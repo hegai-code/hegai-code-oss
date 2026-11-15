@@ -5,7 +5,7 @@
 **Quick start (English).** Self-host the hub on a Linux server with Docker Compose v2, a domain pointing at it, and ports 80/443 open:
 
 ```bash
-git clone https://github.com/hegai-code/hegai-code.git && cd hegai-code/deploy/selfhost
+git clone https://github.com/hegai-code/hegai-code-oss.git && cd hegai-code-oss/deploy/selfhost
 sudo ./install.sh code.example.com owner@example.com
 ```
 
@@ -30,7 +30,7 @@ Then connect machines with `curl -fsSL https://code.example.com/go | bash`. Deta
 Нужны сервер с Docker (Compose v2), домен с A/AAAA-записью на сервер и открытые порты 80 и 443.
 
 ```bash
-git clone https://github.com/hegai-code/hegai-code.git && cd hegai-code/deploy/selfhost
+git clone https://github.com/hegai-code/hegai-code-oss.git && cd hegai-code-oss/deploy/selfhost
 sudo ./install.sh code.example.com owner@example.com
 # .env с секретами → hub в Docker (первый раз 10–20 минут) → этот сервер
 # подключается сам → печатается одноразовая ссылка настройки владельца
@@ -56,7 +56,7 @@ sudo ./install.sh code.example.com owner@example.com
 Без сервера можно попробовать продукт из исходников: hub и агент на одной машине, без TLS и без входа, `http://localhost:4319`. Нужны Node 20.19–24 и Rust stable. **Не запускайте этот агент на машине, где уже работает другой агент Hegai Code** (две записи в одну сессию портят её).
 
 ```bash
-git clone https://github.com/hegai-code/hegai-code.git && cd hegai-code
+git clone https://github.com/hegai-code/hegai-code-oss.git && cd hegai-code-oss
 npm ci
 npm run build --workspace shared && npm run build
 
