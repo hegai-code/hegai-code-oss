@@ -1,0 +1,100 @@
+/* 29-projects-list — projects the way ChatGPT lists them, the «…» menu on a session. */
+
+/* ---- Projects the way ChatGPT lists them (08.10.2026, by request) ----
+   The project was a group label — muted 12px bold over its rows. Now it is a
+   row of its own: a folder glyph (open/closed = unfolded/folded, and it is the
+   fold switch) and the name in the rows' own type; the chats sit under it
+   indented to the name's text, without times (the tooltip has them). «…» (the
+   project menu) and the pencil wait for the pointer, as ChatGPT's do; touch
+   keeps them. A «Проекты ⌄ +» heading folds the whole list. Scoped to `.pg`
+   so the «Команда» person cards keep their own shape. */
+.projects-tree .pl-head { display: flex; align-items: center; gap: 4px; padding: 4px 8px 2px 16px; }
+.projects-tree .pl-title {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; border: none; background: none; cursor: pointer;
+  font: 500 var(--size-small)/1.5 var(--sans); color: var(--text-muted);
+}
+.projects-tree .pl-title:hover { color: var(--text); }
+.projects-tree .pl-add {
+  margin-left: auto; display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: var(--radius-sm); color: var(--text-muted); text-decoration: none;
+}
+.projects-tree .pl-add:hover { background: var(--surface-hover); color: var(--text); }
+.sidepanel .proj-grid:has(> .pg) { gap: 2px; padding-top: 2px; }
+.projects-tree .pg { padding: 0 8px; }
+.projects-tree .pg .pc-headrow {
+  gap: 2px; padding: 0 4px 0 0; margin: 0; min-height: 34px; border-radius: var(--radius-sm);
+}
+.projects-tree .pg .pc-headrow:hover, .projects-tree .pg.menu-open .pc-headrow { background: var(--surface-hover); }
+.projects-tree .pg.here .pc-headrow { background: var(--here); }
+.projects-tree .pg .pc-fold {
+  flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; padding: 0;
+  border: none; background: none; cursor: pointer; color: var(--text-muted);
+}
+.projects-tree .pg .pc-fold:hover { color: var(--text); }
+.projects-tree .pg .pc-fold:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -4px; border-radius: var(--radius-sm); }
+.projects-tree .pg .pc-head { gap: 6px; align-self: stretch; }
+.projects-tree .pg .pc-name { font-size: var(--size-nav); font-weight: 400; line-height: 1.5; color: var(--text); letter-spacing: normal; }
+.projects-tree .pg .pc-head:hover .pc-name { color: var(--text); }
+.projects-tree .pg .pc-mach { color: var(--text-faint); }
+.projects-tree .pg .pc-pin { flex: 0 0 auto; color: var(--text-faint); }
+.projects-tree .pg :is(.pc-dots, .pc-new) {
+  flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; margin: 0; padding: 0;
+  border: none; background: none; border-radius: var(--radius-sm); cursor: pointer;
+  color: var(--text-muted); text-decoration: none; opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.projects-tree .pg .pc-headrow:hover :is(.pc-dots, .pc-new),
+.projects-tree .pg.menu-open :is(.pc-dots, .pc-new),
+.projects-tree .pg :is(.pc-dots, .pc-new):focus-visible { opacity: 1; }
+.projects-tree .pg :is(.pc-dots, .pc-new):hover { color: var(--text); background: var(--here); }
+@media (hover: none) { .projects-tree .pg :is(.pc-dots, .pc-new) { opacity: 1; } }
+.projects-tree .pg .pc-sessions { margin: 0; }
+.projects-tree .pg .pc-sess { padding: 6px 8px 6px 34px; color: var(--text); }
+.projects-tree .pg .pcs-time { display: none; }
+.projects-tree .pg .pc-more { padding: 4px 8px 4px 34px; }
+/* «ещё N» / «Свернуть» open and close a project's chats in place (10.10.2026):
+   buttons dressed as the link they replaced, side by side on one line. */
+.pc-more-btn { border: 0; background: none; cursor: pointer; text-align: left; width: auto; }
+.pc-more-row { display: flex; align-items: center; }
+.projects-tree .pg .pc-more-row > .pc-more-btn + .pc-more-btn { padding-left: 8px; }
+.pc-more-of { color: var(--text-faint); }
+.sdrawer .projects-tree .pg .pc-more-btn { min-height: 44px; }
+/* Menu glyphs, ChatGPT-style: muted, before the label. */
+.ws-more-item .ctx-ico { display: grid; place-items: center; flex: 0 0 auto; color: var(--text-muted); }
+/* The phone drawer: the name at the rows' body size, 44px targets. */
+.sdrawer .projects-tree .pg .pc-name { font-size: var(--size-body); }
+.sdrawer .projects-tree .pg .pc-headrow { min-height: 44px; }
+.sdrawer .projects-tree .pg .pc-fold { height: 44px; }
+.sdrawer .projects-tree .pg :is(.pc-dots, .pc-new) { width: 36px; height: 36px; }
+
+/* ---- «…» on a session (08.10.2026, by request) ----
+   A side-panel row carries «…» (its right-click menu) beside «+» (open as a
+   column), both under the pointer, on touch always; the row makes room for
+   them only while pointed at. A pane head has the same «…» left of ×. */
+.pc-sessions > li.has-acts { position: relative; }
+.pcs-acts {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 2px;
+}
+.pcs-acts > .pc-col { position: static; transform: none; }
+.pcs-dots {
+  display: grid; place-items: center; width: 22px; height: 22px; padding: 0;
+  border: none; background: none; border-radius: var(--radius-sm);
+  color: var(--text-muted); cursor: pointer; opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.pcs-dots:hover { color: var(--text); background: var(--here); }
+.pc-sessions > li:hover .pcs-dots, .pcs-dots:focus-visible { opacity: 1; }
+.pcs-dots:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.sidepanel .pc-sessions > li.has-acts:hover > .pc-sess,
+.sidepanel .pc-sessions > li.has-acts:focus-within > .pc-sess { padding-right: 56px; }
+@media (hover: none) {
+  .pcs-dots { opacity: 1; }
+  .sidepanel .pc-sessions > li.has-acts > .pc-sess { padding-right: 56px; }
+}
+.sc-col-more { width: 28px; height: 28px; flex: 0 0 auto; }
+.pc-sessions > li:hover .pcs-acts > .pc-col,
+.sidepanel .pc-sessions > li:hover .pcs-acts > .pc-col:not(:disabled) { opacity: 1; }
+/* The phone drawer: room for «…» under the title and a 36px target. */
+.sdrawer .pc-sessions > li.has-acts > .pc-sess { padding-right: 44px; }
+.sdrawer .pcs-dots { width: 36px; height: 36px; opacity: 1; }

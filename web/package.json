@@ -1,0 +1,36 @@
+{
+  "name": "@cc-remote/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:lite": "vite --config vite.lite.config.ts",
+    "build": "vite build && vite build --config vite.lite.config.ts",
+    "build:lite": "vite build --config vite.lite.config.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "shot": "node scripts/shot.mjs",
+    "focus-check": "node scripts/picker-focus-check.mjs",
+    "icons": "python3 scripts/icons.py",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@cc-remote/shared": "*",
+    "@novnc/novnc": "1.7.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "cmdk": "^1.0.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^6.0.4",
+    "puppeteer-core": "^25.12.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vite": "^8.1.5"
+  }
+}

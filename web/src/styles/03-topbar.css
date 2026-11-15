@@ -1,0 +1,194 @@
+/* 03-topbar — the top bar and the usage meter (Claude + Codex limits). */
+
+/* ============================ topbar ============================ */
+/* The phone's ☰ — the session list lives in the drawer and this is the door.
+   Hidden on a desktop, where the list is a column that is already open. */
+.topbar-menu { display: none; }
+/* Spans the WINDOW, above the side panel rather than beside it — so the panel
+   toggle at its left end keeps its place when the panel goes, and so this row
+   can be the window's title bar where the shell has no frame of its own.
+   `z-index` above the panel: its popovers hang below it. */
+.topbar {
+  display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px;
+  flex: 0 0 auto; position: relative; z-index: 30;
+  background: var(--surface); border-bottom: 1px solid var(--divider);
+}
+.menu-btn { display: none; background: none; border: none; color: var(--text-muted); padding: 6px; border-radius: var(--radius-sm); line-height: 0; }
+.menu-btn:hover { color: var(--text); background: var(--surface-hover); }
+
+.brand { display: flex; align-items: center; gap: 8px; user-select: none; }
+.brand-mark {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-list);
+  background: var(--action); color: var(--on-action); font-weight: 700; font-size: var(--size-small); letter-spacing: -0.5px;
+}
+.brand-name { font-weight: 600; font-size: var(--size-lead); color: var(--text); }
+.brand-name b { color: var(--link); font-weight: 700; }
+
+.spacer { flex: 1; }
+
+.icon-btn {
+  position: relative; display: grid; place-items: center; width: 36px; height: 36px;
+  border-radius: var(--radius-list); border: 1px solid transparent; background: transparent;
+  color: var(--text-muted); transition: all 0.12s var(--ease);
+}
+.icon-btn:hover { color: var(--text); background: var(--surface-hover); }
+.icon-btn.active { color: var(--action); background: var(--action-soft); }
+/* The unread count on an icon (the bell). Sits ON the glyph's top-right
+   shoulder, inside the button, at the size Windows and Teams draw theirs —
+   13.10.2026, by request: it used to hang off the button's corner as a 20px
+   disc in a 2px white ring, bigger and louder than the 18px bell it labelled,
+   and the ring was --surface on a bar painted --tint. The ring is now a 1.5px
+   shadow in the bar's own colour (`--badge-ring`), so it reads as a cut-out. */
+.icon-btn .nbadge {
+  position: absolute; top: 4px; right: 4px; min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: var(--radius-pill); background: var(--red); color: var(--text-on-color);
+  font: 600 var(--size-nano)/1 var(--sans); font-variant-numeric: tabular-nums; letter-spacing: 0;
+  display: grid; place-items: center; pointer-events: none;
+  box-shadow: 0 0 0 1.5px var(--badge-ring, var(--surface));
+}
+
+.cmdk-hint {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--radius-list);
+  border: 1px solid var(--divider); background: var(--surface-hover); color: var(--text-muted); font-size: var(--size-small); transition: all 0.12s var(--ease);
+}
+.cmdk-hint:hover { border-color: var(--border); background: var(--chip); }
+.cmdk-hint kbd { background: var(--surface); }
+
+.token {
+  width: 140px; background: var(--surface); color: var(--text-muted); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 8px 11px; font-family: var(--mono); font-size: var(--size-meta);
+}
+.token:focus { outline: none; border-color: var(--action); color: var(--text); }
+
+/* ---------- usage meter (top-right: Claude + Codex limits) ---------- */
+.usage { position: relative; display: inline-flex; }
+/* Tightened when this pill moved onto the lens row: three providers at the old
+   spacing ran 445px, and the tabs beside them started clipping «Колонки» on a
+   1378px viewport. Same information, ~60px less of it. */
+.usage-pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-list);
+  border: 1px solid var(--divider); background: var(--surface-hover); color: var(--text-muted); transition: all 0.12s var(--ease);
+}
+.usage-pill:hover { border-color: var(--border); background: var(--chip); }
+.usage-provider { display: inline-flex; align-items: center; gap: 6px; }
+.usage-provider-name { font-size: var(--size-micro); font-weight: 650; color: var(--text); white-space: nowrap; }
+.usage-sep { width: 1px; height: 16px; background: var(--border); }
+.meterlet { display: inline-flex; align-items: center; gap: 5px; font-size: var(--size-micro); }
+/* The 7d figure trails the 5h one: same row, plainly the secondary number. */
+.meterlet-week { color: var(--text-faint); }
+.meterlet-bar { width: 28px; height: 5px; border-radius: 2px; background: var(--surface); overflow: hidden; flex: 0 0 auto; }
+/* Usage fills as you CONSUME — gold like Claude's own /usage, red when nearly spent. */
+.meterlet-fill { display: block; height: 100%; border-radius: 2px; background: var(--orange); transition: width 0.3s var(--ease); }
+.meterlet-val { font-variant-numeric: tabular-nums; color: var(--text-muted); min-width: 30px; white-space: nowrap; }
+
+/* The one rule this panel was missing. It is anchored under a pill in a 56px
+   bar, and `body { overflow: hidden }` — so anything past the bottom of the
+   viewport is not merely off-screen, it is UNREACHABLE: neither the page nor
+   the panel scrolls. Nothing bounds its height either: a block per account
+   (one per machine signed into a different login) times a row per limit, and
+   both counts come from outside this app. Measured 20.09.2026 with two Claude
+   accounts, Codex and Gateway: ~1000px, i.e. off the bottom of a 1080p screen.
+   Same ceiling-and-scroll the neighbouring popovers already have
+   (.notif-pop). */
+.usage-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; min-width: 264px;
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, calc(100vh - 88px)); overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface-raised); border: 1px solid var(--divider); border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-lg); padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.usage-pop-head { font-size: var(--size-micro); text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); }
+.usage-section { display: flex; flex-direction: column; gap: 5px; }
+.usage-section + .usage-section { border-top: 1px solid var(--divider); padding-top: 10px; }
+.usage-section-title { font-size: var(--size-meta); font-weight: 650; color: var(--text); }
+/* The folded «Прочие аккаунты» — per-machine logins that are not the team's
+   main subscriptions. Closed by default; the summary is its own title. */
+/* The phone's pill: two providers as mark + figures, no bar. «/ weekly» is
+   back (26.09.2026, by request): Codex showed its week and Claude only its
+   5-hour window, so the two numbers side by side were not the same question.
+   It fits because the back/forward arrows left the phone's bar. */
+.usage.compact .meterlet-bar { display: none; }
+.usage.compact .usage-provider { gap: 4px; }
+.usage-others > summary { cursor: pointer; color: var(--text-muted); list-style: revert; }
+
+/* «Мои · Команда · Все» — whose sessions the lists show (ScopeSwitch.tsx).
+   The theme picker's segmented shape. On «Мои» the chosen segment is only the
+   quiet `--here` plate; off «Мои» it takes the solid select plate, because
+   being off «Мои» must remain visible — the old
+   «Только мои» chip was left off and forgotten for weeks. */
+.scope-seg { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-hover); }
+.scope-seg button {
+  border: 0; cursor: pointer; min-height: 28px; padding: 4px 12px; border-radius: var(--radius-sm);
+  font: 500 var(--size-meta)/1.5 var(--sans); color: var(--text-muted); background: transparent; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.scope-seg button:hover { color: var(--text); background: var(--surface-hover); }
+.scope-seg button.on { background: var(--here); color: var(--text); }
+.scope-seg.lit button.on { background: var(--select); color: var(--on-select); }
+.scope-seg button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+/* The phone's reminder in the bar: the same select plate, and the ✕ says what
+   a tap does. */
+.scope-chip {
+  position: relative; display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+  border: 0; cursor: pointer; padding: 4px 8px; border-radius: var(--radius-sm);
+  font: 600 var(--size-meta)/1.2 var(--sans); background: var(--select); color: var(--on-select);
+}
+.scope-chip::after { content: ''; position: absolute; inset: 50% 0 auto; height: 44px; transform: translateY(-50%); }
+.scope-chip svg { flex: 0 0 auto; }
+.scope-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ws-scope { display: none; }
+@media (max-width: 860px) {
+  /* The phone's open session hides TopBar, so its own header keeps the exit. */
+  .ws-scope:not(:empty) { display: flex; flex: 0 0 auto; }
+  .app:has(> .topbar.titlebar) .ws-scope { display: none; }
+}
+/* In the phone drawer the switch is a full-width row under the search. */
+.sdrawer-scope:empty { display: none; }
+.sdrawer-scope { flex: 0 0 auto; padding: 0 12px 8px; }
+.sdrawer-scope .scope-seg { display: flex; }
+.sdrawer-scope .scope-seg button { flex: 1; min-width: 0; min-height: 44px; padding: 8px; font-size: var(--size-small); }
+.usage-others[open] > summary { margin-bottom: 6px; }
+.uacct { display: flex; flex-direction: column; gap: 3px; }
+/* A machine whose runtime needs a hand, where its limits would otherwise be
+   silently missing: the machine, the problem in the attention tone, the fix. */
+.uacct + .uacct { border-top: 1px solid var(--divider); margin-top: 4px; padding-top: 8px; }
+/* Who, where, on what plan — one line, with the machines taking the slack. */
+.uacct-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.uacct-name { flex: 0 0 auto; font-size: var(--size-meta); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.uacct-sub { font-size: var(--size-micro); color: var(--text-muted); background: var(--surface-hover); border: 1px solid var(--divider); border-radius: var(--radius-sm); padding: 1px 6px; text-transform: uppercase; letter-spacing: 0.4px; flex: 0 0 auto; }
+/* One limit is ONE ROW of four columns: name, bar, percent, reset. The name
+   takes the slack and truncates; the three that carry the figure are fixed, so
+   every row lines up its numbers and the panel reads down them. It used to be
+   three stacked lines per limit, which is how nine limits made a 1000px panel. */
+.uwin { display: flex; align-items: center; gap: 8px; min-height: 19px; }
+.uwin-label {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--size-micro); color: var(--text-muted);
+}
+.uwin-bar { flex: 0 0 56px; height: 5px; border-radius: 2px; background: var(--chip); overflow: hidden; }
+.uwin-fill { display: block; height: 100%; border-radius: 2px; background: var(--orange); transition: width 0.3s var(--ease); }
+.uwin-val {
+  flex: 0 0 auto; min-width: 30px; text-align: right;
+  font-size: var(--size-micro); color: var(--text); font-variant-numeric: tabular-nums;
+}
+.uwin-reset {
+  flex: 0 0 auto; min-width: 44px; text-align: right; white-space: nowrap;
+  font-size: var(--size-micro); color: var(--text-faint); font-variant-numeric: tabular-nums;
+}
+.uwin-bar { position: relative; overflow: visible; }
+/* Limits by PACE (20.10.2026, by request — usagePace.ts). Green is allowed
+   here and only here: the owner asked for a traffic light, and it is a fill
+   on a 5px bar, not a tone under text. The tick is where the fill «should» be
+   by now; it overhangs the bar so it reads on any fill. */
+.pace-tick {
+  position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px;
+  border-radius: 1px; background: var(--text); pointer-events: none;
+}
+.meterlet.pace-ok .meterlet-fill, .uwin.pace-ok .uwin-fill { background: var(--pace-ok); }
+.meterlet.pace-edge .meterlet-fill, .uwin.pace-edge .uwin-fill { background: var(--pace-edge); }
+.meterlet.pace-over .meterlet-fill, .uwin.pace-over .uwin-fill { background: var(--pace-over); }
+.meterlet.pace-out .meterlet-fill, .uwin.pace-out .uwin-fill { background: var(--pace-out); }
+.meterlet.pace-over .meterlet-val, .meterlet.pace-out .meterlet-val,
+.uwin.pace-over .uwin-val, .uwin.pace-out .uwin-val { color: var(--negative); }
+.usage-mark { flex: 0 0 auto; }
+.uacct-machines { flex: 1 1 auto; min-width: 0; font-size: var(--size-micro); color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

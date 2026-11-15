@@ -1,0 +1,43 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <application android:name=".HegaiApplication" android:allowBackup="false" android:label="Hegai Code"
+        android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:enableOnBackInvokedCallback="true" android:supportsRtl="true"
+        android:theme="@style/Theme.HegaiCode" android:usesCleartextTraffic="false">
+        <activity android:name=".MainActivity" android:exported="true" android:theme="@style/Theme.HegaiCode.Starting"
+            android:launchMode="singleTask" android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="hegai-code" android:host="auth" />
+            </intent-filter>
+            <!-- Google identity linking returns a one-use result, confirmed with the
+                 SAME bearer session that minted its ticket. Never accepts a login token. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ccremote" android:host="auth" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" /><category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" /><data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" /><category android:name="android.intent.category.DEFAULT" /><data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+        <!-- Download the code-scanner module with the install, so the first pairing scan does not wait for it. -->
+        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />
+        <service android:name=".PushService" android:exported="false"><intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter></service>
+        <receiver android:name=".PushActionReceiver" android:exported="false" />
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.files" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" /></provider>
+    </application>
+</manifest>

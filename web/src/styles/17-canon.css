@@ -1,0 +1,186 @@
+/* 17-canon — phone fixes, canon surfaces (plates without borders), the eyebrow, the rail, bottom sheets. */
+
+/* ============================ phone fixes (narrow viewports) ============================
+   Surfaces that were unusable below ~400px. Each is a containment bug, not a
+   styling preference, so the fixes live together and come LAST in source so they
+   win over the earlier ≤860 block without editing it. */
+
+@media (max-width: 860px) {
+  /* The Таблица lens used to be made to scroll itself here, holding its rows at
+     the sum of their track floors (624px). It never worked and could not: this
+     screen renders inside `.main-col`, which is `display: none` on a phone
+     whenever a context column is beside it — which is every sessions route.
+     The lens is gone now, and the rule with it; `.mtable` survives as the
+     file list's grid, and that one has its own phone block further down. */
+
+  /* 24px of padding on each side is a seventh of the viewport at 360px. */
+  .board { padding: 16px 12px; }
+}
+
+
+/* The Flow board's stage picker went with the board. The stage FIELD did not:
+   «Закрыть сессию» still writes `done`, and the iPhone's Flow lens still reads
+   the whole ladder — see the `--stage-*` tokens, which stay for it. */
+
+/* ============================ canon surfaces ============================
+   a.test surfaces/Card.jsx: a card is a lifted plate with NO border — the
+   green-tinted float shadow does the separating. Hairline borders everywhere
+   is what makes an app read as "flat with rules" instead of this system.
+
+   Dark cannot use that shadow (a drop shadow does not read on near-black), so
+   every one of these also carries --rim, which is `none` in light and an inner
+   light rim in dark. That pairing is the whole trick. */
+
+/* raised plates — content that sits ON the canvas */
+.proj-card,
+.hw-card,
+.mem-body,
+.auth-card,
+.prof-hero,
+.mtable,
+.workspace {
+  border: none;
+  background: var(--surface-raised);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm), var(--rim);
+}
+
+/* floating layers — things that genuinely leave the page */
+.usage-pop,
+.settings-pop,
+.proj-pop,
+.notif-pop,
+.session-col,
+.ctxmenu {
+  border: none;
+  background: var(--surface-raised);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), var(--rim);
+}
+
+/* the command palette and modals are the top layer */
+.cmdk,
+.modal {
+  border: none;
+  background: var(--surface-raised);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl), var(--rim);
+}
+
+/* The workspace is a full-height column, not a floating card: it keeps the
+   plate but must not look detached at the top. */
+.workspace { box-shadow: var(--rim); background: var(--bg); }
+
+/* `.proj-card` no longer lifts on hover: it stopped being one big button when
+   it became a heading plus a list of session links, and a card that lifts under
+   the cursor promises a click it no longer accepts. The transition stays for
+   its background and colour. */
+.proj-card {
+  transition: box-shadow var(--dur) var(--ease-soft), transform var(--dur) var(--ease-soft),
+              background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+/* ============================ the eyebrow ============================
+   The single most recognisable a.test mark: a mono ALL-CAPS label with wide
+   tracking, prefixed by an 8×8 SQUARE ember dot. Every label below was already
+   uppercase-with-tracking, so adopting it is a swap rather than an addition.
+
+   The discipline that keeps it meaningful: the ember square marks a SECTION,
+   never a field label. Put one on every small caps label and it stops saying
+   "a new region starts here" and becomes wallpaper. Rows that already carry a
+   disclosure chevron don't take a dot either — the chevron is the marker. */
+
+.eyebrow,
+.cmdk [cmdk-group-heading],
+.install-kicker,
+.pin-head,
+.project-head,
+.si-label,
+.usage-pop-head,
+.sp-title,
+.mem-group-name,
+.q-header,
+.prof-subhead,
+.src-tag {
+  font-family: var(--mono);
+  font-size: var(--size-micro);
+  font-weight: 500;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+}
+
+/* section heads carry the mark; field labels and chevron rows do not */
+.eyebrow--mark::before,
+.cmdk [cmdk-group-heading]::before,
+.install-kicker::before,
+.pin-head .pin-name::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--brand);
+  margin-right: 8px;
+  vertical-align: 0.02em;
+  flex: none;
+}
+
+.eyebrow { display: inline-flex; align-items: center; color: var(--link); }
+.cmdk [cmdk-group-heading] { color: var(--text-faint); }
+/* the mono cut runs narrower than Onest at the same size — hold the label
+   height so section heads keep their rhythm against the rows beneath */
+.pin-head, .project-head { line-height: 1.4; }
+
+/* ============================ the rail ============================
+   The permanent navigation. It replaces a 248px popover that opened by clicking
+   the brand mark — which was the only route to nine screens, behind a control
+   that gave no sign it was one.
+
+   The rail is a SIBLING of the context column inside .body, never a child:
+   `.sidebar.collapsed > *` hides the column's children, and nesting would take
+   the navigation down with it. */
+
+/* `.rail` and every `.rail-*` rule went with the strip.
+   Collapsed means the panel is GONE now — the toggle, the history arrows,
+   search, notifications and the account all live in the top bar, which is on
+   every screen, so a 68px column drawing second copies of them was spending
+   exactly the width the collapse exists to reclaim. */
+
+/* ============================ bottom sheets ============================
+   Five tabs cannot honestly carry seven destinations, and a phone has no room
+   for a rail — so the overflow lives in a sheet instead of behind a drawer
+   behind a brand mark behind a popover. */
+/* The bottom sheet is gone with its last caller. It was the phone's
+   destination list — first as the «Ещё» tab of the bottom bar, then as a sheet
+   opened from the session-list header — and the drawer now carries those rows
+   itself (`.sdrawer-nav`), next to the session list they sit beside anyway.
+   Two panels for one set of four links was one panel too many. */
+
+/* team tabs sit under the page head */
+.team-tabs { margin: -4px 0 18px; gap: 22px; }
+
+/* Настройки and the three screens folded into it (Железо, Память, Профиль).
+   Each of those brings its own `.board-head`, so the strip sits ABOVE them
+   rather than inside a shared panel — one scrolling column, the tabs pinned at
+   the top of it. `min-height: 0` because this is a flex child of `.main`, and
+   without it the inner screens cannot scroll. */
+.settings-shell { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.settings-shell > .settings-tabs {
+  flex: 0 0 auto; margin: 0;
+  /* the strip sits on the same column as the content below (the tab's own
+     14px inset is taken off so the first label lines up with the heading) */
+  padding: 10px max(var(--space-2), calc((100% - var(--chat-measure)) / 2 - 14px)) 0;
+  border-bottom: 1px solid var(--divider); background: var(--surface);
+}
+.settings-shell > .settings-tabs > .tab { padding-bottom: 10px; white-space: nowrap; }
+/* The screen under the strip owns the scrolling. Every tab shares ONE column
+   (`--chat-measure`, centred), so switching tabs never moves the content. */
+.settings-shell > :not(.settings-tabs) {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding-inline: max(var(--space-6), (100% - var(--chat-measure)) / 2);
+}
+@media (max-width: 860px) {
+  .settings-shell > .settings-tabs { padding: 8px 12px 0; gap: 0; }
+  .settings-shell > .settings-tabs > .tab { padding-inline: var(--space-3); font-size: var(--size-small); }
+  .settings-shell > :not(.settings-tabs) { padding-inline: var(--space-3); }
+}

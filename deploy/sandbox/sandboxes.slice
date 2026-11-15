@@ -1,0 +1,16 @@
+# The one ceiling every community sandbox shares.
+#
+# stage has 24 GB, of which the hegai platform (postgres, pm2 apps, nginx)
+# already holds ~16 GB; about 8 GB is free. 6 GB here leaves the platform its
+# headroom no matter how many sandboxes exist: the slice is throttled at 5 GB
+# (MemoryHigh) and killed at 6 GB (MemoryMax) as a whole, before the box swaps.
+#
+# With 1.5–2 GB per active sandbox that is a ceiling of 3–5 sandboxes working
+# AT THE SAME TIME (idle agents take ~100 MB). Past ~8 members on this box the
+# design moves to a dedicated VPS unchanged — see SANDBOX.md.
+#
+# CPUQuota=400% = four of the eight vCPUs for all sandboxes together.
+[Slice]
+MemoryMax=6G
+MemoryHigh=5G
+CPUQuota=400%

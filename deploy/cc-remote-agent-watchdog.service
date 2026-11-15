@@ -1,0 +1,11 @@
+[Unit]
+Description=cc-remote agent watchdog (unwedge a throttled agent cgroup)
+Documentation=file:///home/cc-remote-agent/agent-watchdog.sh
+
+[Service]
+Type=oneshot
+ExecStart=/home/cc-remote-agent/agent-watchdog.sh
+# It reads /proc and /sys/fs/cgroup for the agent's group and sends one SIGKILL.
+# Nothing it does should ever be the reason a machine is down, so it never fails
+# the boot and never retries: the next tick is 60s away.
+SuccessExitStatus=0

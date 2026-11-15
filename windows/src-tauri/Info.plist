@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Merged into the generated Info.plist on macOS builds: Tauri looks for this
+	  file in the same directory as the Tauri configuration file
+	  (tauri-utils `MacConfig::info_plist`). Windows builds never read it.
+
+	  The usage string is what macOS shows in the permission prompt, and an app
+	  that asks for a microphone without saying why is an app people refuse.
+	  Wording follows the native Mac app this replaces (ios/project.yml).
+	-->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dictate a task into the composer.</string>
+</dict>
+</plist>

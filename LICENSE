@@ -1,0 +1,37 @@
+Hegai Code — licensing
+Copyright 2026 Individual Entrepreneur Pavel Khegai (ИП Хегай Павел Валентинович)
+
+This repository is under two licenses. Which one applies is decided by where a
+file lives:
+
+1. Functional Source License, Version 1.1, ALv2 Future License (FSL-1.1-ALv2)
+   — full text in LICENSES/FSL-1.1-ALv2.md — applies to:
+
+     server-rs/          the hub: workspaces and roles, manager visibility,
+                         audit, support access, LLM gateway seats, sign-in,
+                         the external (self-hosted) edition
+     deploy/selfhost/    the self-hosted packaging
+     deploy/sandbox/     employee sandboxes
+
+   You may use, copy, modify and run this code for any purpose EXCEPT a
+   Competing Use (offering it, or a product substantially similar to it, as a
+   commercial product or service to others). Internal use at your company,
+   self-hosting for your own team, and professional services to a customer who
+   runs it themselves are permitted. Two years after each version is made
+   available, that version is also available under the Apache License 2.0.
+
+2. Apache License, Version 2.0 — full text in LICENSES/Apache-2.0.txt —
+   applies to everything else: the agent (agent/), the wire protocol
+   (shared/), the web, iOS, Android and desktop clients (web/, ios/,
+   android/, windows/), the Telegram client (tgbot/), skills, the release
+   signer and the install scripts.
+
+A directory with its own LICENSE file states its license explicitly; the list
+above is the same rule written down once.
+
+Third-party components keep their own licenses — see THIRD-PARTY-NOTICES.md.
+
+Trademarks: neither license grants rights to the names "Hegai Code", "HegAI",
+"heg.ai" or their logos. A fork must use another name. "Claude", "Claude Code",
+"Codex" and "OpenAI" are trademarks of their owners; Hegai Code works with
+these tools and is not affiliated with or endorsed by Anthropic or OpenAI.

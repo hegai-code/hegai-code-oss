@@ -1,0 +1,159 @@
+/* 20-tool-calls — tool calls as machinery rows, the enrichment strip under the tail turn. */
+
+/* ---- tool calls: machinery rows, not centred service pills ----------------
+   They used to be fit-content capsules with `margin: auto`, floating down the
+   middle of the transcript like system notices in a messenger. They are not
+   notices — they are the record of what the agent did, so they sit on the same
+   left measure as everything else and read as a log. */
+details.tool, details.tool-result, details.thinking {
+  width: 100%; max-width: none; margin: 2px 0;
+  border-radius: var(--radius-sm); border: none;
+}
+details.tool[open], details.tool-result[open], details.thinking[open] {
+  width: 100%; max-width: none; margin: 8px 0;
+  border-radius: var(--radius-md); background: var(--surface-raised);
+  box-shadow: var(--shadow-sm), var(--rim);
+}
+details summary {
+  border-radius: var(--radius-sm); background: transparent;
+  padding: 5px 10px; font-family: var(--mono); font-size: var(--size-meta);
+  letter-spacing: var(--ls-tech);
+}
+details summary:hover { background: var(--surface-hover); }
+details[open] > summary {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+details summary::after { margin-left: auto; }
+.tool-sq { width: 16px; height: 16px; border-radius: 2px; color: var(--text-on-color); }
+
+/* the agent thinking aloud — muted body text, as in Codex and Claude */
+.thinking-body {
+  font-size: var(--size-body); line-height: var(--lh-read); color: var(--text-muted);
+}
+
+/* A FOLDED RUN hangs in the right margin. It used to start at the prose's left
+   edge, which put "6 tool calls" exactly where the eye returns for the next
+   line — you had to step over the scaffolding to keep reading the answer. At
+   the right edge, tucked up into the turn that opened it (the -8px eats
+   `.log-inner`'s gap, so it reads as that turn's margin note rather than a row
+   of its own), it is one glance away and never in the way.
+
+   Closed only: `[open]` restores the centred panel, which is the moment the
+   machinery IS the thing being read. */
+.log-inner > details.toolrun:not([open]) { margin: -8px 0 1px auto; }
+
+/* A CONTINUATION turn: same speaker, same day (groupHistory computes it). The
+   header does not repeat — the -8px eats `.log-inner`'s gap, so the seam is the
+   previous turn's own padding-bottom: a paragraph break, not a new entry.
+   The STAMP still repeats: it is the one thing that genuinely differs between
+   two turns by the same speaker, so with no `.who` above it, it takes the
+   gutter's first row itself. */
+.msg.cont { padding-top: 0; margin-top: -8px; }
+/* No speaker row above it here, so the stamp takes that place itself. */
+.msg.cont.assistant > .when, .msg.cont.user > .when { top: 2px; }
+
+/* An ATTACHED run rides the prose line that framed it — «Теперь роут: ⚙ 5».
+   The first/last paragraph turns inline so the chip continues ITS OWN line:
+   the association is on the line itself, not at the pane's far edge, and a
+   line that fills the measure simply wraps the chip to the next one. This is
+   what replaced the absolute -31px tuck, which collided with long lines and
+   left short lines' chips orphaned at the right edge. */
+.md.chip-tail > p:last-of-type { display: inline; } /* in force again since 28.09.2026 — see «Metadata rides the line again» */
+/* The chip must fit INSIDE the line box it rides. At 20px tall and shifted 5px
+   below the baseline it did not: every paragraph carrying one was a visibly
+   taller row than the paragraphs around it, which is the "widened lines" this
+   replaces. A ~12px mark at -1px sits inside 14px/1.6 with room to spare. */
+.chip-inline { display: inline-block; vertical-align: -1px; line-height: 1; max-width: 100%; min-width: 0; }
+/* The chain that carried the folded run had NO definite width anywhere in it:
+   `.chip-inline` is shrink-to-fit, and `details.toolrun`'s `max-width: 88%`
+   resolves against a parent that is itself measured from its content — a cycle,
+   which CSS resolves as `none`. So the `nowrap` label below set the width, the
+   `text-overflow: ellipsis` next to it never had anything to clip against, and
+   the row simply ran past the pane. `100%` resolves (the paragraph above it has
+   a real width), which is what makes the ellipsis start working. */
+.chip-inline > details.toolrun { max-width: 100%; }
+/* A CLOSED run still laid its body out. Chrome does not treat `[open]=false` as
+   `display: none` — it hides the content box without removing it — and because
+   the closed run is `inline-flex` here, that box became the SECOND flex item and
+   sat to the RIGHT of the summary, off the pane. Everything inside it measured
+   from there: the nested `.tool-sq` (`flex: 0 0 auto`, so it could not shrink)
+   and `pre.code` with its 24px of padding. Those were the `408px` and `403px`
+   the screenshot harness kept reporting at a 390px viewport. */
+details.toolrun:not([open]) > *:not(summary) { display: none; }
+.chip-inline.tail { margin-left: 0; } /* the gap is a space in the markup (Md) — it collapses at a wrap */
+.chip-inline details.toolrun:not([open]) { display: inline-flex; margin: 0; }
+/* Opened from the line, the machinery takes the prose column below it. */
+.chip-inline:has(> details[open]) { display: block; margin: 6px 0 2px; }
+
+/* Everything else keeps the prose measure. A lone tool row is a full-width log
+   line, not a capsule, and «работает…» is the session talking rather than
+   scaffolding — both would read as strays hanging off a ragged left edge.
+   "The prose measure" is now the LEFT EDGE of the column: the 2026-09-17
+   redesign dropped the speaker gutter (see `.msg`), and these three kept the
+   92px indent that used to clear it. With the gutter gone that indent had
+   nothing to clear — «session resumed» and «работает…» simply stood a track to
+   the right of every sentence around them, which is the ragged edge the rule
+   was written to prevent, arrived at from the other side. */
+.log-inner > details:not(.toolrun),
+.log-inner > .line,
+.log-inner > .typing { margin-left: 0; }
+
+/* ---- enrichment strip: one-tap moves under the tail turn ----
+   Lives at the transcript's tail, on the prose measure — the same left edge as
+   the sentences above it. The first reply is a real SEND — `--action`'s one
+   legitimate job. The others used to be transparent with a hairline, and the
+   owner could not find them (13.10.2026): they now stand on the same `--chip`
+   surface as the human-turn plate, with `--border` and `--text` (≥9:1 in all
+   three themes). Radius-12 rectangles, not pills. */
+.enrich-strip { display: flex; flex-direction: column; gap: 10px; padding: 2px 0 4px; }
+/* A caption-sized switch between two spellings of one text (dictation's
+   «как сказал», composer.tsx). Quiet on purpose — the text is the point. */
+.caption-toggle {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: var(--mono); font-size: var(--size-micro); letter-spacing: var(--ls-caps);
+  text-transform: uppercase; color: var(--text-muted);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border);
+}
+.caption-toggle:hover { color: var(--text); text-decoration-color: currentColor; }
+/* `.enrich-notes` / `.enrich-kicker` / `.enrich-note` are gone with the «итог»
+   block they painted — a summary of the paragraph immediately above it. Rules
+   for markup nobody renders are how a removed panel quietly returns. */
+.enrich-replies { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Status of the hand-off (done / asks / blocked) — a status line, not a kicker. */
+.enrich-head { font-size: var(--size-small); color: var(--text-muted); margin-bottom: -2px; }
+/* Ideas sit APART from the replies: tapping one starts work nobody asked for,
+   and it must not be one slip away from «Да». Quieter than a quiet reply, and
+   led by the lamp so the row reads as «а ещё можно» without a label saying so
+   — an eyebrow here would be a field label, which the motif is not for. */
+.enrich-ideas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.enrich-ideas .ei-mark { flex: 0 0 auto; color: var(--text-muted); }
+/* An idea only fills the composer, so it is the lightest of the three — but
+   still readable: dashed edge and the lamp set it apart, the text is
+   `--text-muted` (≥6:1), never `--text-faint`. */
+.qr-btn.idea {
+  background: transparent; color: var(--text-muted);
+  border: 1px dashed var(--border); padding: 7px 15px; font-weight: 500;
+}
+.qr-btn.idea:hover { background: var(--surface-hover); color: var(--text); border-style: solid; }
+.qr-btn {
+  border: none; cursor: pointer; border-radius: var(--radius-md);
+  padding: 8px 16px; font-family: var(--sans); font-size: var(--size-small); font-weight: 600;
+  line-height: 1.3; text-align: left;
+  transition: filter var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.qr-btn.primary { background: var(--action); color: var(--on-action); }
+.qr-btn.primary:hover { filter: brightness(1.15); }
+.qr-btn.quiet { background: var(--chip); color: var(--text); border: 1px solid var(--border); padding: 7px 15px; }
+.qr-btn.quiet:hover { background: var(--surface-hover); }
+.qr-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (pointer: coarse) { .qr-btn { min-height: 44px; } }
+
+/* The gutter collapses in a NARROW PANE — a phone, or a column of the Колонки
+   lens, which hands the transcript a 380px measure on a 1440px screen. 76px of
+   label plus a 16px gap beside that is a fifth of the pane spent on the word
+   "Claude", and the answer wraps four words to the line.
+
+   A container query, not a viewport one: the pane is narrow no matter how wide
+   the window is, and that is precisely what @media cannot see. See the
+   `container` declaration on `.chat`. */

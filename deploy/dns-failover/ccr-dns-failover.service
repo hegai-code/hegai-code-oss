@@ -1,0 +1,27 @@
+[Unit]
+Description=Hegai Code DNS relay failover
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=ccr-dns-failover
+StateDirectoryMode=0700
+LoadCredential=gcore-api-key:/root/.secrets/gcore-apikey.txt
+ExecStart=/usr/bin/python3 /opt/ccr-dns-failover/failover.py --apply --key-file ${CREDENTIALS_DIRECTORY}/gcore-api-key --state-dir /var/lib/ccr-dns-failover
+TimeoutStartSec=5min
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+MemoryMax=128M
+CPUQuota=20%

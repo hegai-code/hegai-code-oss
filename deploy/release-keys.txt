@@ -1,0 +1,20 @@
+# Trusted release-signing public keys of the EXTERNAL edition.
+#
+# One key per line: base64 of the SPKI DER encoding of an Ed25519 public key
+# (what deploy/release-signer/setup.mjs prints). Lines starting with # are
+# comments. Compiled into the external agent bundle (deploy/build-agent.sh) and
+# into the hub (server-rs/src/agent_release.rs, include_str!).
+#
+# Rotation is a list, not a swap: add the new key, ship a release signed with
+# the OLD key that trusts both, let the customers approve it, then sign with the
+# new key. Removing the only key an agent trusts strands that agent.
+#
+# An external agent with an empty list never self-updates and an external hub
+# offers no bundle as valid. Keys are made offline with
+# deploy/release-signer/offline-sign.mjs setup (README there).
+
+# Owner's MacBook, offline signer, out of the fleet (31.10.2026).
+MCowBQYDK2VwAyEArdBVq+hFGRPVzc0hCiwOo5EKLAEZ4ZraVMj6ojTOsGo=
+
+# Owner's MacBook, Hegai Signer app, Touch ID + Secure Enclave (05.11.2026).
+MCowBQYDK2VwAyEA2zV+BgKqHn/PACr1ryjHxBdPDf6HNG9zMHpc94gpz0c=

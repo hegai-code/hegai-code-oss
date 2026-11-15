@@ -1,0 +1,85 @@
+# Hegai Code sandbox agent — one instance per community member.
+# `%i` is the unix user (sb-<slug>); the provisioner creates the user, writes
+# /etc/cc-remote/sandboxes/%i.env and runs `systemctl enable --now cc-remote-sandbox@%i`.
+#
+# Why each cap exists:
+#   StartLimitIntervalSec/Burst — five starts in five minutes, then systemd
+#     stops trying. The vps-box-1 agent once OOM-crashlooped for hours on an
+#     oversized transcript; with Restart=always and no limit, a broken sandbox
+#     would burn CPU forever and spam the journal. A stopped unit shows up in
+#     sb-monitor.sh; a crash loop does not.
+#   Slice=sandboxes.slice — every sandbox shares ONE ceiling (6 GB) so that no
+#     number of them can push the hegai platform on this box into swap.
+#   MemoryMax=2G / MemoryHigh=1536M — one sandbox may not take the whole slice.
+#     High throttles first, Max kills; the gap is the warning zone.
+#   CPUQuota=150% — 1.5 cores: a build stays responsive, a runaway loop does not
+#     starve the other tenants (8 vCPU box).
+#   TasksMax=512 — a fork bomb ends here, not at the kernel's pid limit.
+#   NODE_OPTIONS=--max-old-space-size=512 — the agent itself stays small; the
+#     memory budget is for the member's Codex and their build, not for V8.
+#   NoNewPrivileges — no setuid/sudo escalation from anything the agent spawns.
+#   PrivateTmp — /tmp is private to the sandbox.
+#   ProtectSystem=strict + ReadWritePaths=/home/%i — the whole filesystem is
+#     read-only except the sandbox's own home. /opt/cc-remote-agent stays intact.
+#   ProtectKernelTunables / ProtectControlGroups / RestrictSUIDSGID — the usual
+#     "cannot reconfigure the host" set; harmless for a user-level agent.
+#   EnvironmentFile under /etc/cc-remote, root 0600 — systemd reads it as root
+#     BEFORE dropping to %i. Until 08.10.2026 it sat in the sandbox's own home,
+#     so the sandbox could swap it for a symlink to any root-only file (the
+#     fleet agent's env, the provisioner token) and read that from its env.
+#   ProtectHome=tmpfs + BindPaths=/home/%i — other homes do not exist inside.
+#   InaccessiblePaths — /srv (every project on this box, their .env files),
+#     /root, backups, /etc/cc-remote and the /opt trees that are not ours.
+#     `-` prefix: a path missing on some host is not an error.
+#   ProtectProc=invisible / ProcSubset=pid — other users' processes and their
+#     command lines and environments are not visible.
+#   PrivateDevices / CapabilityBoundingSet= — no raw devices, no capabilities.
+#   Loopback to host services is refused by sandbox-egress.service (nft):
+#     only listeners inside sandboxes.slice and the DNS stub are reachable.
+#
+# The unix user is the real boundary (homes 700, group `sandbox`, no sudo, no
+# docker, sshd DenyGroups). These caps limit blast radius; they are not a VM.
+[Unit]
+Description=Hegai Code sandbox agent (%i)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=%i
+Group=sandbox
+WorkingDirectory=/home/%i
+Slice=sandboxes.slice
+Environment=HOME=/home/%i
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=NODE_OPTIONS=--max-old-space-size=512
+# The env file is written by the provisioner (root:root 0600, outside the
+# sandbox's home — see the header) and applied LAST so it overrides the
+# defaults above.
+EnvironmentFile=/etc/cc-remote/sandboxes/%i.env
+ExecStart=/usr/bin/node /opt/cc-remote-agent/current/agent.mjs
+Restart=always
+RestartSec=5
+MemoryMax=2G
+MemoryHigh=1536M
+CPUQuota=150%
+TasksMax=512
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/%i
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ProtectHome=tmpfs
+BindPaths=/home/%i
+InaccessiblePaths=-/srv -/root -/var/backups -/etc/cc-remote -/opt/pipx -/opt/containerd -/opt/posthog-smoke -/opt/swift -/opt/codex-gateway -/opt/card-app -/opt/forgejo-runner -/opt/forgejo-runner-2 -/opt/forgejo-runner-heavy -/opt/promote-bot -/opt/android
+ProtectProc=invisible
+ProcSubset=pid
+PrivateDevices=yes
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,189 @@
+/* 21-composer-touch — the composer at rest on a touch device, and the chat container queries. */
+
+/* ---- the composer at rest: ONE row, ON A TOUCH DEVICE ONLY -------------
+   Three stacked bands — field, controls, footer — is a lot of a phone to spend
+   on a box you are not using, and there the transcript is what the screen is
+   for. At rest it folds to the reference's shape: `+`, the field, mic, send.
+
+   THE GATE IS THE DEVICE, not the pane width, and that is the whole fix. This
+   fold lived in `@container chat (max-width: 640px)` and was removed outright
+   (181d6c3) because a container query cannot tell a phone from a narrow pane:
+   a Колонки column is ~380px on a 1440px screen and the Windows window crosses
+   640px constantly, so the composer folded on a desk — which is where it was
+   reported from. Removing it everywhere then took it off the phone too, where
+   it was wanted. `pointer: coarse` asks the question that was actually being
+   asked; the width bound keeps a touchscreen laptop out of it.
+
+   LANDSCAPE joins it (26.09.2026, by request). A phone turned sideways is
+   wider than 860px, so it gets the desk shell — split, top bar — and lost the
+   fold with the width bound, which is exactly backwards: sideways is where the
+   screen is SHORTEST and three bands of composer cost the most. `pointer:
+   coarse` still keeps every desk out; a tablet held landscape folds too, the
+   same way ChatGPT's composer does until you tap into it.
+
+   `idle` is React's (nothing typed, nothing staged) and `engaged` outlives the
+   blur by a beat — deliberately NOT `:focus-within`, which is what made the
+   model menu untappable on iOS: the field blurs before the click lands, so the
+   row folded the control away mid-tap.
+
+   `display: contents` on the action row is what makes one row possible at all:
+   the buttons live in a child box, so without it flex could only order that box
+   as a unit and `+` would sit after the text it belongs in front of. */
+@media (pointer: coarse) and (max-width: 860px), (pointer: coarse) and (orientation: landscape) {
+  .composer-box.cg.idle {
+    flex-direction: row; align-items: center; gap: 2px; padding: 2px 4px 2px 2px;
+  }
+  .composer-box.cg.idle > .composer-actions { display: contents; }
+  /* The model control is NOT in the folded row. It comes back on the first tap
+     into the field, which is where you are going anyway before deciding how
+     hard to think, and it comes back whole — name and level — because that row
+     has the width for it.
+     This has swung twice before. Keeping the full button in cost the
+     placeholder its line («Opus…» plus a wrapped second row). Stripping it to
+     a glyph was meant to keep "the LEVEL" visible — two comments here and one
+     in RunPicker.tsx said exactly that — but the rule that hid `.rp-effort-short`
+     hid the level along with everything else, so what actually shipped was a
+     lightning bolt identical at every model and every effort: forty pixels of
+     the narrowest row in the product, carrying zero information. Those
+     comments described a control that never existed; they are gone with it.
+     Safe to fold: the phone's picker is a bottom sheet portalled to `body`
+     (dadd2eb), so hiding the trigger cannot take an OPEN menu with it. */
+  .composer-box.cg.idle { flex-wrap: nowrap; }
+  .composer-box.cg.idle .composer-tools { display: none; }
+  /* The two controls a thumb actually aims at, at the size a thumb needs. Send
+     was 36 beside a 40 microphone — the PRIMARY action, the smallest thing in
+     the row — and both were under the 44 the rest of the product holds. The
+     glyphs grow with them (sized here rather than in JSX so the desk composer,
+     where the row is not the whole screen, keeps its proportions). */
+  .composer .round-btn.mic, .composer .send-round { width: 44px; height: 44px; }
+  .composer .round-btn.mic svg { width: 23px; height: 23px; }
+  .composer .send-round svg { width: 18px; height: 18px; }
+  /* The stop square grows with its button, still visibly smaller than the
+     arrow it replaces — a stop is a smaller mark inside the same plate. */
+  .composer .send-round.stop { width: 36px; height: 36px; }
+  .composer-box.cg.idle > textarea {
+    order: 2; flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 10px 2px 10px 4px;
+    /* The third time this row lost its placeholder to a second, clipped line —
+       twice to a model name, once to the type going from 13.5px to 16px. The
+       two earlier fixes both took something away to buy the width back, which
+       is why the row is now down to a glyph. So say it structurally instead:
+       one line, whatever is in it. The box is `idle`, which MEANS the draft is
+       empty, and the first keystroke unfolds the row — so this can never clip
+       anything a person typed, only the tail of a placeholder. */
+    white-space: nowrap; overflow: hidden;
+  }
+  /* The folded row has no second line to spend, so the meter takes the field's
+     slot outright (the textarea is already `display: none` while dictating) and
+     the label goes — at 390px there is room for the wave, the clock and the ✕,
+     and the clock says «recording» as well as the word did. */
+  .composer-box.cg.idle > .dict-strip { order: 2; flex: 1 1 auto; min-width: 0; padding: 0 var(--space-1); }
+  .composer-box.cg.idle > .dict-strip .dict-label { display: none; }
+  /* The wave runs all the way to the microphone. Two things kept it short and
+     both had to go: it did not grow (`flex: 0 1 auto` below, right for a 760px
+     desk composer where 28 bars pinned right read as something come loose),
+     and the clock and ✕ sat to its RIGHT — so the strip's leftover width
+     landed between the last bar and the mic as a dead tail. Here the two small
+     things go in FRONT and the meter takes everything after them, which also
+     puts the newest bar next to the button that stops it. */
+  .composer-box.cg.idle > .dict-strip .work-clock { order: -2; }
+  .composer-box.cg.idle > .dict-strip .dict-x { order: -1; }
+  .composer-box.cg.idle > .dict-strip .vwave { order: 0; flex: 1 1 auto; }
+  /* The BARS fill too, not just the box around them. Growing the container
+     alone moved the empty space rather than removing it: 28 bars at a fixed
+     3px are 138px whatever the row is wide, and `justify-content: flex-end`
+     parked them against the microphone with the slack pooled on the left.
+     Widening the bars instead spends the whole strip on the meter — and it is
+     what a voice memo looks like on a phone, where a hairline is thinner than
+     the finger that started it. Basis stays 3px so the desk composer, which
+     does not grow, measures exactly as before. */
+  .composer-box.cg.idle > .dict-strip .vwave i { flex: 1 1 3px; width: auto; }
+  .composer-box.cg.idle .round-btn.attach { order: 1; }
+  .composer-box.cg.idle .round-btn.mic { order: 3; }
+  .composer-box.cg.idle .send-round { order: 4; }
+  /* Its 46px hit area is built from `inset: -5px`, wider than this row's 2px
+     gap, so its left edge sat on the mic. */
+  .composer-box.cg.idle .send-round::after { inset: -5px 0; }
+  /* The footer folds too — context meter, «Сжать контекст». Both are about a
+     message you are composing, and neither reads as an instruction when there
+     is no message. A SIBLING combinator, not `:has`: the footer is the box's
+     next sibling and `+` says it legally. */
+  .composer-box.cg.idle + .composer-foot { display: none; }
+}
+
+@container chat (max-width: 640px) {
+  /* The reading size used to step up here: `--size-body` was 14px, chosen
+     against a 1440px desk where the transcript shares the screen with two
+     columns of chrome, and a phone — where the transcript IS the screen and is
+     read at arm's length — got 15.5px. The base is 16px now and has absorbed
+     that; a bump on top of it would be a container query deciding it knows a
+     phone from a 380px «Колонки» pane on a desk, which is the mistake the
+     composer fold was moved off this query to avoid. */
+  .msg { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .msg > .who, .msg.assistant::before,
+  .msg.assistant > .md, .msg.user > * { grid-column: 1; }
+  /* REDESIGN 2026-09-17 — this block used to re-seat the stamp into the
+     speaker's grid row, because in a narrow pane there was no gutter to hang it
+     in. There is no gutter in ANY pane now, and `grid-row: 1` put the time
+     above the plate it stamps. The stamp simply follows its turn. */
+  .msg.user > .when {
+    position: static; width: auto;
+    grid-column: 1; grid-row: auto; justify-self: end; order: 2;
+  }
+  .msg.cont.user > .when { position: static; top: auto; right: auto; }
+  /* Effort STAYS on the phone, and the type steps back up.
+     Both were a consequence of the one-row fold, and the fold is gone
+     (`181d6c3`): «Opus 4.6 Высокое ›» was ~160px fighting the field and five
+     controls for a single 390px row, so the effort was dropped and the label
+     set to 11.5px to survive it. Unfolded, the controls have a band of their
+     own — `+`, model, microphone, send — and the reference this composer is
+     modelled on puts the effort right there in it («6 Astra Средний», with the
+     model in full tone and the effort a tone back). We were showing less than
+     the thing we were copying, and reading it two points smaller.
+     Measured at 390px rather than assumed: the row fits with the effort in. */
+  .composer-tools { gap: 4px; }
+  .ctool { padding: 4px 8px; }
+  /* No phone bump any more. 14px was chosen while the label still carried
+     «Opus (1M context)» and the row had to shout to be found; the name is
+     trimmed to its short form now and the chip has edges, so the type can sit
+     back down where a footnote to the message belongs. */
+  .run-pick { gap: 4px; padding: 5px 8px; }
+
+  /* ---- the composer at rest: the ONE-ROW fold is GONE -------------------
+     It used to collapse to `+`, field, microphone, send whenever the box was
+     `idle` — hiding the model control, «Сжать», «Закрыть прогон», the context
+     meter and the Enter hint until the first tap.
+
+     Removed on request (19.09.2026), and removed EVERYWHERE rather than just
+     off the desktop. The trigger was a container query on `.chat`, so it was
+     never "the phone layout": a Колонки column is ~380px on a 1440px screen,
+     and the Windows app window crosses 640px constantly — the composer folded
+     on a desk, which is where it was reported from. Making it conditional on
+     pointer type was the alternative and was declined: one composer that
+     always shows its controls beats two shapes to reason about.
+
+     The cost the fold's own note predicted — «Opus…» truncated, the
+     placeholder wrapping to a clipped second line — does NOT appear, and that
+     is measured, not assumed: `.shots/session-390-*` after this change shows
+     «Opus 4.6 ›» whole and the placeholder on one line. The prediction was
+     about keeping the model INSIDE a single folded row, where the field and
+     five controls shared 390px. Unfolded there is no such row: the field gets
+     its own band and the controls get theirs, which is the layout that always
+     fitted. Under 460px `.rp-effort` gives way to `.rp-effort-short`, so the
+     phone row carries the model and the short level.
+
+     The `idle` class and Chat.tsx's `engaged` state now feed nothing. Left in
+     place deliberately: another session is editing Chat.tsx as this lands, and
+     a dead className is cheaper than a merge conflict. Sweep both once that
+     work is in. */
+
+  /* The folded run's glyph-and-number is the DEFAULT now, not a narrow-pane
+     override — see the block next to `.tool-line` above. It used to live only
+     here, which is why the sentence survived on a laptop, in the Windows app
+     and in a wide PWA window long after it had been asked to go. */
+  .composer-foot { gap: 8px; }
+  /* The pane's own padding is the rest of that empty left edge. */
+  .log { padding-left: 12px; padding-right: 12px; }
+  /* The 92px gutter-clearing indent these used to carry is gone at every width
+     now — see the note by the rule itself — so the narrow pane has nothing left
+     to undo here. */
+}

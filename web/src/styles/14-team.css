@@ -1,0 +1,226 @@
+/* 14-team — team workspaces: the sign-in card, members, roles, enrollment. */
+
+/* Team workspaces --------------------------------------------------------- */
+.auth-screen { min-height: 100vh; display: grid; place-items: center; padding: var(--space-6); background: var(--bg); color: var(--text); }
+.auth-card { width: min(480px, 100%); display: grid; gap: var(--space-4); padding: var(--space-8); border: 1px solid var(--divider); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow); }
+.auth-card h1 { margin: 0; font: 600 var(--size-screen)/1.2 var(--title); }
+.auth-card p { margin: 0; color: var(--text-muted); line-height: 1.55; }
+.auth-login { justify-self: start; text-decoration: none; }
+
+/* «Войти через Telegram» (components/TelegramSignIn.tsx). The number is the
+   point of the dialog — the person presses the same one in the bot, which is
+   what stops a login someone else started — so it is the largest thing on it:
+   the data voice (mono), the app's own top size, never the marketing scale. */
+.tg-login { width: 440px; }
+.tg-login .eyebrow { color: var(--text-muted); margin-bottom: var(--space-3); }
+.tg-login-lead { margin: 0 0 var(--space-3); color: var(--text); font-size: var(--size-body); line-height: var(--lh-body); }
+.tg-login-match {
+  font-family: var(--mono); font-size: var(--size-screen); font-weight: 600; letter-spacing: var(--ls-caps);
+  text-align: center; padding: var(--space-4) 0; margin: var(--space-1) 0 var(--space-4);
+  background: var(--here); color: var(--text); border-radius: var(--radius-lg);
+}
+.tg-login-actions { display: flex; justify-content: center; margin-bottom: var(--space-3); }
+.tg-login-wait { text-align: center; color: var(--text-muted); font-size: var(--size-small); margin: 0 0 var(--space-4); }
+.tg-login-hint { color: var(--text-muted); font-size: var(--size-small); margin: 0 0 var(--space-2); }
+.tg-login-link { display: flex; gap: var(--space-2); align-items: center; }
+.tg-login-link code {
+  flex: 1; min-width: 0; overflow-wrap: anywhere; font-family: var(--mono); font-size: var(--size-micro);
+  padding: var(--space-2); background: var(--surface-sunken); color: var(--text-muted); border-radius: var(--radius-sm);
+}
+.tg-login-close { margin-top: var(--space-4); }
+
+/* «Вы вошли через Telegram как @x» — once after a Telegram sign-in, over
+   whatever screen follows (the waiting screen included), with a way out. */
+.tg-signed-in {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + var(--space-3)); left: 50%; transform: translateX(-50%);
+  /* Above every other layer (modals 85, the drawer 88/89, the run picker
+     90/91): a tool prompt in someone else's account must not cover the line
+     that says whose account this is. */
+  z-index: 95; display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: center;
+  width: max-content; max-width: calc(100vw - 2 * var(--space-3)); padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised); color: var(--text); font-size: var(--size-small);
+  border-radius: var(--radius-panel); box-shadow: var(--shadow-lg), var(--rim);
+}
+.tg-signed-in-actions { display: flex; gap: var(--space-2); }
+.tg-link-row { color: var(--text-muted); font-size: var(--size-small); }
+/* Two ways in, side by side; they wrap on a phone. */
+.link-signin { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* The landing's nav is tight on a phone: the Telegram door stays in the
+   closing banner there. */
+@media (max-width: 560px) { .lp-nav-tg { display: none; } }
+.read-only-banner { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--divider); background: var(--surface-hover); color: var(--text-muted); font-size: var(--size-meta); }
+/* `body` is `overflow: hidden`, so every page under `.main` has to carry its own
+   scroller. `.board` (board/table/flow/hardware/memory), `.startscreen` and
+   `.profile` all do; the five team screens share this one
+   box and had none, so the list was clipped at the fold with no way down.
+   The scroller is the full-width flex child and the 1120px measure comes from
+   auto side padding — that keeps the scrollbar at the window edge instead of
+   floating inside the column. `align-content: start` stops the auto rows from
+   stretching to fill a short page (a workspace with two people and one project).
+
+   `grid-auto-rows: max-content` is the half that is easy to miss. Once the page
+   has a definite height (it is a stretched flex item), an `auto` row track gets
+   clamped to the leftover space instead of growing to its content, so the last
+   card was cut to the fold and `scrollHeight === clientHeight` — a scroller with
+   nothing to scroll. Measured live: 493px track for 1086px of rows. */
+.team-page {
+  flex: 1; min-width: 0; overflow-y: auto;
+  align-content: start; grid-auto-rows: max-content;
+  padding: var(--space-6) max(var(--space-6), (100% - 1120px) / 2);
+  display: grid; gap: var(--space-4);
+}
+.team-head { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+.team-head h2 { margin: 0; font: 600 var(--size-page)/1.2 var(--title); }
+.team-head > span { color: var(--text-muted); font-size: var(--size-small); }
+.team-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.team-metrics article, .team-card { border: none; border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-sm), var(--rim); }
+.team-metrics article { display: grid; gap: var(--space-1); padding: var(--space-4); }
+.team-metrics b { font: 600 var(--size-screen)/1 var(--title); }
+.team-metrics span, .team-help { color: var(--text-muted); font-size: var(--size-meta); }
+.team-card { overflow: hidden; }
+.team-card h3, .settings-section { margin: 0; padding: var(--space-4); }
+.team-card h3 { font-size: var(--size-body); border-bottom: 1px solid var(--divider); }
+.team-row { width: 100%; min-height: 52px; padding: var(--space-2) var(--space-4); display: flex; align-items: center; gap: var(--space-3); border: 0; border-top: 1px solid var(--divider); background: transparent; color: var(--text); text-align: left; }
+button.team-row:hover { background: var(--surface-hover); }
+.team-row:first-child { border-top: 0; }
+.team-row > span:not(.role-chip):not(.team-avatar) { min-width: 0; display: grid; gap: 2px; flex: 1; }
+.team-row b, .team-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-row small, .team-row time { color: var(--text-muted); font-size: var(--size-meta); }
+.team-row.static { cursor: default; }
+.team-avatar { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--radius-sm); background: var(--chip); color: var(--text-muted); font-size: 11px; font-weight: 600; }  /* off-ladder: an initial sized by its 32px box */
+.role-chip { margin-left: auto; padding: 3px 8px; border-radius: 999px; background: var(--surface-hover); color: var(--text-muted); font-size: var(--size-micro); text-transform: capitalize; }
+/* A person's name, when it opens their work. Reads as the row's title until
+   it is hovered — the affordance belongs to the name, not to a separate
+   control competing with the role selector on the right. */
+.link-name { padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.link-name:hover { color: var(--brand); }
+.link-name[aria-expanded="true"] { color: var(--brand); }
+.member-work h3 .live-now { color: var(--attn); }
+.team-form { display: flex; gap: var(--space-2); align-items: center; padding: var(--space-3); border: none; border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-sm), var(--rim); }
+/* A form inside a card is part of that card, not a second plate. */
+.team-card .team-form { padding: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.settings-section > .team-form { margin: 0; }
+/* The canon field (same well as the side panel's search and the browser sheet):
+   a raw browser input is a thin border on white and reads as unstyled. */
+.team-form input:not([type='checkbox']):not([type='radio']), .team-form select {
+  min-width: 0; min-height: 36px; padding: 6px var(--space-3); border: none; border-radius: var(--radius-md);
+  background: var(--surface-sunken); color: var(--text); box-shadow: inset 0 0 0 1px var(--divider);
+  font: var(--size-body)/1.4 var(--sans); outline: none;
+}
+.team-form input { flex: 1; }
+.team-form input::placeholder { color: var(--text-faint); }
+.team-form input:focus, .team-form select:focus { box-shadow: inset 0 0 0 1px var(--border), 0 0 0 3px var(--focus-ring); }
+.team-form.compact { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--divider); border-radius: 0; box-shadow: none; background: transparent; }
+.team-form.compact b { flex: 1; }
+/* «Доступ поддержки» (Настройки): the open-form wraps, the one-time link and the log sit under it. */
+.support-form { flex-wrap: wrap; }
+.support-form select { min-width: 0; }
+.support-link, .support-log { display: grid; gap: var(--space-2); padding: var(--space-3) 0; }
+.support-log { border-top: 1px solid var(--divider); padding-top: 0; }
+.project-share { display: grid; grid-template-columns: 180px minmax(220px, 1fr) minmax(160px, .6fr) auto; }
+.team-note { padding: var(--space-3); border-radius: var(--radius-sm); background: var(--surface-hover); color: var(--text-muted); font-size: var(--size-meta); }
+.team-empty { padding: var(--space-6); color: var(--text-faint); text-align: center; }
+.settings-section { display: grid; gap: var(--space-3); }
+.settings-section h3, .settings-section p { margin: 0; }
+.enrollment-code { font: 600 28px/1 var(--mono); letter-spacing: .1em; }  /* off-ladder: read aloud across a room */
+.install-command { overflow: auto; margin: 0; padding: var(--space-3); border-radius: var(--radius-sm); background: var(--terminal-bg); color: var(--terminal-text); font: 12px/1.5 var(--mono); white-space: pre-wrap; }  /* off-ladder: the /install landing has a hero; the app does not */
+.settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+/* The OS switcher is `.install-os-tabs`, borrowed whole from /install rather
+   than re-styled here: "which machine am I installing on" is one question and
+   deserves one control. Two things have to give, both from the borrowing: its
+   bottom margin belongs to the install page's loose cards, and its segments are
+   `flex: 1` inside a ~560px column there — in a settings card twice that wide
+   they become two enormous plates for a two-word choice. */
+.settings-section .install-os-tabs { margin-bottom: 0; max-width: 280px; }
+/* `.settings-section` is a grid, so a button that is a direct child stretches to
+   the full card — a 1000px-wide «Выйти». Buttons are sized by their label. */
+.settings-section > .btn, .settings-section > form > .btn { justify-self: start; }
+/* The card runs to the 1120px cap, and prose that runs with it is ~150
+   characters a line — the eye loses the return. Only the prose is capped; the
+   command block still needs the full width. */
+.settings-section .team-help { max-width: 76ch; }
+
+.attn-text { color: var(--negative); }
+/* Collapsed once the fleet is not empty: the grid is the subject of the screen
+   and this must not push it down. `<details>` and not a modal because the
+   instruction is something people read WHILE typing in another window. */
+.hw-connect { margin-top: var(--space-4); }
+/* Onest, not the inherited mono: this is a control the eye reads as a label,
+   and mono here is the data-layer voice used for counts, paths and code. */
+.hw-connect > summary { display: inline-flex; width: max-content; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: transparent; font-family: var(--sans); font-size: var(--size-small); color: var(--text-muted); }
+.hw-connect > summary:hover { background: var(--surface-hover); color: var(--text); }
+/* The shared `details[open] > summary` draws a divider and squares the bottom
+   corners for a summary that caps a panel. This one captions a free-standing
+   card, so it keeps its own shape. */
+.hw-connect[open] > summary { margin-bottom: var(--space-3); border-bottom: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); }
+
+@media (max-width: 720px) {
+  .team-page { padding: var(--space-3); }
+  .team-metrics { grid-template-columns: 1fr; }
+  .team-form, .project-share { display: grid; grid-template-columns: 1fr; }
+  .team-row time { display: none; }
+}
+
+/* Sign-in of a customer's own hub (SignInScreen.tsx, SetupPage.tsx): local
+   email + password + authenticator code, provider buttons, the /setup page. */
+.signin-card { gap: var(--space-4); }
+.signin-card p { overflow-wrap: anywhere; }
+.signin-form { display: grid; gap: var(--space-3); }
+.signin-form p { margin: 0; color: var(--text-muted); }
+.signin-form label { display: grid; gap: var(--space-1); color: var(--text-muted); font-size: var(--size-meta); font-weight: 600; }
+.signin-form input {
+  width: 100%; padding: 10px var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-list);
+  background: var(--bg); color: var(--text); font: var(--size-body) var(--sans); outline: none;  /* 16px: iOS Safari zooms below it */
+}
+.signin-form input:focus { border-color: var(--action); box-shadow: 0 0 0 3px var(--focus-ring); }
+.signin-form .btn, .signin-methods .btn { justify-content: center; }
+.signin-methods { display: grid; gap: var(--space-2); }
+.signin-or { text-align: center; font-size: var(--size-meta); }
+/* The scanner needs a white quiet zone; the hub's SVG carries its own. */
+.setup-qr { justify-self: center; max-width: 100%; height: auto; border-radius: var(--radius-sm); }
+.setup-secret { font-family: var(--mono); font-size: var(--size-micro); overflow-wrap: anywhere; }
+.recovery-codes {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); padding: var(--space-3);
+  background: var(--surface-sunken); border-radius: var(--radius-md); font-family: var(--mono);
+}
+.recovery-codes code { font-size: var(--size-meta); overflow-wrap: anywhere; }
+
+/* «Расходы»: one block per person, a metrics grid that wraps to the width it
+   gets — the same markup is the desktop table and the phone list. */
+.usage-period { display: flex; gap: var(--space-4); margin: 0 0 var(--space-3); }
+.usage-list { display: grid; gap: var(--space-3); }
+.usage-row { padding: var(--space-4); border: 1px solid var(--divider); border-radius: var(--radius-list); background: var(--surface); box-shadow: var(--shadow-xs); }
+.usage-row.quiet { opacity: 0.8; }
+.usage-row header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.usage-row header b { font-size: var(--size-body); }
+.usage-row header .role-chip { margin-left: 0; text-transform: none; }
+.usage-row header .role-chip.attn { background: var(--attn); color: var(--on-attn); }
+.usage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-4); }
+.usage-cell { min-width: 0; display: grid; align-content: start; gap: var(--space-1); }
+.usage-cell > small, .usage-sub > small { color: var(--text-muted); font-size: var(--size-meta); }
+.usage-num { font: 600 var(--size-page)/1.2 var(--title); }
+.usage-none { color: var(--text-faint); font-size: var(--size-small); }
+.usage-err { color: var(--negative) !important; }
+.usage-spark { width: 100%; height: 28px; color: var(--text-muted); }
+.usage-models span { font-size: var(--size-small); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-models code { font-size: var(--size-meta); }
+.usage-subs { grid-column: span 2; }
+.usage-sub { display: grid; gap: var(--space-1); margin-bottom: var(--space-2); }
+.usage-reset { color: var(--text-faint); font-size: var(--size-meta); }
+.usage-bar { display: grid; grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); font-size: var(--size-meta); }
+.usage-bar.bare { grid-template-columns: minmax(0, 1fr) auto; }
+.usage-bar-label { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-bar-track { height: 6px; border-radius: 2px; background: var(--surface-sunken); overflow: hidden; }
+.usage-bar-track i { display: block; height: 100%; background: var(--pace-ok); }
+.usage-bar.edge .usage-bar-track i { background: var(--pace-edge); }
+.usage-bar.over .usage-bar-track i { background: var(--pace-over); }
+.usage-bar.over b { color: var(--negative); }
+.usage-foot { margin: var(--space-3) 0 0; }
+.usage-card .usage-row { margin: 0 var(--space-4) var(--space-3); }
+.usage-card .usage-period { padding: 0 var(--space-4); }
+@media (max-width: 640px) {
+  .usage-subs { grid-column: 1 / -1; }
+}
+/* A team's row carries a chip and up to four buttons: let the buttons drop under the name instead of eating it. */
+.team-row.wrap { flex-wrap: wrap; }
+.team-row.wrap > span:not(.role-chip):not(.team-avatar) { min-width: 140px; }

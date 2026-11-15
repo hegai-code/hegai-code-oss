@@ -1,0 +1,161 @@
+/* 18-shell-chrome — shell responsiveness, the top bar as the title bar, Windows menu bar, macOS traffic-light inset. */
+
+/* ============================ shell responsiveness ============================ */
+@media (max-width: 1199px) {
+  /* below the info column's breakpoint the toggle would be a dead control, so
+     the info panel becomes a sheet instead — see .ws-info-sheet */
+  .rail { flex-basis: 60px; width: 60px; }
+}
+
+@media (max-width: 860px) {
+  /* ONE page and ONE drawer. That is the whole phone shell.
+     It used to be two pages: the context column rendered full-screen at
+     `/w/sessions` with `.main-col` hidden beside it, and the drawer rendered
+     the SAME component over an open session — two session lists in one app,
+     reached by different gestures, and every browser back landed on the one
+     nobody asked for. React does not even mount the column here any more
+     (App: `showContext` is false on a phone), so this is belt and braces. */
+  .rail { display: none; }
+  .sidebar.sidepanel { display: none; }
+}
+
+/* `.lensview`, `.lensbar`, `.lb-*` and `.lens` are gone with the switcher.
+   Список, Flow and Колонки were three tabs over one dataset, two of which drew
+   what the side panel draws permanently and the third of which was a layout,
+   not a way of looking. With the bar gone, `TopBar` renders on every screen
+   again and nothing has to fold its chrome into a tabs row. */
+
+/* ---------- the top bar AS the title bar ----------
+   On Windows the shell hands the page a frameless window, so this row is the
+   title bar: it drags the window, double-click zooms it, and the three buttons
+   at its right end are the window's. `.titlebar` is set only when the shell
+   installed its bridge (`hasWindowChrome`), so a browser and the macOS app —
+   both of which keep a real frame — are untouched. */
+.topbar.titlebar { -webkit-app-region: drag; }
+.topbar.titlebar button,
+.topbar.titlebar a,
+.topbar.titlebar input { -webkit-app-region: no-drag; }
+/* The three controls, hard against the right edge with no padding between them
+   and the corner: Windows draws them edge-to-edge and a gap there reads as a
+   misaligned window rather than as breathing room. The bar's own right padding
+   is cancelled for exactly this row. */
+.topbar.titlebar { padding-right: 0; }
+.win-buttons { display: flex; align-self: stretch; margin-left: 4px; }
+.win-btn {
+  width: 46px; align-self: stretch; display: grid; place-items: center;
+  border: none; background: transparent; color: var(--text-muted); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.win-btn:hover { background: var(--surface-hover); color: var(--text); }
+/* The close button is the one control in the app that goes red on hover, and it
+   is not a decision about this app: every Windows title bar does it, and a
+   close button that looks like its two neighbours is the one people miss. */
+.win-btn.danger:hover { background: var(--red); color: #fff; }
+
+/* ---------- the Windows menu bar (`shell/MenuBar.tsx`) ----------
+   The program's icon, then «Файл · Вид · Перейти», at the left end of the
+   Windows title bar (13.10.2026, by request). Flat text buttons that only
+   gain a plate on hover or while their menu is open — the Windows 11 shape.
+   The drop-down is the app's ordinary floating layer (`--surface-raised`,
+   `--shadow-lg`), with a check column, a label and a right-aligned shortcut,
+   because that is the row every Windows menu has. */
+.app-mark { flex: 0 0 auto; display: block; }
+/* The menus are the first thing to give way when the bar runs out of room
+   (a large font scale on a mid-width window): the row clips, the window
+   buttons at the right edge never leave the screen. The drop-down is the
+   row's sibling, so the clip never cuts it. */
+.menubar { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 0; }
+.menubar-row { display: flex; align-items: center; min-width: 0; overflow: hidden; }
+.menubar-btn { flex: 0 0 auto; }
+.menubar, .menubar * { -webkit-app-region: no-drag; }
+.menubar-btn {
+  height: 30px; padding: 0 9px; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text); cursor: default;
+  font: 400 var(--size-small)/1 var(--sans);
+  transition: background var(--dur-fast) var(--ease);
+}
+.menubar-btn { color: var(--text-muted); }
+.menubar-btn:hover, .menubar-btn.open { background: var(--surface-hover); color: var(--text); }
+.menubar-pop {
+  position: absolute; top: calc(100% + 6px); z-index: 60;
+  min-width: 248px; padding: 4px;
+  display: flex; flex-direction: column;
+  background: var(--surface-raised); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg), var(--rim);
+}
+.menubar-item {
+  display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 8px;
+  width: 100%; min-height: 30px; padding: 0 10px 0 8px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; cursor: default;
+  color: var(--text); font: 400 var(--size-small)/1.2 var(--sans); text-align: left; text-decoration: none;
+}
+.menubar-item.active:not(:disabled) { background: var(--surface-hover); }
+.menubar-item:disabled { color: var(--text-faint); }
+.menubar-check { display: grid; place-items: center; }
+.menubar-hint {
+  padding-left: 24px; color: var(--text-muted);
+  font-size: var(--size-meta); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.menubar-item:disabled .menubar-hint { color: var(--text-faint); }
+.menubar-sep { height: 1px; margin: 4px 8px; background: var(--divider); }
+.menubar-head { padding: 8px 10px 4px 32px; color: var(--text-muted); font-size: var(--size-meta); }
+/* The bar needs ~1250px with the five menus and ~890 without; below that the
+   window buttons were pushed off the right edge. A narrow window drops the
+   icon and the menus (Alt/F10 then do nothing — `MenuBar` checks) and keeps
+   what the bar carried before them. */
+@media (max-width: 1039px) { .menubar { display: none; } }
+/* «Справка → О программе»: the mark, the name, the installed version. */
+.about-modal { width: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.about-modal .app-mark { margin: 4px 0 6px; }
+.about-name { font: 600 var(--size-title)/1.2 var(--title); color: var(--text); }
+.about-version { font-size: var(--size-small); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.about-note { margin: 10px 0 0; font-size: var(--size-small); line-height: 1.5; color: var(--text-muted); }
+.about-modal .modal-actions { align-self: stretch; }
+
+/* ---------- macOS: the top bar under the traffic lights ----------
+   The Mac shell (0.1.22+) is an `Overlay` window, like Claude's app: no title
+   strip, the system's three buttons float over this bar's left end. So the bar
+   starts after them (`--mac-lights`, paired with `TRAFFIC_LIGHTS` in
+   `windows/src-tauri/src/main.rs`, which centres them on the 56px bar), keeps
+   its ordinary right padding (no Windows buttons there), and stays 56px on a
+   narrow window where the Windows rule shrinks it to 44 — the lights do not
+   move with it. In native fullscreen the lights are gone and so is the room.
+   A screen with no top bar (sign-in, the waiting card) gets the system's 28px
+   strip back: `#root` starts below it and the page drags from it. */
+html.mac-shell { --mac-lights: 88px; }
+html.mac-shell .topbar.titlebar.mac { padding-left: var(--mac-lights); padding-right: 16px; }
+html.mac-shell.mac-fullscreen .topbar.titlebar.mac { padding-left: 16px; }
+html.mac-shell:not(.mac-fullscreen):not(:has(.topbar)) #root { top: 28px; }
+@media (max-width: 860px) {
+  html.mac-shell .app:has(.workspace) > .topbar.titlebar.mac { height: 56px; min-height: 56px; }
+}
+
+/* Panel toggle, back, forward — the left end of the bar, in browser order. */
+.nav-arrows { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; margin-right: 4px; }
+/* Disabled rather than hidden: a pair that appears and disappears makes the
+   controls beside it jump, and this is the top-left corner of every screen. */
+.nav-arrows .icon-btn:disabled { color: var(--text-faint); opacity: 0.45; cursor: default; }
+.nav-arrows .icon-btn:disabled:hover { background: transparent; }
+
+
+
+
+/* ---- team pages: let the grid actually shrink ----------------------------
+   `.team-page` is a grid with an implicit `auto` column, so its track was sized
+   to the widest row's MIN-CONTENT and cards ran 397px wide inside a 390px page.
+   Grid items do not shrink below min-content unless the track says minmax(0,…). */
+.team-page { grid-template-columns: minmax(0, 1fr); }
+.team-card, .team-metrics, .team-form { min-width: 0; }
+.team-row { min-width: 0; }
+.team-row > span { min-width: 0; overflow: hidden; }
+.team-row small, .team-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+
+/* The OLD mobile drawer is gone — the context column is a route, not an overlay
+   — so its hamburger, scrim and slide-in transform go with it. (The session
+   drawer below is a different thing: it opens over an open CONVERSATION, which
+   is the one place a route cannot help, because leaving the route is exactly
+   what you are trying not to do.) */
+.menu-btn { display: none !important; }
+@media (max-width: 860px) {
+  .scrim { display: none; }
+}

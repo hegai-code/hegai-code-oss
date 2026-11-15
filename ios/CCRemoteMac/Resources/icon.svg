@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Full-bleed ground: Tahoe masks every icon into its own squircle, and a
+       legacy shape with transparent margins gets the white backing plate —
+       edge-to-edge paint is what makes the green own the whole tile. -->
+  <rect x="0" y="0" width="1024" height="1024" fill="#06463D"/>
+  <rect x="478.46" y="200.90" width="67.08" height="256.10" rx="33.54" fill="#FF6A3D" transform="rotate(0 512.00 512.00)"/><rect x="478.46" y="280.16" width="67.08" height="176.83" rx="33.54" fill="#F2A900" transform="rotate(45 512.00 512.00)"/><rect x="478.46" y="200.90" width="67.08" height="256.10" rx="33.54" fill="#FF6A3D" transform="rotate(90 512.00 512.00)"/><rect x="478.46" y="280.16" width="67.08" height="176.83" rx="33.54" fill="#F2A900" transform="rotate(135 512.00 512.00)"/><rect x="478.46" y="200.90" width="67.08" height="256.10" rx="33.54" fill="#FF6A3D" transform="rotate(180 512.00 512.00)"/><rect x="478.46" y="280.16" width="67.08" height="176.83" rx="33.54" fill="#F2A900" transform="rotate(225 512.00 512.00)"/><rect x="478.46" y="200.90" width="67.08" height="256.10" rx="33.54" fill="#FF6A3D" transform="rotate(270 512.00 512.00)"/><rect x="478.46" y="280.16" width="67.08" height="176.83" rx="33.54" fill="#F2A900" transform="rotate(315 512.00 512.00)"/>
+</svg>

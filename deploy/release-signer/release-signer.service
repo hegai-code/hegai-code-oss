@@ -1,0 +1,51 @@
+# Hegai Code release signer. Install on a host OUTSIDE the fleet (README.md).
+#   install -d -m 0700 /etc/release-signer
+#   node setup.mjs /etc/release-signer          (as root, once)
+#   cp release-signer.service /etc/systemd/system/ && systemctl enable --now release-signer
+[Unit]
+Description=Hegai Code release signer (request/approve, TOTP-gated Ed25519)
+After=network.target
+
+[Service]
+# A dynamic user cannot read a 0600 root file, so the key material is handed
+# in as credentials: systemd copies them into a private tmpfs readable only by
+# this service, and the unit never needs a persistent user.
+DynamicUser=yes
+LoadCredential=key.pem:/etc/release-signer/key.pem
+LoadCredential=totp-secret:/etc/release-signer/totp-secret
+LoadCredential=request-token:/etc/release-signer/request-token
+# Optional Telegram notices on every request and signature:
+#LoadCredential=tg-bot-token:/etc/release-signer/tg-bot-token
+#Environment=SIGNER_TG_BOT_TOKEN_PATH=%d/tg-bot-token
+#Environment=SIGNER_TG_CHAT_ID=123456789
+StateDirectory=release-signer
+LogsDirectory=release-signer
+Environment=SIGNER_KEY_PATH=%d/key.pem
+Environment=SIGNER_TOTP_SECRET_PATH=%d/totp-secret
+Environment=SIGNER_REQUEST_TOKEN_PATH=%d/request-token
+Environment=SIGNER_STATE_DIR=/var/lib/release-signer
+Environment=SIGNER_LOG_PATH=/var/log/release-signer/sign.log
+Environment=SIGNER_PORT=8787
+ExecStart=/usr/bin/node /opt/release-signer/signer.mjs
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=no
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+UMask=0077
+ReadWritePaths=/var/lib/release-signer /var/log/release-signer
+
+[Install]
+WantedBy=multi-user.target

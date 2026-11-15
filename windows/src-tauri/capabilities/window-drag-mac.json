@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "window-drag-mac",
+  "description": "Три разрешения, которыми страница двигает и разворачивает СВОЁ окно на маке и спрашивает, полноэкранное ли оно. Окно там без полосы заголовка (Overlay, как у Claude): светофор рисует система, а перетаскивание за верхнюю панель и двойной клик — страница. Выдано ТОЛЬКО origin'у хаба и ТОЛЬКО окнам приложения — не окну входа (`popup-*`) и не офлайн-окну.",
+  "platforms": ["macOS"],
+  "windows": ["main", "window-*"],
+  "remote": {
+    "urls": ["https://code.acme.test/*"]
+  },
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-fullscreen"
+  ]
+}

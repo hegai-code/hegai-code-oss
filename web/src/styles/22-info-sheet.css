@@ -1,0 +1,59 @@
+/* 22-info-sheet — the session info sheet under 1200px and the anchors-as-UI link reset. */
+
+/* ---- session info: inline column above 1200px, sheet below ----------------
+   The ⓘ toggle rendered unconditionally while .ws-info was display:none under
+   1200px, so on any laptop it flipped a flag and localStorage and did nothing
+   visible. Same state now drives a sheet at those widths. */
+.si-scrim, .si-sheet { display: none; }
+@media (max-width: 1199px) {
+  .si-scrim { display: block; position: fixed; inset: 0; background: var(--scrim); z-index: 78; }
+  .si-sheet {
+    display: flex; flex-direction: column;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 79;
+    background: var(--surface-raised);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: var(--shadow-xl), var(--rim);
+    padding: 8px 8px calc(8px + var(--sab));
+    max-height: 85vh; overflow-y: auto;
+    animation: sheetup var(--dur) var(--ease-soft);
+  }
+  /* `flex: 0 0 auto`, and this is the bug behind «скролл длинный».
+     `.ws-info` declares `flex: 0 0 320px` for the DESK, where it is an item in
+     a row and that basis is its WIDTH. The sheet is a column, so the same
+     declaration became a fixed HEIGHT of 320px that could neither shrink to
+     short content nor grow past it — a box permanently 320 tall with its own
+     scrollbar, no matter what was in it. Height by content, and the sheet is
+     as tall as what it holds. */
+  .si-sheet .ws-info { display: flex; flex: 0 0 auto; width: auto; border-left: none; overflow: visible; }
+  /* The sheet is CONTROLS now (see `compact` in SessionInfo), and what is left
+     has to be aimed at with a thumb rather than read. `margin-top: auto` on
+     `.si-actions` is for the desk column, which is tall and wants its buttons
+     at the foot; here it would push them against a box that is only as tall as
+     they are, so it goes. The sheet also stops scrolling on its own: with the
+     nine label/value rows gone there is nothing left to scroll, and a box that
+     still offered to would just bounce. */
+  .si-sheet .si-compact { gap: 8px; padding: 2px 4px 4px; }
+  .si-sheet .si-compact .si-rows { gap: 8px; }
+  .si-sheet .si-compact .si-actions { margin-top: 0; padding-top: 2px; }
+  .si-sheet .si-compact .si-actions .ghost { min-height: 44px; font-size: var(--size-body); }
+}
+
+/* ============================================================================
+   Anchors used as UI
+   ----------------------------------------------------------------------------
+   Every destination is a real `<a href>` — the rail, the project cards, the
+   recent cards, the session titles. For a long while none of them were: the
+   routes existed and URLs changed, but navigation ran through `<button>` +
+   navigate(), so none of what a browser gives away for free worked. No ⌘-click
+   into a new tab, no middle-click, no "copy link address", no destination shown
+   in the status bar, and nothing for a screen reader to announce as a link. In
+   a control plane where three sessions in three tabs is the normal way to work,
+   that is a daily cost.
+
+   What the anchors must NOT bring with them is link chrome — an underlined,
+   blue rail icon is not a design, it is a regression. These rules strip the two
+   things a bare <a> adds and nothing else; each selector already declares its
+   own colour except the two cards, which used to inherit from a <button>.
+   ========================================================================== */
+a.sdrawer-row,
+a.session-title { text-decoration: none; }

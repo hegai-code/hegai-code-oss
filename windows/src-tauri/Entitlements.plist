@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Hardened-runtime resource access, NOT App Sandbox — this is a Developer ID
+	  tool for the team, not a Mac App Store submission. Same posture as the
+	  native Mac app it replaces (ios/CCRemoteMac/CCRemoteMac.entitlements).
+
+	  The microphone is here because the SPA dictates: `getUserMedia({audio})`
+	  in web/src/useRecorder.ts. Under the hardened runtime that call is refused
+	  at the process level without this key, and the refusal looks like a broken
+	  button rather than a missing permission.
+
+	  Scope worth knowing: wry grants the WebKit-level permission to whatever
+	  origin asks, and during a sign-in excursion the window legitimately visits
+	  other https hosts. So the TCC grant this entitlement unlocks is not
+	  narrowed to code.acme.test by anything in the shell.
+	-->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

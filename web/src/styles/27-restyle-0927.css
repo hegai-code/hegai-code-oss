@@ -1,0 +1,445 @@
+/* 27-restyle-0927 — the 27-28.09.2026 restyle layers: small print, context ring, side panel as a list, graphite dark, session row. */
+
+/* ---- One typeface for the small print (27.09.2026, by request) ----
+   «Эти шрифты сделать стандартными, в которых весь остальной текст»: the
+   clock under a turn, the gear's count, the «работает…» line and the pane
+   header's second line were set in the mono data voice, so every message
+   ended in a different typeface from the one it was written in. They follow
+   the text now; tabular figures keep the numbers from jittering. */
+.msg .when, .usertext-body > .when, .toolrun-count,
+.line.status.typing, .work-clock {
+  font-family: var(--sans); letter-spacing: normal;
+}
+.msg .when, .usertext-body > .when { font-weight: 400; }
+/* The agent's clock at the END of its last paragraph, beside the gear —
+   see `stampInline` in render/Blocks.tsx. */
+.chip-inline.tail > .when {
+  margin-left: 6px; font-size: var(--size-micro); color: var(--text-faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap; user-select: none;
+}
+.chip-inline.tail > .when:first-child { margin-left: 0; }
+/* The pane header's second line in one voice: the machine · project and the
+   run state were two weights and two tones side by side. */
+.sc-col-sub, .sc-col-src, .sc-col-state { font-family: var(--sans); }
+.sc-col-state { font-weight: 400; color: var(--text-faint); }
+.sc-col-state.needs_attention { color: var(--text); font-weight: 600; }
+
+/* ---- Context: a ring beside the model, and a question before compacting ---- */
+.ctx-ring-wrap { position: relative; display: flex; flex: 0 0 auto; }
+.ctx-ring {
+  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  border: none; background: none; border-radius: var(--radius-pill); cursor: pointer; color: var(--text-muted);
+  transition: background var(--dur-fast) var(--ease);
+}
+.ctx-ring:hover, .ctx-ring[aria-expanded="true"] { background: var(--surface-hover); }
+.ctx-ring:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ctx-ring-track { fill: none; stroke: var(--divider); stroke-width: 2.2; }
+.ctx-ring-fill { fill: none; stroke: var(--text-muted); stroke-width: 2.2; stroke-linecap: butt; }
+.ctx-ring.warn .ctx-ring-fill { stroke: var(--attn); }
+.ctx-ring.busy { cursor: default; animation: ccpulse 1.6s ease-in-out infinite; }
+/* Anchored to the COMPOSER's right edge, not the ring's: the ring sits left of
+   the model and the mic, so a card hung off it ran out past the left edge of a
+   300px column (27.09.2026). Positioned only while open, so no other absolute
+   child of the composer changes its containing block. */
+.ctx-ring-wrap:has(.ctx-ask) { position: static; }
+.composer-box:has(.ctx-ask) { position: relative; }
+.ctx-ask {
+  position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 60;
+  width: min(280px, 100%); box-sizing: border-box; padding: 12px; display: flex; flex-direction: column; gap: 6px;
+  background: var(--surface-raised); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg), var(--rim);
+}
+.ctx-ask-title { font-weight: 600; font-size: var(--size-small); color: var(--text); }
+.ctx-ask-sub { font-size: var(--size-meta); color: var(--text-muted); line-height: 1.45; }
+.ctx-ask-acts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+.ctx-ask-no, .ctx-ask-yes {
+  border: none; border-radius: var(--radius-sm); padding: 6px 12px; cursor: pointer;
+  font: inherit; font-size: var(--size-meta);
+}
+.ctx-ask-no { background: var(--surface-hover); color: var(--text); }
+.ctx-ask-yes { background: var(--action); color: var(--on-action); font-weight: 600; }
+.ctx-ask-yes:hover { filter: brightness(1.15); }
+
+
+/* ---- The side panel: one row on top, blue ground, white cards (27.09.2026) ----
+   «У проекта белый фон с окантовкой, и он на белом фоне — это сливает области».
+   The panel is `--tint` now and the project cards are plain white plates on it
+   with no outline: the two tones do the separating the hairline could not. */
+.sidepanel { background: var(--tint); }
+.side-top { display: flex; align-items: center; gap: 2px; margin: 10px 8px 8px 10px; min-width: 0; }
+/* «hegai.code» at the head of the panel — the iPhone drawer's wordmark
+   (`HegaiWordmark`): the name bold, the dot in colour, «code» quieter. */
+.side-brand {
+  flex: 0 0 auto; display: flex; align-items: baseline; padding: 0 10px 0 4px; box-sizing: border-box;
+  font: 400 var(--size-screen)/1.1 var(--title); letter-spacing: -0.5px;
+  color: var(--text-muted); text-decoration: none;
+}
+.side-brand b { font-weight: 700; color: var(--text); }
+.side-brand-dot { font-weight: 700; color: var(--send); }
+.side-brand:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: var(--radius-sm); }
+/* The head's two icons (bell, search) — ChatGPT's 32px quiet buttons. */
+.side-head-icon { width: 32px; height: 32px; flex: 0 0 auto; }
+.side-top .spacer { flex: 1 1 auto; }
+.side-top { min-height: 36px; }
+/* The bell is in the side panel's head: its popover hangs under that head,
+   not under the top bar's right corner. */
+.topbar.bell-in-panel .notif-pop { position: fixed; top: 100px; left: 10px; right: auto; }
+/* «Мои · Команда · Все» under the search, the full width of the panel. */
+.side-scope { padding: 0 10px 6px; box-sizing: border-box; }
+.side-scope:empty { display: none; }
+.side-scope .scope-seg { display: flex; }
+.side-scope .scope-seg button { flex: 1 1 0; min-width: 0; padding-inline: 4px; }
+.side-top .side-place { width: 30px; height: 30px; flex: 0 0 auto; }
+.side-find {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 10px;
+  margin-right: 4px; border-radius: var(--radius-md); background: var(--surface-raised);
+  box-shadow: inset 0 0 0 1px var(--divider); color: var(--text-faint); cursor: text;
+}
+.side-find:focus-within { box-shadow: inset 0 0 0 1px var(--border); color: var(--text-muted); }
+.side-find svg { flex: 0 0 auto; }
+.side-find input {
+  flex: 1 1 auto; min-width: 0; border: none; background: none; outline: none; padding: 0;
+  color: var(--text); font: inherit; font-size: var(--size-small);
+}
+.side-find input::placeholder { color: var(--text-faint); }
+.side-find-x {
+  flex: 0 0 auto; display: grid; place-items: center; width: 20px; height: 20px; padding: 0;
+  border: none; border-radius: var(--radius-sm); background: none; color: var(--text-faint); cursor: pointer;
+}
+.side-find-x:hover { color: var(--text); background: var(--surface-hover); }
+.sidepanel .proj-card,
+.sidepanel .proj-card:hover { background: var(--surface-raised); box-shadow: var(--shadow-sm), var(--rim); }
+/* The ring is `--border`: `--tint-strong` equalled the card's own
+   `--surface-raised` in dark (#1c1f21), so the active project had no ring. */
+.sidepanel .proj-card.here { box-shadow: var(--shadow-sm), inset 0 0 0 1.5px var(--border), var(--rim); }
+/* What you are looking at — the selected session row. */
+.sidepanel .side-foot { border-top-color: var(--divider); }
+
+/* The «сервер · проект» tray on the same grey as the chosen row. Your own
+   messages keep their original `--chip` plate (the blue there went too). */
+.start-target { background: var(--tint-strong); }
+/* The card's small print in the text's own face too — machine, count, time,
+   «vscode»/«web», «ещё N»: same request as the transcript's clock. */
+.sidepanel .pc-count, .sidepanel .pcs-src, .sidepanel .pcs-time, .sidepanel .pc-more {
+  font-family: var(--sans); letter-spacing: normal;
+}
+
+/* ---- The composer's button row, compact (27.09.2026, by request; ChatGPT
+   as the reference) ----
+   «+» and the microphone were 40px squares with 18–21px glyphs and Send a
+   32px circle: the row was the tallest thing under the field and the capsule
+   read as a toolbar. Now 30px buttons with 16–17px glyphs and a 28px send,
+   on a tighter row — the capsule gets shorter with it.
+   DESK ONLY (a fine pointer). On a phone these are the controls a thumb aims
+   at one-handed, and 44px is the target the rest of the product holds. */
+@media (hover: hover) and (pointer: fine) {
+  .composer-box.cg .composer-actions { padding: 2px 8px 8px 8px; gap: 4px; }
+  .composer-box .round-btn { width: 30px; height: 30px; }
+  .composer-box .round-btn.attach svg { width: 18px; height: 18px; }
+  .composer-box .round-btn:not(.attach) svg { width: 17px; height: 17px; }
+  .composer-box .round-btn.rec svg { width: 12px; height: 12px; }
+  .send-round, .send-round.stop { width: 28px; height: 28px; }
+  .send-round svg { width: 14px; height: 14px; }
+  .send-round.stop svg { width: 10px; height: 10px; }
+  .composer-box .ctx-ring { width: 28px; height: 28px; }
+  .composer-box .run-pick { padding: 4px 6px; }
+  .composer textarea { padding: 10px 13px 2px; min-height: 40px; }
+  .composer.start-composer textarea { min-height: 88px; }
+}
+
+/* Send, Stop and Resume in burgundy — see `--send`. Stop went blue too
+   (by request, same day): the square glyph already says which one it is. */
+.send-round, .send-round:disabled, .send-round.stop { background: var(--send); color: var(--on-send); }
+.send-round:hover:not(:disabled) { background: var(--send-hover); filter: none; }
+
+/* ---- Photos (27.09.2026): the account button is a CIRCLE, and any avatar
+   with a user behind it tries that user's Telegram photo (server-rs/src/
+   avatar.rs), keeping the initials until it loads — and for good on 404.
+   Round by request («иконку ПХ сделаем круглую»), the same owner-requested
+   exception as the send button. */
+.acc-avatar, .acc-avatar-sm { border-radius: var(--radius-pill); overflow: hidden; position: relative; }
+.avatar.has-photo { overflow: hidden; position: relative; }
+.av-photo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; border-radius: inherit; display: block;
+}
+.av-photo.loading { opacity: 0; }
+
+/* The account circle wears Send's colour until a photo covers it (by
+   request) — burgundy since 09.10.2026, white initials (9.2:1 / 6.5:1). */
+.acc-avatar { background: var(--send); color: var(--on-send); }
+
+/* «Режим планирования» in the model menu — a switch, not a list (RunPicker `plan`). */
+.rp-switch { display: flex; align-items: center; gap: 8px; }
+.rp-switch .rp-knob { margin-left: auto; }
+.rp-knob {
+  flex: 0 0 auto; position: relative; width: 28px; height: 16px; border-radius: var(--radius-pill);
+  background: var(--chip); box-shadow: inset 0 0 0 1px var(--border); transition: background var(--dur-fast) var(--ease);
+}
+.rp-knob::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: var(--radius-pill);
+  background: var(--surface-raised); box-shadow: var(--shadow-sm); transition: transform var(--dur-fast) var(--ease);
+}
+.rp-switch.on .rp-knob { background: var(--send); box-shadow: none; }
+.rp-switch.on .rp-knob::after { transform: translateX(12px); }
+.rp-row.rp-switch.on { background: none; color: var(--text); }
+.rp-row.rp-switch.on:hover { background: var(--surface-hover); }
+.rp-row.rp-switch.on .rp-note { color: var(--text-faint); opacity: 1; }
+
+/* ---- Columns edge to edge (27.09.2026, by request; Claude's split as the
+   reference) ----
+   Panes used to be islands: a 14px moat, 12px gaps, a radius and a shadow
+   each, on a canvas of a slightly different grey — card in a card in a card.
+   Now the split is ONE surface cut by hairlines, and the single-session
+   workspace is the same surface without the cuts, so opening a pane from a
+   single session (or back) moves nothing: both heads start at the bar's
+   bottom edge, which keeps the «same session, same place» rule `.sc-col-head`
+   documents — at 0 instead of 14 on both sides. The focused pane is told by
+   its title's ink, not by a tinted head that read as a rendering glitch. */
+.session-columns:not(.stacked) { gap: 0; padding: 0; }
+.session-columns:not(.stacked) > .session-col {
+  border: none; border-left: 1px solid var(--divider); border-radius: 0; box-shadow: none; background: var(--bg);
+}
+.session-columns:not(.stacked) > .session-col:first-child { border-left: none; }
+/* The drag handle lies over the RIGHT pane's first 12px (its transcript has
+   20px of padding there and no scrollbar), with its line drawn on the
+   hairline. Straddling the hairline put half of it over the left pane's
+   scrollbar, and a press there resized instead of scrolling. */
+.session-columns:not(.stacked) > .col-resize { margin: 0 -12px 0 0; }
+.session-columns:not(.stacked) > .col-resize::after { top: 0; bottom: 0; left: -1px; }
+/* The «lands here» rim while a pane is carried — the flat rule above would
+   otherwise flatten it too. */
+.session-columns:not(.stacked) > .session-col.drop { box-shadow: inset 0 0 0 2px var(--focus-ring); }
+.session-columns .sc-col-head { background: var(--bg); }
+.session-col.focused > .sc-col-head { background: var(--bg); }
+.session-columns:not(.stacked) > .session-col:not(.focused) .sc-col-title { color: var(--text-muted); }
+.workspace { margin: 0; border: none; border-radius: 0; box-shadow: none; background: var(--bg); }
+/* No rule across the pane above the composer: the capsule's own hairline says
+   where the writing starts, and a second line cut every column in two. */
+.session-columns:not(.stacked) .composer, .workspace .composer { border-top: none; }
+
+/* ---- The side panel as a list, not a shelf of cards (27.09.2026, by
+   request; Claude's panel as the reference) ----
+   Projects were white plates with shadows on a grey ground — six islands, each
+   with its own count, pencil, source column and «+» on every row. Now a
+   project is a quiet GROUP LABEL and its sessions are plain rows under it; the
+   controls that were always on (count, pencil, «+») wait for the pointer.
+   The two actions of the panel are labelled rows under the search. */
+.side-top { margin: 10px 10px 4px; }
+.side-find { margin-right: 0; }
+.side-rows { display: flex; flex-direction: column; gap: 1px; padding: 2px 8px 6px; }
+.side-row-wrap { position: relative; display: flex; align-items: center; }
+.side-row {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 8px;
+  border: none; border-radius: var(--radius-sm); background: none; cursor: pointer;
+  color: var(--text); font: inherit; font-size: var(--size-nav); text-decoration: none; text-align: left;
+}
+.side-row svg { flex: 0 0 auto; color: var(--text-muted); }
+.side-row:hover { background: var(--surface-hover); }
+.side-row.active { background: var(--here); }
+.side-row:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.side-row-extra { position: absolute; right: 4px; width: 26px; height: 26px; opacity: 0; transition: opacity var(--dur-fast) var(--ease); }
+.side-row-wrap:hover .side-row-extra, .side-row-extra:focus-visible { opacity: 1; }
+@media (hover: none) { .side-row-extra { opacity: 1; } }
+
+.sidepanel .proj-grid { gap: 14px; padding: 6px 0 12px; }
+.sidepanel .proj-card,
+.sidepanel .proj-card:hover,
+.sidepanel .proj-card.here,
+.sidepanel .proj-card.here:hover { background: none; box-shadow: none; border-radius: 0; padding: 0 8px; }
+/* The group label: the project in muted small type, the machine fainter on
+   the same line. The open project is told by ink, not by a ring. */
+.sidepanel .pc-headrow { padding: 0 8px; margin-bottom: 2px; }
+.sidepanel .pc-name { font-size: var(--size-meta); font-weight: 600; color: var(--text-muted); letter-spacing: 0; }
+.sidepanel .pc-mach { font-weight: 400; color: var(--text-faint); }
+.sidepanel .proj-card.here .pc-name { color: var(--text); }
+/* The «новый чат» pencil is always there, faint — it popping in under the
+   pointer read as a glitch (27.09.2026, by request). No session count. */
+.sidepanel .pc-new { opacity: 1; color: var(--text-faint); }
+.sidepanel .pc-new:hover { color: var(--text); }
+/* The ember «нужно решение» count is news, so it never waits for a hover. */
+.sidepanel .pc-head .unread { opacity: 1; }
+.sidepanel .pc-sess { padding: 5px 8px; margin: 0; border-radius: var(--radius-sm); color: var(--text); }
+.sidepanel .pc-sess:hover { background: var(--surface-hover); }
+.sidepanel .pc-sess.sel, .sidepanel .pc-sess.sel:hover { background: var(--here); }
+.sidepanel .pcs-time { color: var(--text-faint); }
+/* «+» (open as a column) only under the pointer on a desk. */
+.sidepanel .pc-col { opacity: 0; right: 4px; }
+.sidepanel .pc-sessions > li:hover > .pc-col:not(:disabled), .sidepanel .pc-col:focus-visible { opacity: 1; }
+@media (hover: none) {
+  .sidepanel .pc-col { opacity: 1; }
+  .sidepanel .pc-col:disabled { opacity: 0.3; }
+}
+.sidepanel .pc-sessions > li.has-col > .pc-sess { padding-right: 28px; }
+.sidepanel .pc-more { padding: 4px 8px; margin: 0; }
+
+/* The pane head is one line now (SessionColumn): the state word sits on the
+   right in small print, never wrapping. */
+.sc-col-head > .sc-col-state { font-size: var(--size-meta); white-space: nowrap; }
+
+/* ---- Telemetry waits for the pointer (27.09.2026, by request) ----
+   Every paragraph ended in «◎ 6 01.09 10:52» — a tool count and a clock
+   stamped into the prose, on every turn of every pane. They are answers to a
+   question you ask of ONE message, so on a desk they appear when that message
+   is pointed at (the space stays reserved: nothing reflows on hover). That a
+   turn is still running is said by the «работает…» line, not by these. Touch
+   has no hover, so a phone keeps them as they were. */
+@media (hover: hover) {
+  /* `:where` keeps this at (0,2,0): with `details[open]` counted it outranked
+     the hover rule below and the gear never came back. */
+  .msg .chip-inline:where(:not(:has(> details[open]))),
+  .msg .when {
+    opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+  }
+  .msg:hover .chip-inline, .msg:hover .when,
+  .msg:focus-within .chip-inline, .msg:focus-within .when { opacity: 1; }
+}
+
+/* ---- One geometry (27.09.2026, by request; Astra's review) ----
+   The pane head sat at 12px, the transcript at 20, the composer at 16, the
+   field's text 13px further in: four left edges where the eye wants one. Now
+   head, transcript and the composer's outer edge share `--pane-inset`, and the
+   heads of a single session and of a pane are the same box — 48px tall, the
+   title 15/600 in both — so a session looks the same wherever it is open. */
+:root { --pane-inset: var(--space-4); --chat-measure: 760px; }
+.log { padding-left: var(--pane-inset); padding-right: var(--pane-inset); }
+.log-inner, .chat .composer-box { max-width: var(--chat-measure); }
+.composer { padding-left: var(--pane-inset); padding-right: var(--pane-inset); }
+.composer textarea { padding-left: 12px; padding-right: 12px; }
+.sc-col-head, .ws-head {
+  box-sizing: border-box; min-height: 48px; padding-top: 0; padding-bottom: 0;
+  padding-left: var(--pane-inset);
+}
+.sc-col-head { padding-right: 8px; gap: 8px; }
+.ws-head { display: flex; flex-direction: column; justify-content: center; padding-right: var(--pane-inset); }
+/* The phone's head keeps its safe-area inset (the ≤860px rule this block
+   would otherwise override). */
+@media (max-width: 860px) { .ws-head { padding-top: var(--sat); } }
+.sc-col-close { width: 28px; height: 28px; }
+@media (min-width: 861px) {
+  .topbar { height: 48px; }
+  .notif-pop { top: 44px; }
+  .settings-pop { top: 46px; }
+}
+
+/* ---- Limits without alarm ----
+   The bar was `--orange` at 30%: a warning colour for an ordinary state. It is
+   the text's own muted tone until the existing thresholds — ember from 75%,
+   red from 90% — and the pill is plain until pointed at or open. */
+.meterlet-bar { background: var(--divider); position: relative; overflow: visible; width: 36px; }
+.usage-pill { background: transparent; border-color: transparent; }
+.usage-pill:hover, .usage.open .usage-pill { background: var(--surface-hover); border-color: transparent; }
+.usage-provider-name { font-weight: 500; }
+:root[data-theme="dark"] body { letter-spacing: 0; }
+
+/* ---- Graphite dark (27.09.2026, by request; Astra's review) ----
+   The page was #0b0c0d under near-white ivory: every glyph glared and every
+   raised surface glowed as a separate patch. One step lighter throughout,
+   the text a cooler off-white, faint text lifted to 60% so it keeps ≥5:1 on
+   every surface (5.1 on --select, 6.1 on the page; muted ≥7.5). The rim loses
+   its bright top edge and keeps one soft outline. */
+:root[data-theme="dark"] {
+  --bg: #181a1b;
+  --surface: #181a1b;
+  --surface-raised: #232628;
+  --surface-sunken: #141617;
+  --tint: #141617;
+  --tint-strong: #232628;
+  --chip: #26292b;
+  --text: #eceeed;
+  --text-muted: rgba(236, 238, 237, 0.78);
+  --text-faint: rgba(236, 238, 237, 0.6);
+  --divider: rgba(236, 238, 237, 0.1);
+  --border: rgba(236, 238, 237, 0.2);
+  --rim: inset 0 0 0 1px rgba(236, 238, 237, 0.08);
+  /* Burgundy one step lighter than light's #7a2e3a, which sinks into the
+     graphite composer (1.65:1); same value as iOS dark. White on it 6.5:1. */
+  --send: #9e3d4e;
+  --send-hover: #b04558;
+}
+
+/* ---- The session row: one right-hand slot, a mark for what wants you ----
+   Time and «+» used to be two neighbours with a 28px reserve for a button
+   that is invisible at rest. Now one 40px slot on the right: the time at rest,
+   «+» over it under the pointer (touch keeps «+» beside the time — no hover).
+   A row that needs a decision or has failed carries an 8×8 square before its
+   title; status marks are squares everywhere in this product. */
+.sidepanel .proj-grid { gap: 16px; }
+.sidepanel .pc-headrow { margin-bottom: 4px; }
+.sidepanel .pc-sess { min-height: 32px; box-sizing: border-box; align-items: center; }
+.sidepanel .pc-sessions > li.has-col > .pc-sess { padding-right: 8px; }
+.sidepanel .pcs-time { min-width: 40px; text-align: right; transition: opacity var(--dur-fast) var(--ease); }
+.sidepanel .pc-col { right: 8px; }
+@media (hover: hover) {
+  /* Only when «+» will actually appear: a full split disables it, and the
+     time must not vanish into an empty slot. */
+  .sidepanel .pc-sessions > li.has-col:is(:hover, :focus-within):has(> .pc-col:not(:disabled)) > .pc-sess .pcs-time { opacity: 0; }
+}
+@media (hover: none) {
+  .sidepanel .pc-sessions > li.has-col > .pc-sess { padding-right: 32px; }
+}
+.pcs-mark { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; }
+.pcs-mark.attn { background: var(--attn); }
+.pcs-mark.err { background: var(--red); }
+
+/* ---- Metadata rides the line again (28.09.2026, by request) ----
+   27.09 moved the gear and the clock to a row of their own under the answer
+   («Metadata is a row», Astra's review). In use every short status line of a
+   working agent turned into two rows — text, then «◎ 15 11:17» alone — and the
+   transcript doubled in height. Owner asked for the chip back on the last
+   line, so the inline rules above (`.md.chip-tail > p:last-of-type`,
+   `.chip-inline`) are in force again. It still appears on hover on a desk
+   («Telemetry waits for the pointer»). */
+/* The single session's head uses the pane's `InlineTitle` (rename on click);
+   «О сессии» is an icon on the right. Nothing draws `.ws-title` any more —
+   its rules above are dead (DESIGN.md «Известные расхождения»). */
+.ws-title-slot { flex: 1; min-width: 0; }
+.ws-info-btn { width: 28px; height: 28px; flex: 0 0 auto; }
+.ws-info-btn.active { background: var(--here); }
+
+/* The project before a session's title, in both heads: faint, never wider
+   than 40% of the row, then a slash — the title keeps the rest. */
+.sc-col-titles { display: flex; align-items: center; min-width: 0; }
+.sc-col-title-slot { flex: 1; min-width: 0; }
+.sc-col-proj {
+  flex: 0 1 auto; max-width: 40%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--size-card); color: var(--text-faint); padding-left: 0;
+}
+.sc-col-sep { flex: 0 0 auto; margin: 0 6px; color: var(--text-faint); font-size: var(--size-card); }
+.sc-col-sep + .sc-col-title-slot .sc-col-title,
+.sc-col-sep + .ws-title-slot .sc-col-title { margin-left: -6px; }
+
+/* ---- The panel slides (27.09.2026, by request; ChatGPT as the reference) ----
+   Collapsed used to unmount the panel — it vanished in one frame. It stays
+   mounted now and its column eases to 0 while the content keeps its own width,
+   so the list slides out of view instead of squeezing. */
+.sidebar { transition: width var(--dur) var(--ease), flex-basis var(--dur) var(--ease), border-color var(--dur) var(--ease); overflow: hidden; }
+.sidebar > * { min-width: var(--sidebar-w, 320px); }
+.sidebar > .sidebar-resize { min-width: 0; right: 0; }
+/* The search row has 10px margins each side; `min-width` does not count margins. */
+.sidebar > .side-top { min-width: calc(var(--sidebar-w, 320px) - 20px); } /* inside the edge: the column clips now */
+.sidebar.collapsed { width: 0; flex-basis: 0; border-right-width: 0; }
+.sidebar.collapsed .sidebar-resize { display: none; }
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
+
+/* ---- The work is a white sheet in a tinted frame (27.09.2026, by request;
+   ChatGPT / Codex as the reference) ----
+   Three near-greys (panel #f0f2f0, bar #fff, sessions #f6f7f6) made the
+   screen read as «white — or not quite». Now the frame — side panel and top
+   bar — is ONE tone (`--tint`), with no hairlines between them, and the work
+   area is a sheet of `--surface` with a rounded top-left corner where it
+   meets the frame. Inside the sheet `--bg` IS the sheet, so every rule that
+   paints the transcript, the heads and the composer strip with `--bg` follows
+   without touching them. Dark: the frame is the deeper #141617 and the sheet
+   the page tone — the same relation. Desk only; the phone has no frame. */
+@media (min-width: 861px) {
+  .main-col { background: var(--tint); }
+  .topbar { background: var(--tint); border-bottom-color: transparent; --badge-ring: var(--tint); }
+  .sidebar { border-right-color: transparent; }
+  .main {
+    --bg: var(--surface);
+    background: var(--bg);
+    border-top-left-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1px var(--divider);
+  }
+}

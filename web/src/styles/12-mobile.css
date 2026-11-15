@@ -1,0 +1,92 @@
+/* 12-mobile — the first phone layer: the max-width 860px block (sidebar as a drawer, hamburger, start screen padding). */
+
+/* ============================ mobile ============================ */
+@media (max-width: 860px) {
+  .menu-btn { display: grid; place-items: center; }
+  /* the mobile drawer uses the hamburger, not the desktop collapse/resize */
+  .sidebar-resize, .side-head-btn { display: none; }
+  .cmdk-hint .lbl { display: none; }
+  .workspace { margin: 0; border-radius: 0; border-left: none; border-right: none; }
+  .sidebar {
+    position: absolute; z-index: 50; top: 0; bottom: 0; left: 0; width: 88vw; max-width: 340px;
+    transform: translateX(-100%); transition: transform 0.22s var(--ease); box-shadow: var(--shadow-lg);
+  }
+  .sidebar.open { transform: translateX(0); }
+  /* a desktop-collapsed sidebar must still show its content in the mobile drawer */
+  .sidebar.collapsed { overflow: visible; border-right: none; }
+  .sidebar.collapsed > * { visibility: visible; }
+  .settings-pop { width: calc(100vw - 24px); right: 12px; }
+  .scrim { display: block; position: absolute; inset: 0; background: var(--scrim); z-index: 40; }
+  /* `.msg.user { max-width: 90% }` lived here: a bubble had to stop short of the
+     edge so you could see it was a bubble. There is no bubble now, and a turn
+     set 10% narrower than the answer above it just reads as a broken measure. */
+  .board-cols { grid-template-columns: 1fr; }
+  .notif-pop { width: calc(100vw - 24px); right: 12px; }
+  /* Top-aligned, not centred. `margin: auto` floats a short screen in the
+     middle with a band of nothing above it; with the shelf grouped into rows
+     the content starts at the top where the eye does. */
+  .start-inner { padding: 16px 16px 12px; margin: 0 auto; }
+  .start-dock-inner { padding-inline: 16px; }
+  /* At 390px «+», the three agents, the model pill and the microphone are more
+     than one row holds, and the agents alone are wider than a shared row leaves
+     them. So the row splits: tools and agents above, model and Send below. */
+  .start-composer .composer-actions { flex-wrap: wrap; gap: 4px; padding: 4px 6px 8px 8px; }
+  .start-composer .composer-left { flex: 1 1 100%; gap: 4px; row-gap: 6px; }
+  .start-composer .composer-right { flex: 1 1 100%; min-width: 0; justify-content: flex-end; }
+  .start-composer .composer-right .run-pick-pop { left: 0; right: auto; }
+  .start-composer .agent-opt { padding: 3px 7px; }
+
+  /* iOS Safari zooms the page whenever a focused field is under 16px, and it
+     never zooms back. That one behaviour caused two separate-looking bugs: the
+     view "creeping closer" on every tap into the composer, and being able to
+     drag around onto empty space afterwards — once zoomed, the visual viewport
+     is smaller than the layout viewport, so the page pans even though <body>
+     is overflow:hidden. 16px is the threshold, not a style preference. */
+  .composer textarea,
+  .start-composer textarea,
+  .cmdk input,
+  .install-fields input,
+  .token,
+  input[type='text'], input[type='search'], input[type='password'],
+  input[type='email'], input[type='number'], input[type='url'],
+  textarea, select,
+  /* `.ctool` is a class and this list was bare element selectors, so the rule
+     LOST on specificity (0,1,0 against 0,0,1) and those controls stayed at
+     12.5px — a phone then zooms on focus. The three composer selects that
+     originally motivated this are gone (model and effort are one button now,
+     the permission mode moved into the session-info panel); `.ctool` survives
+     on PermissionModePicker, which is exactly where it still matters. */
+  .ctool {
+    font-size: 16px;  /* off-ladder: a Safari threshold, not a style — see above */
+  }
+
+  /* Belt and braces: pinch-zoom is still allowed, but a stray horizontal drag
+     can't reveal blank canvas beside the shell. */
+  html, body { overflow-x: hidden; overscroll-behavior: none; }
+
+  /* The limits pill is BACK on the phone, folded to one provider.
+     It was removed outright, and the reason given was width: three providers,
+     each a name plus a bar plus two numbers, was the widest thing in the chrome
+     of a 390px screen. True — but the conclusion was wrong. «Сколько осталось»
+     is precisely the question a phone asks, because a phone is where you decide
+     whether to start something, and the answer had been moved to a screen you
+     were not on. So: ONE provider on the pill (see `compact` in UsageMeter, and
+     it is the one nearest its ceiling, or the seat's own), and the popover
+     opens full-width with all of them.
+     It takes the room the three chrome icons used to hold — theme,
+     notifications and settings now live in the drawer's ⚙ sheet, which is where
+     a thumb already goes. */
+  .usage.compact .usage-pill { max-width: 64vw; }
+  .usage.compact .usage-provider-name { max-width: 72px; overflow: hidden; text-overflow: ellipsis; }
+  /* Full-width, like every other panel on this screen. The old phone rules for
+     this popover were deleted along with the pill, on the grounds that a panel
+     which cannot be opened need not fit; it can be opened again.
+     `right: 0` is kept from the base rule rather than re-anchored: the pill is
+     the last thing in a bar with 16px of padding, so a panel of
+     `100vw - 32px` growing leftward from the pill's right edge lands exactly
+     16px from the left too. Anchoring to the viewport instead would need
+     `position: fixed`, and the phone's `.topbar` carries a `backdrop-filter` —
+     which makes it a containing block for fixed descendants, so `fixed` here
+     would not mean what it reads as. */
+  .usage-pop { width: calc(100vw - 32px); max-width: none; }
+}

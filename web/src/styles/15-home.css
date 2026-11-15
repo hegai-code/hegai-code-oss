@@ -1,0 +1,95 @@
+/* 15-home — Главная (dashboard). */
+
+/* ============================ Главная (dashboard) ============================
+   Same contract as every other page under `.main`: `body` is `overflow: hidden`,
+   so the page carries its own scroller. The inner stack is a FLEX column with an
+   AUTO height rather than a grid — an auto row inside a definite-height grid
+   scroller gets clamped to the leftover space and silently kills the scroll,
+   which is exactly what happened to `.team-page`. */
+.home { flex: 1; min-width: 0; overflow-y: auto; }
+.home-inner {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  width: min(1120px, 100%); margin: 0 auto; padding: var(--space-6);
+}
+.home-head { display: flex; align-items: baseline; gap: var(--space-4); flex-wrap: wrap; }
+.home-title { flex: 1; min-width: 0; margin: 0; font: 600 var(--size-page)/1.2 var(--title); letter-spacing: -0.3px; }
+.home-new { flex: 0 0 auto; }
+
+.home-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); align-items: start; }
+.home-card {
+  display: flex; flex-direction: column; min-width: 0;
+  padding: var(--space-3) 0 var(--space-2);
+  background: var(--surface-raised); border-radius: var(--radius-list); box-shadow: var(--shadow-xs), var(--rim);
+}
+.home-card .eyebrow { padding: 0 var(--space-4) var(--space-2); }
+.home-dot { flex: 0 0 auto; width: 8px; height: 8px; background: var(--text-faint); }
+.home-dot.working { background: var(--live); }
+.home-dot.needs_attention { background: var(--attn); }
+.home-dot.error { background: var(--red); }
+.hr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hr-title { font-size: var(--size-small); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-sub { font: var(--size-micro)/1.4 var(--mono); color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hr-time { flex: 0 0 auto; font: var(--size-micro)/1 var(--mono); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.hr-num { flex: 0 0 auto; font: 600 var(--size-body)/1 var(--mono); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.hr-num.on { color: var(--link); }
+
+/* «Начать» — the shortlist of work types, as addresses into the composer.
+   Same plate as .home-proj so the two shelves read as one family; the accent
+   stays on the 8×8 square, never on a fill, so the label keeps normal text
+   contrast. */
+.home-starts { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0 var(--space-4) var(--space-2); }
+.home-start-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-radius: var(--radius-md); background: var(--surface); color: var(--text); text-decoration: none;
+  font-size: var(--size-small); font-weight: 600; white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--divider);
+  transition: box-shadow var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.home-start-btn:hover { background: var(--surface-hover); box-shadow: inset 0 0 0 1px var(--brand); }
+.home-start-btn.more { color: var(--text-muted); font-weight: 500; }
+
+/* A card head that carries a link on the right of its eyebrow. The eyebrow keeps
+   its own padding, so the head only has to hold the two ends apart. */
+.home-cardhead { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.home-all {
+  flex: 0 0 auto; padding: 0 var(--space-4) var(--space-2);
+  font: var(--size-micro)/1.4 var(--mono); color: var(--text-faint); text-decoration: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+.home-all:hover { color: var(--brand); }
+
+/* «Мои проекты» — ROWS, in a fixed four-column rhythm: name, machine, time,
+   mark. The shelf mixes a laptop's checkouts with a server's, so the machine
+   gets a column of its own to scan down instead of a dot-separated tail on a
+   subtitle. Name is the only sans here; the rest is the mono data layer. */
+.home-projects { display: flex; flex-direction: column; padding: 0 var(--space-2) var(--space-2); }
+.hpr-name {
+  font-size: var(--size-small); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hpr-machine {
+  font: var(--size-micro)/1.4 var(--mono); color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hpr-time {
+  font: var(--size-micro)/1.4 var(--mono); color: var(--text-faint); text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* The mark column is always 20px wide, live or not: a shelf whose rows shift
+   sideways when a run starts is harder to read than one steady column. */
+.hpr-dot { justify-self: center; width: 8px; height: 8px; border-radius: 2px; background: transparent; }
+.hpr-dot.live { background: var(--live); animation: ccpulse 2s ease-in-out infinite; }
+.hpr-attn {
+  justify-self: center; min-width: 20px; padding: 1px 5px; border-radius: var(--radius-sm);
+  background: var(--attn); color: var(--on-attn);
+  font: 600 var(--size-micro)/1.6 var(--mono); text-align: center; font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  /* The machine column is the first thing to go when the name needs the room. */
+  .hpr-machine { display: none; }
+}
+
+@media (max-width: 720px) {
+  .home-inner { padding: var(--space-3); gap: var(--space-3); }
+}

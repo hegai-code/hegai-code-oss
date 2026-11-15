@@ -1,0 +1,17 @@
+{
+  "note": "Synthetic. key = bytes 0..31, nonce = 0xa0..0xab, AAD = `kid|bind` (UTF-8), bind = `machineId|dir|kind|id`, plaintext = JSON.stringify(value). Used by the agent (Node crypto) and web (WebCrypto) tests: both must produce and open exactly this.",
+  "keyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "nonceHex": "a0a1a2a3a4a5a6a7a8a9aaab",
+  "kid": "630dcd2966c43366",
+  "value": {
+    "text": "привет, synthetic-marker"
+  },
+  "envelope": {
+    "e2e": 1,
+    "kid": "630dcd2966c43366",
+    "n": "oKGio6Slpqeoqaqr",
+    "c": "nToISD2/IIVAtTgCh6p4DsJ87MEQm2If5WBS7hrfHGL/GyaNxEchHyKk1wzVP77y4MJMI3qfQ58G"
+  },
+  "pairingCode": "hcp1.m-1.AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+  "bind": "m-1|a2c|stream|run-1"
+}

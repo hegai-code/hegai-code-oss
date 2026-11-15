@@ -1,0 +1,163 @@
+/* 07-workspace — the workspace card, session info column, context menu and tabs. */
+
+/* ---------- workspace (raised card on the canvas) ---------- */
+.workspace {
+  display: flex; flex: 1; min-width: 0; margin: 14px; overflow: hidden;
+  background: var(--surface-raised); border: 1px solid var(--divider); border-radius: var(--radius-panel); box-shadow: var(--shadow-xs);
+}
+.ws-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+
+/* ---------- session info column ---------- */
+.ws-info {
+  flex: 0 0 320px; min-height: 0; overflow-y: auto;
+  border-left: 1px solid var(--divider);
+  padding: 26px 20px 20px; display: flex; flex-direction: column; gap: 18px;
+}
+@media (max-width: 1199px) { .workspace > .ws-info { display: none; } }
+/* while the info column is visible it carries the actions — don't
+   repeat them in the header */
+@media (min-width: 1200px) {
+  .workspace.info-open .ws-actions { display: none; }
+}
+.si-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.si-name {
+  font-family: var(--title); font-size: var(--size-card); font-weight: 700; line-height: 1.35; letter-spacing: -0.2px;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.si-status { font-size: var(--size-meta); color: var(--text-faint); }
+.si-status.live { color: var(--positive); font-weight: 600; }
+.si-rows { display: flex; flex-direction: column; }
+.si-row { display: grid; gap: 3px; padding: 9px 2px; border-bottom: 1px solid var(--divider); }
+.si-row:last-child { border-bottom: none; }
+.si-label { font-size: var(--size-micro); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 600; }
+.si-value { font-size: var(--size-small); color: var(--text); overflow-wrap: anywhere; line-height: 1.45; display: flex; align-items: center; gap: 6px; }
+.si-value.mono { font-family: var(--mono); font-size: var(--size-meta); }
+/* The permission mode is the one INPUT among the info rows, so it is set apart
+   from the read-only values it sits between: full text tone, and the pill takes
+   the row's width rather than the 190px the composer gives it. */
+.si-ctool {
+  max-width: 100%; width: 100%; color: var(--text); font-size: var(--size-small);
+  padding: 6px 10px; border-radius: var(--radius-sm);
+}
+.si-copy {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  background: none; border: none; border-radius: var(--radius-sm); color: var(--text-faint); cursor: pointer;
+}
+.si-copy:hover { background: var(--surface-hover); color: var(--text); }
+/* Three actions do not fit one 260px row — «Вернуть в работу» is two words
+   longer than anything that used to live here, and unwrapped it pushed Delete
+   off the panel edge. Close takes a row of its own ABOVE the pair, so Rename and
+   Delete keep the geometry they always had, at every width. */
+.si-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 10px; }
+.si-actions .ghost { flex: 1; justify-content: center; min-width: 0; }
+.si-actions .si-close { flex-basis: 100%; }
+/* One quiet line, not a floating plate. The header used to be a lettered mark,
+   the title, two labelled buttons and a recap strip of five chips — a standing
+   card above the transcript restating what you knew when you opened the
+   session. What is left is the thing you actually need on screen: which session
+   this is, and the two controls that act on it. */
+.ws-head { padding: 10px 16px; border-bottom: 1px solid var(--divider); }
+.ws-titlebar { display: flex; align-items: center; gap: 8px; }
+/* A <button> now — it is how the info panel opens — so the browser's own
+   button chrome has to be undone. It must still LOOK like the title, not like
+   a control: the affordance is that the whole name is a target, which a
+   hover tint says without adding a shape to the row. */
+.ws-title {
+  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
+  background: none; border: none; padding: 4px 6px; margin-left: -6px;
+  border-radius: var(--radius-sm); text-align: left; cursor: pointer;
+  color: var(--text);
+  font-family: var(--title); font-size: var(--size-lead); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.2px;
+  transition: background var(--dur-fast) var(--ease);
+}
+.ws-title:hover { background: var(--surface-hover); }
+.ws-title:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.ws-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The 8×8 square every status in this system uses, saying the run is moving. */
+/* `.ws-live` — the 8px green square that used to lead this title — is gone;
+   the bolt (`.srun`) says «идёт работа» here as it does in every list. */
+.ws-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+/* `.ws-more` (the session overflow menu) and `.info-toggle` are gone with the
+   markup that used them: the menu duplicated the info panel's own actions, and
+   the title took over opening that panel. `.ws-more-pop` and `.ws-more-item`
+   below STAY — «Файлы», SendToSession and the project shelf all render menus
+   with them, and they are the shared menu shapes, not this one header's. */
+.ws-more-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  min-width: 168px; padding: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-raised); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg), var(--rim);
+}
+.ws-more-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 10px; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text);
+  font: 500 var(--size-small)/1.2 var(--sans); text-align: left;
+}
+.ws-more-item:hover:not(:disabled) { background: var(--surface-hover); }
+.ws-more-item.danger { color: var(--negative); }
+/* Drawn but refused, with the reason on hover. A row that DISAPPEARS raises
+   "where did it go"; this answers it — which is why «Добавить в колонку» greys
+   out at four panes rather than vanishing. */
+.ws-more-item:disabled { color: var(--text-faint); cursor: default; }
+/* Destructive and rare do not sit flush against what you press by habit. */
+.ws-more-item.sep { margin-top: 5px; padding-top: 9px; border-top: 1px solid var(--divider); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+
+/* ---------- the context menu (right-click / long-press) ----------
+   Summoned at a POINT, so it is fixed-positioned and mounted at the app root:
+   anchored inside the scrolling list it was raised from, it would be clipped by
+   it. `ContextMenu` measures itself and flips above the pointer near the bottom
+   edge — `.ctxmenu-measuring` is the one frame in which it is in the DOM but
+   not yet placed, and it must not be painted at the raw coordinates. */
+/* `right: auto` is load-bearing, not tidiness: `.ws-more-pop` pins itself to
+   `right: 0` because every OTHER user of it hangs under a trigger at the right
+   edge. Inherited here, together with the `left` this menu is positioned by, it
+   stretched the popover across the whole viewport — 1440px of menu for eight
+   short rows. Same for `bottom`, which the flip would otherwise fight. */
+.ctxmenu { position: fixed; top: 0; left: 0; right: auto; bottom: auto; min-width: 210px; width: max-content; max-width: 280px; }
+.ctxmenu-measuring { visibility: hidden; }
+.ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 13px;
+  border-radius: var(--radius-md); font-size: var(--size-meta); font-weight: 500; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.ghost:hover { color: var(--text); background: var(--surface-hover); border-color: var(--text-faint); }
+.ghost.danger:hover { color: var(--red); border-color: var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--size-micro); color: var(--text-muted); background: var(--surface-hover); border: 1px solid var(--divider);
+  padding: 3px 10px; border-radius: var(--radius-sm); font-weight: 500;
+}
+.chip.machine { color: var(--link); border-color: var(--action-soft-2); background: var(--action-soft); }
+.chip.muted { color: var(--text-faint); }
+.chip.live { color: var(--orange-text); border-color: color-mix(in srgb, var(--orange) 42%, transparent); background: color-mix(in srgb, var(--orange) 14%, transparent); }
+
+/* ---------- tabs ---------- */
+/* Scrolls within itself rather than pushing the page sideways — the same answer
+   the split's own pane strip already gives. The Команда row grew a fifth
+   tab («Доступ») and stopped fitting a phone: at 390px it ran ~90px past the
+   edge, and because nothing here is a scroller that became horizontal scroll on
+   the whole screen. `min-width: 0` so the row may actually shrink inside its
+   flex parent instead of forcing it wider. */
+.tabs {
+  display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--divider);
+  min-width: 0; overflow-x: auto; scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs > .tab { flex: 0 0 auto; }
+.tab {
+  position: relative; background: none; border: none; color: var(--text-muted);
+  /* No `capitalize`: Russian labels are sentence case, and the rule turned the
+     first multi-word tab («В списке») into «В Списке». Labels are
+     authored with the capitalisation they should have. */
+  padding: 11px 14px; font-size: var(--size-body); font-weight: 600; transition: color 0.12s var(--ease);
+}
+.tab:hover:not(:disabled) { color: var(--text); }
+.tab.active { color: var(--text); font-weight: 600; }
+.tab.active::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--brand); }
+.tab:disabled { opacity: 0.38; cursor: default; }
+.panel { flex: 1; min-height: 0; display: flex; }

@@ -1,0 +1,60 @@
+[package]
+name = "cc-remote-server"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "cc-remote-server"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
+tower-http = { version = "0.6", features = ["fs"] }
+# Already in the lockfile (axum's own dependency); named here for `oneshot`,
+# which is how the Host dispatcher hands a request to the chosen shell.
+tower = { version = "0.5", features = ["util"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+futures-util = "0.3"
+uuid = { version = "1", features = ["v4"] }
+# Notifications: Telegram + APNs (HTTP/2 + ES256 provider token via jsonwebtoken)
+# + FCM, all over reqwest. rustls so the VPS build needs no OpenSSL; `http2`
+# because APNs speaks nothing else.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2", "json", "multipart"] }
+# Durable session catalog + transcript replicas. `bundled` keeps deployments
+# independent of the host's sqlite development packages.
+rusqlite = { version = "0.41", features = ["bundled"] }
+jsonwebtoken = "9"
+sha2 = "0.10"
+urlencoding = "2"
+# Attachment ceiling (src/images.rs). Default features off: this decodes PNG and
+# JPEG and nothing else, and every extra codec is build time and attack surface
+# for a format nobody attaches.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+base64 = "0.22"
+# Already used by rustls/JWT; encrypt only revocation tokens at rest.
+ring = "=0.17.14"
+# Local accounts of the external edition (local_login.rs): argon2id password
+# hashes, and the setup QR rendered on the hub so the web needs no QR library.
+argon2 = "0.5"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+
+[target.'cfg(unix)'.dependencies]
+# Already in the lockfile; effective UID for privacy-watermark path ownership.
+libc = "=0.2.186"
+
+[profile.release]
+strip = true
+lto = true
+opt-level = "z"
+
+# Clippy runs in CI with `-D warnings` (ci.yml, `hub` job). The three lints
+# below are size thresholds, not defects: the hub's error enums are large by
+# design (they carry the refusal the client will see), a few routers take eight
+# arguments, and a couple of channel types are long. Everything else clippy says
+# is a real finding and fails the build.
+[lints.clippy]
+result_large_err = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"

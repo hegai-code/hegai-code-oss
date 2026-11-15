@@ -1,0 +1,25 @@
+# Hegai Code sandbox provisioner — the root daemon that turns hub jobs into
+# unix users and cc-remote-sandbox@ units. Dials OUT to the hub only; nothing
+# listens. Token and paths live in /etc/cc-remote/provisioner.env (0600).
+#
+# TimeoutStopSec is longer than a sandbox_create (which waits up to 120 s for
+# the agent to enroll) so a `systemctl stop` lets the current job finish and
+# report instead of leaving the hub with a job that never gets a result.
+[Unit]
+Description=Hegai Code sandbox provisioner
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/cc-remote/provisioner.env
+ExecStart=/usr/bin/node /opt/cc-remote-agent/sandbox/provisioner.mjs daemon
+Restart=always
+RestartSec=5
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

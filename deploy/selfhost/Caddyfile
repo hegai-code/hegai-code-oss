@@ -1,0 +1,72 @@
+# Automatic HTTPS (Let's Encrypt) for the hub. The only thing Caddy does is
+# terminate TLS and forward EVERY path to the hub as-is: /ui, /mobile/ui and
+# /agent are WebSockets (Caddy upgrades them by itself), /install/*, /go and
+# /api/* are plain HTTP. HEGAI_DOMAIN comes from .env.
+{$HEGAI_DOMAIN} {
+	# The optional LLM gateway (./llm.sh enable): only the OpenAI-compatible
+	# inference endpoints of Bifrost are public, authenticated by each
+	# person's key. Its admin API and UI (which Bifrost serves for any other
+	# path) are never routed. Without the gateway this answers 502 - nothing
+	# listens there.
+	@llm path /llm/v1/models /llm/v1/models/* /llm/v1/responses /llm/v1/responses/* /llm/v1/chat/completions /llm/v1/completions /llm/v1/embeddings
+	handle @llm {
+		request_body {
+			max_size 100MB
+		}
+		uri strip_prefix /llm
+		reverse_proxy bifrost:8080 {
+			header_up X-Real-IP {remote_host}
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 900s
+			}
+			flush_interval -1
+		}
+	}
+	handle /llm/* {
+		respond 404
+	}
+
+	# Gateway limits for an agent: it asks /hegai/limits on the origin of
+	# the gateway its machine trusts, with its own gateway key.
+	handle /hegai/limits {
+		rewrite * /api/gateway/key-limits
+		reverse_proxy hub:4319 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		# Uploads: dictation audio (25 MB cap in the hub) and report files.
+		request_body {
+			max_size 30MB
+		}
+
+		reverse_proxy hub:4319 {
+			# The hub rate-limits and audits by client address and believes this
+			# header only from the compose network (CC_REMOTE_TRUSTED_PROXIES).
+			# Setting it here REPLACES whatever the client sent.
+			header_up X-Real-IP {remote_host}
+			# X-Forwarded-Host (the name and port the browser used, which sign-in
+			# returns to), -For and -Proto are set by reverse_proxy itself.
+
+			# Dictation and long RPC replies; the sockets themselves are not
+			# subject to this timeout.
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 300s
+			}
+
+			# A config reload must not cut every agent's socket at once: they
+			# reconnect on their own, but there is no reason to make them.
+			stream_close_delay 10m
+			flush_interval -1
+		}
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+	}
+}

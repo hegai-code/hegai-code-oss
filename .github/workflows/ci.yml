@@ -1,0 +1,121 @@
+name: CI
+
+# GitHub-hosted runners only. No secrets are used by any job here.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # Secrets in the tree. The binary is pinned by version and checksum; the
+      # allowlist for the smoke harness's fake secrets is .gitleaks.toml.
+      - name: gitleaks
+        run: |
+          V=8.30.1
+          SHA=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          curl -sSL -o /tmp/gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz"
+          echo "${SHA}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          /tmp/gitleaks dir . --config .gitleaks.toml --no-banner --redact --exit-code 1
+      - name: Release signer tests (TOTP vectors, replay, lockout)
+        run: node --test deploy/release-signer/test/*.test.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # shared is the protocol contract: build it first, then everything that imports it.
+      - name: Build shared
+        run: npm run build --workspace shared
+      - name: Build all workspaces
+        run: npm run build
+      # `vite build` does not type-check, so check the workspaces no build covers.
+      - name: Type-check workspaces not checked by builds
+        run: |
+          for w in web server tgbot; do
+            echo "== tsc --noEmit -p $w"
+            npx tsc --noEmit -p "$w" || exit 1
+          done
+      - name: Lint (biome)
+        run: npm run lint
+      - name: Unit tests
+        run: npm test
+      - name: npm audit (high and above)
+        run: npm audit --audit-level=high
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server-rs
+      # deploy/agent.mjs is a placeholder file; the hub only needs it to exist to compile.
+      - name: rustfmt
+        run: cargo fmt --manifest-path server-rs/Cargo.toml --check
+      - name: Clippy
+        run: cargo clippy --manifest-path server-rs/Cargo.toml --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --manifest-path server-rs/Cargo.toml
+      - uses: taiki-e/install-action@cargo-audit
+      - name: cargo audit
+        run: cargo audit --file server-rs/Cargo.lock
+
+  # Behaviour, not just compilation: browser-free smokes against a throwaway hub
+  # with the fake agent each smoke enrolls itself.
+  smokes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [node, rust]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace shared && npm run build --workspace web
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server-rs
+      - name: Build the hub (debug)
+        run: cargo build --manifest-path server-rs/Cargo.toml
+      - name: Smokes against a throwaway hub
+        env:
+          CC_REMOTE_TOKEN: dev-token
+          CC_REMOTE_SSO_SECRET: smoke-sso-secret-0123456789-0123456789
+          CC_REMOTE_PLATFORM_ADMIN_IDS: legacy-owner
+          CC_SMOKE_URL: ws://127.0.0.1:4319
+        run: |
+          mkdir -p /tmp/smoke
+          CC_REMOTE_PUBLIC_URL=http://127.0.0.1:4319 CC_REMOTE_DB_PATH=/tmp/smoke/hub.sqlite3 \
+            WEB_DIST="$PWD/web/dist" PORT=4319 \
+            ./server-rs/target/debug/cc-remote-server > /tmp/smoke/hub.log 2>&1 &
+          HUB=$!
+          trap 'kill "$HUB" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do grep -q listening /tmp/smoke/hub.log && break; sleep 1; done
+          grep -q listening /tmp/smoke/hub.log || { echo "hub did not start"; cat /tmp/smoke/hub.log; exit 1; }
+          status=0
+          for sm in memory-smoke profile-smoke team-smoke run-active-attach-smoke turn-usage-smoke; do
+            echo "== $sm"
+            if ! timeout 180 npx tsx "server/src/cli/$sm.ts"; then echo "FAILED: $sm"; status=1; fi
+          done
+          if [ "$status" != 0 ]; then echo "--- hub log (tail)"; tail -60 /tmp/smoke/hub.log; fi
+          exit "$status"

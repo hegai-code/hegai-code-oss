@@ -1,0 +1,10 @@
+# cargo-audit policy for CI (`cargo audit --file server-rs/Cargo.lock`, ci.yml `hub` job).
+# No ignores. The four rustls-webpki 0.102 advisories and the two rustls 0.22.4
+# ones (RUSTSEC-2026-0049/0098/0099/0104, -0346/-0349) were ignored while the
+# APNs client `a2` pinned rustls 0.22; APNs now goes over reqwest (rustls 0.23),
+# so they are gone with it. 16.10.2026.
+# A new ignore must name the crate that pins the vulnerable version and what
+# would lift it, and be scoped so it cannot hide the same advisory elsewhere
+# (ignores are keyed by advisory id only).
+[advisories]
+ignore = []

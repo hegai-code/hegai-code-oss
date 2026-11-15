@@ -1,0 +1,322 @@
+/* 23-community — community access: waiting card, admin access tab, sandbox as a device, welcome, budget card. */
+
+/* ============================ community access ============================
+   The waiting card, the admin access tab, the sandbox as a device, and the
+   self-serve team controls. Every colour is a role token already in the
+   system: the sandbox-in-progress square is `--brand` (an indicator, like the
+   eyebrow dot), a suspended plate is `--attn` with ink on it, buttons stay on
+   `--action`. Nothing here is a circle and nothing is a gradient. */
+
+/* The gate — one card in the sign-in layout. `.gate-status` is the data layer:
+   mono, faint (4.8:1 light / 4.9:1 dark — the same tier as timestamps). */
+.access-gate .gate-status { font: var(--size-meta)/1.4 var(--mono); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.gate-form { display: grid; gap: var(--space-2); }
+.gate-form label { font-size: var(--size-small); font-weight: 500; color: var(--text); }
+.gate-form textarea {
+  width: 100%; min-height: 84px; padding: 10px var(--space-3); resize: vertical;
+  border: 1px solid var(--border); border-radius: var(--radius-list); background: var(--bg); color: var(--text);
+  font: var(--size-body)/1.5 var(--sans); outline: none;
+}
+.gate-form input {
+  width: 100%; min-height: 40px; padding: 8px var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius-list); background: var(--bg); color: var(--text);
+  font: var(--size-body)/1.5 var(--sans); outline: none;
+}
+.gate-form label small { font-weight: 400; color: var(--text-faint); }
+.gate-form input::placeholder, .gate-form textarea::placeholder { color: var(--text-faint); }
+.gate-form input:focus, .gate-form textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
+.gate-form .btn { justify-self: start; }
+.gate-sent { color: var(--positive); }
+.gate-hint { font-size: var(--size-small); }
+/* A disclosure, not a section: the summary is a link-coloured line with the
+   browser's own marker, and no eyebrow dot — the marker is the marker. */
+.gate-how summary { cursor: pointer; color: var(--link); font-size: var(--size-small); font-weight: 500; }
+.gate-how summary:hover { color: var(--text); }
+.gate-how p { margin: var(--space-2) 0 0; font-size: var(--size-small); }
+.gate-out { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--text-faint); font-size: var(--size-meta); cursor: pointer; }
+.gate-out:hover { color: var(--text); }
+
+/* Доступ — the admin tab reuses the team layout. A counter that holds a
+   suspended person turns ember with ink, exactly like the Home «ждут» tile. */
+.team-metrics article.attn { background: var(--attn); border-color: transparent; }
+.team-metrics article.attn b, .team-metrics article.attn span { color: var(--on-attn); }
+.role-chip.attn { background: var(--attn); color: var(--on-attn); }
+.role-chip.invited { background: var(--ai); color: var(--on-ai); text-transform: none; }
+/* One address and one button: the page's primary verb, above all three lists. */
+.access-add input { flex: 1 1 260px; }
+/* The three lists are a switch, not a second row of destination tabs. */
+.access-switch { max-width: 420px; }
+/* The name block is `flex: 1`, so chips and actions sit at the right edge on
+   their own — no `margin-left: auto` needed (the base .role-chip rule's one is
+   reset so several chips stay together). */
+.access-row .role-chip { margin-left: 0; text-transform: none; white-space: nowrap; }
+.access-row .team-avatar { flex: 0 0 auto; }
+.access-date { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.access-note { color: var(--text-faint); }
+/* The registration answers and the GitHub profile, folded under the name. */
+.access-detail { margin-top: var(--space-1); font-size: var(--size-small); }
+.access-detail summary { cursor: pointer; color: var(--text-faint); }
+.access-detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px var(--space-3); margin: var(--space-2) 0 0; }
+.access-detail dt { color: var(--text-faint); }
+.access-detail dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.access-actions { display: flex; gap: var(--space-2); flex: 0 0 auto; margin-left: var(--space-2); }
+.access-row .btn { min-height: 32px; padding: 4px 12px; font-size: var(--size-small); }
+
+/* The sandbox as a device: an 8×8 square. Brand while it is being built (an
+   indicator, the eyebrow's colour), faint when it is stopped or failed. */
+.sb-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; background: var(--brand); margin: 0 5px; }
+.sb-dot.busy { animation: ccpulse 2s ease-in-out infinite; }
+.sb-dot.off { background: var(--text-faint); }
+.team-card h3 .devices-count { font: 500 var(--size-meta)/1 var(--mono); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* Hardware: the chip sits beside the name, before the mono meta on the right;
+   a not-yet-built sandbox is a card with a pulsing brand square and no meters. */
+.hw-head .hw-chip { margin-left: 0; text-transform: none; }
+/* What the machine's Claude and Codex ARE: a chip per runtime under the name,
+   and under an ember chip the command to run there. `attn` is the one tone
+   that asks for a hand; `muted` («нет данных») is an older agent, not a fault. */
+.hw-runtimes { display: flex; flex-direction: column; gap: 4px; }
+.hw-runtime-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hw-runtime-chips .hw-chip, .hw-runtimes > .hw-chip { margin-left: 0; text-transform: none; white-space: nowrap; }
+.hw-runtimes .hw-chip.muted { color: var(--text-faint); }
+.hw-runtime-hint { font-size: var(--size-meta); color: var(--text-muted); }
+.hw-runtime-detail { color: var(--text-faint); font-family: var(--mono); font-size: var(--size-micro); }
+
+/* One machine, two runtimes, each row a fact or one button (the onboarding's
+   second step and the machine card). Name | state (quiet text + a line about
+   the job) | one normal `.btn`. On the machine card the rows run compact. */
+.rt-rows { display: flex; flex-direction: column; }
+.rt-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: var(--space-2) var(--space-3); align-items: center; padding: 10px 0; border-top: 1px solid var(--divider); }
+.rt-rows.compact .rt-row { grid-template-columns: 112px minmax(0, 1fr) auto; padding: 6px 0; border-top: 0; }
+.rt-rows.compact { border-top: 1px solid var(--divider); border-bottom: 1px solid var(--divider); padding: 2px 0; }
+/* «Claude Code» is the longest name and broke onto two lines at 96px. */
+.rt-rows.compact .rt-name { white-space: nowrap; }
+.rt-name { font-weight: 600; }
+.rt-state { display: flex; flex-direction: column; gap: 4px; min-width: 0; align-items: flex-start; }
+/* Status is quiet text, not a pill: an ember 8×8 square marks «needs a hand»,
+   the words stay in `--text-muted`. Ok reads in `--text` with no mark. */
+.rt-status { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: var(--size-small); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-status.attn { color: var(--text-muted); }
+.rt-status.muted { color: var(--text-faint); font-size: var(--size-meta); }
+.rt-mark { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; background: var(--attn); }
+.rt-job { grid-column: 2 / -1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rt-note { font-size: var(--size-meta); color: var(--text-muted); }
+.rt-hint { font-size: var(--size-meta); color: var(--text-faint); }
+.rt-tail { font-family: var(--mono); font-size: var(--size-micro); color: var(--text-faint); }
+.rt-code { font-family: var(--mono); font-size: 18px; letter-spacing: 0.08em; color: var(--text); font-weight: 600; user-select: all; }
+.rt-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: flex-end; }
+.rt-actions .btn { white-space: nowrap; }
+.rt-input { display: inline-flex; gap: var(--space-2); align-items: center; }
+.rt-input input { width: 220px; max-width: 100%; }
+/* Same canon well as the Account/Team fields (14-team.css): a raw input read as unstyled. */
+.rt-input input {
+  min-height: 36px; padding: 6px var(--space-3); border: none; border-radius: var(--radius-md);
+  background: var(--surface-sunken); color: var(--text); box-shadow: inset 0 0 0 1px var(--divider);
+  font: var(--size-body)/1.4 var(--sans); outline: none;
+}
+.rt-input input::placeholder { color: var(--text-faint); }
+.rt-input input:focus { box-shadow: inset 0 0 0 1px var(--border), 0 0 0 3px var(--focus-ring); }
+@media (max-width: 640px) {
+  /* name over status on the left, the button centred on the right; a login in
+     progress (code, link, field, «Отмена») takes the full width below. */
+  .rt-row, .rt-rows.compact .rt-row { grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--space-3); }
+  .rt-name { grid-column: 1; grid-row: 1; align-self: end; }
+  .rt-state { grid-column: 1; grid-row: 2; align-self: start; }
+  .rt-actions { grid-column: 2; grid-row: 1 / span 2; align-self: center; justify-content: flex-end; }
+  .rt-job { grid-column: 1 / -1; grid-row: 3; }
+  .rt-row.running .rt-actions { grid-column: 1 / -1; grid-row: 4; justify-content: flex-start; margin-top: var(--space-2); }
+  .rt-input input { width: 100%; }
+}
+.hw-dot.pending { background: var(--brand); animation: ccpulse 2s ease-in-out infinite; }
+.hw-card.pending { opacity: 0.85; }
+
+/* Team switcher in the panel head; row actions in «Мои команды». */
+.team-head .team-select { margin-left: auto; align-self: center; max-width: 260px; }
+.team-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); flex: 0 0 auto; margin-left: auto; }
+.team-row .role-chip + .team-actions, .team-row .btn + .team-actions { margin-left: var(--space-2); }
+.team-form.compact .team-help { flex: 0 0 100%; }
+
+/* Publish form grew a third select (owner-session visibility). Three fields on
+   the first row, three controls on the second; the button keeps its own width. */
+.project-share { grid-template-columns: minmax(160px, .55fr) minmax(220px, 1fr) minmax(160px, .6fr); }
+.project-share > .btn { justify-self: start; }
+
+@media (max-width: 720px) {
+  .team-head .team-select { margin-left: 0; max-width: none; width: 100%; }
+  /* Five labels do not fit 390dp, and `.team-page` scrolls vertically only —
+     without this the PAGE scrolls sideways. Same treatment as `.folders`. */
+  .team-tabs { gap: var(--space-3); padding: 0 var(--space-2); overflow-x: auto; scrollbar-width: none; }
+  .team-tabs::-webkit-scrollbar { display: none; }
+  .access-row { flex-wrap: wrap; }
+  .access-actions, .team-actions { flex-basis: 100%; margin-left: 0; }
+}
+
+/* ===================== community: projects, welcome, budget =====================
+   Increment 4 of the community rollout: «Новый проект» on the shelf, the
+   greeting card, «Забрать своё», the seat's own limit and the budget card in a
+   transcript. Same rules as everything above: role tokens only (buttons on
+   --action, attention on --attn with ink, indicators on --brand), rectangles,
+   no gradients, the eyebrow only where a section starts. */
+
+/* ---- the row menu, reused by the project table ---- */
+.pcp-more { position: relative; flex: 0 0 auto; display: flex; }
+.pcp-more > summary {
+  list-style: none; cursor: pointer; display: grid; place-items: center;
+  width: 28px; color: var(--text-faint); background: none;
+  opacity: 0; transition: opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.pcp-more > summary::-webkit-details-marker { display: none; }
+/* Revealed by the ROW, not by a card wrapper that no longer exists — with the
+   old selector the button stayed at `opacity: 0` in the table, i.e. the menu
+   was unreachable at every width. */
+.pc-item:hover .pcp-more > summary,
+.pc-item:focus-within .pcp-more > summary,
+.proj-card:hover .pc-menu-wrap > summary,
+.proj-card:focus-within .pc-menu-wrap > summary,
+.pcp-more[open] > summary { opacity: 1; }
+.pcp-more > summary:hover, .pcp-more[open] > summary { color: var(--text); background: var(--surface-hover); }
+/* FIXED, not absolute, and placed by `anchorMenu` in StartScreen.tsx.
+   `.proj-row` is `overflow-x: auto`, and per spec that promotes `overflow-y`
+   from `visible` to `auto` — so the shelf is a scroll container in BOTH axes
+   and an absolutely-positioned menu hanging below a card was clipped away
+   entirely. «Забрать своё» and «Удалить» were unreachable at every width,
+   and while the menu was open the shelf also became vertically scrollable,
+   so a swipe over it scrolled the chip row instead of the page.
+   This is the same clipping `1d81b90` hit with the model menu one screen
+   over; a fixed box escapes the overflow the way that portal does. */
+.pcp-menu {
+  position: fixed; z-index: 45;
+  min-width: 168px; padding: 4px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-raised); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg), var(--rim);
+}
+/* No hover on touch, so it is simply always on. */
+@media (hover: none) { .pcp-more > summary { opacity: 1; } }
+
+/* A line under the shelf: created, reused, could not share, could not remove. */
+.start-note {
+  display: flex; align-items: center; gap: var(--space-2); margin: 10px auto 0; width: fit-content; max-width: 100%;
+  padding: 6px 10px; border-radius: var(--radius-sm); background: var(--surface-hover);
+  color: var(--text-muted); font: var(--size-meta)/1.4 var(--mono); overflow-wrap: anywhere;
+}
+.start-note-x { border: 0; background: transparent; color: var(--text-faint); font-size: var(--size-body); line-height: 1; padding: 0 2px; cursor: pointer; }
+.start-note-x:hover { color: var(--text); }
+
+/* The sandbox being built, where the shelf would be. */
+.start-pending { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin: 0 0 18px; color: var(--text-muted); }
+.start-pending .sb-dot { margin: 0; }
+
+/* The suggested first prompt lives in the placeholder; this takes it in one press. */
+.start-suggest {
+  display: block; margin: 8px auto 0; padding: 4px 10px; border: 0; background: transparent;
+  color: var(--link); font: 500 var(--size-meta)/1.4 var(--mono); cursor: pointer; border-radius: var(--radius-sm);
+}
+.start-suggest:hover { background: var(--action-soft); }
+
+/* A hosted sandbox runs Codex through the gateway: a badge, not a choice. */
+.role-chip.gateway { margin-left: 0; text-transform: none; color: var(--teal-dark); background: color-mix(in srgb, var(--teal-dark) 16%, transparent); }
+:root[data-theme="dark"] .role-chip.gateway { color: var(--text); background: color-mix(in srgb, var(--teal-dark) 40%, transparent); }
+
+/* ---- «Новый проект» — the form in the picker's slot ---- */
+.proj-pop.newproj { width: min(420px, 92vw); padding: var(--space-3) var(--space-4) var(--space-4); gap: var(--space-3); }
+.np-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.np-title { font: 600 var(--size-card)/1.3 var(--title); }
+.np-field { display: grid; gap: 4px; min-width: 0; }
+.np-field > span { font: 600 var(--size-meta)/1.4 var(--sans); color: var(--text-muted); }
+.np-path { font: var(--size-meta)/1.4 var(--mono); overflow-wrap: anywhere; color: var(--text-muted); }
+.np-field input, .np-field select, .take-push input, .home-take-pick {
+  width: 100%; min-width: 0; padding: 8px var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius-list); background: var(--bg); color: var(--text);
+  font: var(--size-body)/1.4 var(--sans); outline: none;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.np-field input { font-family: var(--mono); font-size: var(--size-small); }
+.np-field input::placeholder, .take-push input::placeholder { color: var(--text-faint); }
+.np-field input:focus, .np-field select:focus, .take-push input:focus, .home-take-pick:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
+.np-field input[aria-invalid="true"] { border-color: var(--red); }
+.np-field input:disabled, .np-field select:disabled { opacity: 0.6; }
+.np-hint { font-size: var(--size-meta); line-height: 1.45; color: var(--text-faint); }
+/* Empty / clone — a segmented pair, the same control as the agent picker. */
+.np-mode { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-sunken); align-self: start; }
+.np-mode-opt {
+  padding: 5px 12px; border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--text-muted); font: 500 var(--size-small)/1.3 var(--sans); cursor: pointer;
+}
+.np-mode-opt:hover { color: var(--text); }
+.np-mode-opt.active { background: var(--select); color: var(--on-select); }
+.np-check { display: flex; align-items: flex-start; gap: var(--space-2); cursor: pointer; }
+.np-check input { margin-top: 3px; accent-color: var(--action); width: 15px; height: 15px; flex: 0 0 auto; }
+.np-check > span { display: grid; gap: 2px; min-width: 0; }
+.np-check b { font-size: var(--size-small); font-weight: 600; }
+.np-check small { font-size: var(--size-meta); line-height: 1.45; color: var(--text-muted); }
+.np-error { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--surface-hover); color: var(--negative); font-size: var(--size-small); line-height: 1.45; }
+.np-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.np-note { font: var(--size-micro)/1.4 var(--mono); color: var(--text-faint); }
+
+/* ---- «Забрать своё» — in the shelf slot, in the Home card ---- */
+.proj-pop.take-pop { width: min(460px, 92vw); }
+.take { display: grid; gap: var(--space-3); padding: var(--space-3) var(--space-4) var(--space-4); min-width: 0; }
+.take-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.take-title { font: 600 var(--size-card)/1.3 var(--title); }
+.take-lead, .take-list { margin: 0; font-size: var(--size-small); line-height: 1.5; color: var(--text); }
+.take code, .home-text code, .welcome-body code { font-family: var(--mono); font-size: 0.92em; padding: 1px 5px; border-radius: var(--radius-sm); background: var(--surface-sunken); overflow-wrap: anywhere; }
+.take-list { padding-left: 1.3em; display: grid; gap: var(--space-3); }
+.take-list li { display: grid; gap: 4px; padding-left: 4px; }
+.take-list b { font-weight: 600; }
+.take-list b a { color: var(--link); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.take-list b a:hover { text-decoration: underline; }
+.take-list small { font-size: var(--size-meta); line-height: 1.45; color: var(--text-muted); }
+.take-push { display: flex; gap: var(--space-2); align-items: center; margin-top: 2px; }
+.take-push input { font-family: var(--mono); font-size: var(--size-small); }
+.take-push .btn { flex: 0 0 auto; white-space: nowrap; }
+.home-take { margin: 0 var(--space-2) var(--space-2); border-radius: var(--radius-md); background: var(--surface); box-shadow: inset 0 0 0 1px var(--divider); }
+.home-take .take { padding-bottom: var(--space-3); }
+.home-take-pick { margin: var(--space-3) var(--space-4) 0; width: calc(100% - 2 * var(--space-4)); }
+
+/* ---- Home: the card head with more than one link, and the prose cards ---- */
+.home-cardlinks { display: flex; align-items: baseline; gap: var(--space-3); flex: 0 0 auto; }
+button.home-all { border: 0; background: transparent; cursor: pointer; }
+button.home-all[aria-expanded="true"] { color: var(--brand); }
+.home-text { margin: 0; padding: 0 var(--space-4); font-size: var(--size-body); line-height: 1.55; color: var(--text); max-width: 70ch; }
+.home-text .sb-dot { display: inline-block; vertical-align: 0.05em; margin: 0 8px 0 0; }
+.home-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-2); }
+.home-actions .btn { text-decoration: none; }
+.home-first, .home-sandbox, .home-team, .welcome { padding-bottom: var(--space-3); }
+
+/* «Здравствуй» — the one prose card on the board. Body copy at reading size,
+   a measure that stays readable, two buttons and nothing else. */
+.welcome-body { display: grid; gap: var(--space-3); padding: 0 var(--space-4); max-width: 72ch; }
+.welcome-body p { margin: 0; font-size: var(--size-body); line-height: 1.6; color: var(--text); }
+.welcome-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-4) var(--space-4) var(--space-2); }
+.welcome-actions .btn { text-decoration: none; }
+
+/* ---- the budget card in a transcript: ember plate, ink on it, no modal ---- */
+.budget-card {
+  max-width: 940px; width: 100%; margin: 6px 0;
+  display: grid; gap: 4px; padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-list); background: var(--attn); color: var(--on-attn);
+}
+.bc-title { font-size: var(--size-body); font-weight: 600; line-height: 1.4; }
+.bc-body { font-size: var(--size-small); line-height: 1.5; }
+.bc-meta { font: var(--size-meta)/1.5 var(--mono); font-variant-numeric: tabular-nums; }
+.bc-links { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: 4px; font-size: var(--size-small); font-weight: 500; }
+.bc-links a { color: var(--on-attn); text-decoration: underline; text-underline-offset: 2px; }
+.bc-links a:hover { text-decoration-thickness: 2px; }
+
+/* ---- the info column: someone else's session, in your hands ---- */
+.si-drive { font: var(--size-micro)/1.5 var(--mono); color: var(--text-muted); text-align: center; overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .take-push { flex-direction: column; align-items: stretch; }
+  .home-cardlinks { gap: var(--space-2); }
+}
+
+/* Above a composer whose coder is not installed / signed in on that machine. */
+.rt-gate { margin: 0 0 var(--space-2); padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-hover); }
+.rt-gate-text { color: var(--text); font: var(--size-small)/1.5 var(--sans); margin-bottom: 4px; }
+/* «Not logged in» answered by the CLI, as a plain notice in the transcript:
+   prose type, the attention mark, a token link — not a red mono log line. */
+.rt-notice { margin: var(--space-2) 0; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface-hover);
+  color: var(--text); font: var(--size-small)/1.5 var(--sans); box-shadow: inset 3px 0 0 var(--attn); }
+.rt-notice a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.rt-gate .rt-rows.compact { border: 0; padding: 0; }

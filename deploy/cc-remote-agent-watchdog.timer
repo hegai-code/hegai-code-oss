@@ -1,0 +1,13 @@
+[Unit]
+Description=Check the cc-remote agent cgroup every minute
+
+[Timer]
+# The incident this watches for ran for six hours. A minute is not urgency, it
+# is just cheap: one pass reads a handful of files per agent unit.
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=cc-remote-agent-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,113 @@
+{
+  "machine": "Fixture Mac",
+  "generatedAt": 1699999999000,
+  "transcriptsScanned": 120,
+  "sessions": 80,
+  "messages": {
+    "user": 400,
+    "assistant": 900
+  },
+  "span": {
+    "firstTs": 1690000000000,
+    "lastTs": 1699999999000,
+    "activeDays": 42,
+    "longestStreakDays": 9
+  },
+  "cadence": {
+    "hourHistogram": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      5,
+      4,
+      3,
+      2,
+      1,
+      2,
+      3,
+      4,
+      3,
+      2,
+      1
+    ],
+    "weekdayHistogram": [
+      1,
+      5,
+      6,
+      7,
+      6,
+      5,
+      2
+    ],
+    "nightOwlShare": 0.31,
+    "avgSessionMessages": 16.2,
+    "avgSessionMinutes": 48.7
+  },
+  "tools": {
+    "counts": {
+      "Bash": 320,
+      "Read": 410
+    },
+    "buildVsExplore": 0.44,
+    "testRunShare": 0.12,
+    "gitOpShare": 0.2,
+    "toolCallsPerSession": 21.5
+  },
+  "steering": {
+    "avgPromptChars": 210.3,
+    "shortPromptShare": 0.5,
+    "longPromptShare": 0.1,
+    "followUpsPerSession": 3.4
+  },
+  "engineering": {
+    "filesTouched": 900,
+    "topLanguages": [
+      {
+        "name": "ts",
+        "count": 500
+      }
+    ],
+    "repos": 12,
+    "branches": 34
+  },
+  "planning": {
+    "planModeShare": 0.25,
+    "todoShare": 0.4,
+    "topSkills": [
+      {
+        "name": "investigate",
+        "count": 9
+      }
+    ]
+  },
+  "models": {
+    "histogram": {
+      "claude-opus-5": 700
+    },
+    "avgModelsPerSession": 1.1
+  },
+  "scores": {
+    "steering": 7.2,
+    "execution": 8.1,
+    "engineering": 6.9,
+    "planning": 5.5,
+    "product": 3.2
+  },
+  "archetype": {
+    "primary": "Архитектор",
+    "badges": [
+      "Работа с кодом",
+      "Исследование"
+    ]
+  }
+}

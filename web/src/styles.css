@@ -1,0 +1,50 @@
+/*
+ * Hegai Remote — the stylesheet entry. The rules live in `./styles/NN-*.css`;
+ * this file is ONLY the ordered list of them.
+ *
+ * THE ORDER IS THE CASCADE. The sheets were cut, in source order, from one
+ * chronological file: a later layer overrides an earlier one at equal
+ * specificity, and several of them say so in their own comments («comes LAST
+ * so it wins over the ≤860 block»). Do not reorder, merge or insert a sheet in
+ * the middle without checking the built CSS is unchanged. A new rule goes into
+ * the sheet of the surface it styles, not at the end of the last one. Design
+ * tokens live in `00-tokens.css` (see DESIGN.md).
+ *
+ * Imported by `main.tsx`, `lite/main.tsx` and `screens.tsx` as `styles.css`.
+ */
+@import './styles/00-tokens.css';
+@import './styles/01-base.css';
+@import './styles/02-primitives.css';
+@import './styles/03-topbar.css';
+@import './styles/04-sidebar.css';
+@import './styles/05-session-list.css';
+@import './styles/06-start.css';
+@import './styles/07-workspace.css';
+@import './styles/08-transcript.css';
+@import './styles/09-composer.css';
+@import './styles/10-columns.css';
+@import './styles/11-overlays.css';
+@import './styles/12-mobile.css';
+@import './styles/13-nav-profile.css';
+@import './styles/14-team.css';
+@import './styles/15-home.css';
+@import './styles/16-install.css';
+@import './styles/17-canon.css';
+@import './styles/18-shell-chrome.css';
+@import './styles/19-session-drawer.css';
+@import './styles/20-tool-calls.css';
+@import './styles/21-composer-touch.css';
+@import './styles/22-info-sheet.css';
+@import './styles/23-community.css';
+@import './styles/24-files.css';
+@import './styles/25-projects.css';
+@import './styles/26-board.css';
+@import './styles/27-restyle-0927.css';
+@import './styles/28-vscode.css';
+@import './styles/29-projects-list.css';
+@import './styles/30-subagents.css';
+@import './styles/31-browser-sheet.css';
+@import './styles/32-generated-image.css';
+@import './styles/33-file-previews.css';
+@import './styles/34-review.css';
+@import './styles/35-onboarding.css';

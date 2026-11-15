@@ -1,0 +1,86 @@
+/* 32-generated-image — pictures the agent MADE (Codex image_gen, `hegai-image`):
+   the live placeholder with its bar, the finished picture, the lightbox's two
+   actions. Tokens only; rectangles; no gradients. DESIGN.md «Транскрипт». */
+
+/* The picture is the agent's answer, so it takes the measure up to 420px at its
+   own aspect — unlike `.att-shot`, a reference inside somebody's message. */
+.gen-img { margin: 6px 0; display: grid; gap: 6px; width: min(420px, 100%); justify-items: start; }
+.gen-open {
+  display: block; width: 100%; padding: 0; border: none; background: var(--surface-sunken);
+  border-radius: var(--radius-lg); overflow: hidden; cursor: zoom-in; line-height: 0;
+  box-shadow: var(--shadow-sm), var(--rim);
+}
+.gen-open img { display: block; width: 100%; height: auto; }
+.gen-open:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* The prompt: two lines, a tap opens the rest (the full text is also the title). */
+.gen-prompt {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  width: 100%; padding: 0; border: none; background: none; cursor: pointer; text-align: left;
+  font-family: var(--sans); font-size: var(--size-small); line-height: var(--lh-read);
+  color: var(--text-muted); overflow-wrap: anywhere;
+}
+.gen-prompt.open { display: block; -webkit-line-clamp: unset; }
+.gen-prompt:hover { color: var(--text); }
+
+/* Not resolvable after the bounded retries; a tap asks again. */
+.gen-missing {
+  padding: 8px 12px; border: none; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--surface-sunken); color: var(--text-muted);
+  font-family: var(--sans); font-size: var(--size-small);
+}
+.gen-missing:hover { color: var(--text); }
+
+/* The placeholder: a roughly square plate that holds the place of the picture.
+   The «shimmer» is a soft pulse of one layer — a sweep would be a gradient. */
+.gen-card { margin: 6px 0; width: min(420px, 100%); }
+.gen-wait {
+  position: relative; overflow: hidden; display: grid; align-content: end;
+  width: min(420px, 100%); aspect-ratio: 1 / 1; padding: 16px;
+  border-radius: var(--radius-lg); background: var(--surface-sunken);
+  box-shadow: var(--shadow-sm), var(--rim);
+}
+.gen-wait::before {
+  content: ""; position: absolute; inset: 0; background: var(--surface-hover);
+  animation: ccpulse 2s ease-in-out infinite;
+}
+.gen-wait-load { display: block; aspect-ratio: 4 / 3; padding: 0; }
+.gen-wait-body { position: relative; display: grid; gap: 8px; }
+.gen-prompt-clip {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  font-size: var(--size-small); line-height: var(--lh-read); color: var(--text-muted); overflow-wrap: anywhere;
+}
+.gen-label {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  font-size: var(--size-small); color: var(--text);
+}
+.gen-clock { font-family: var(--mono); font-size: var(--size-meta); font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.gen-bar { height: 4px; border-radius: 2px; background: var(--divider); overflow: hidden; }
+.gen-bar > span { display: block; height: 100%; background: var(--brand); transition: width 1s linear; }
+
+.gen-failed {
+  margin: 2px 0; font-size: var(--size-small); line-height: var(--lh-read); color: var(--negative);
+  overflow-wrap: anywhere;
+}
+
+/* The lightbox's actions: over the scrim, top right, chips on --surface. */
+.att-viewer { padding: 64px 32px 32px; }
+.att-viewer-bar {
+  position: absolute; top: 12px; right: 12px; left: 12px; display: flex; flex-wrap: wrap;
+  justify-content: flex-end; gap: 8px; cursor: default;
+}
+.att-viewer-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 6px 12px;
+  border: none; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm), var(--rim);
+  font-family: var(--sans); font-size: var(--size-small); font-weight: 500;
+}
+.att-viewer-btn:hover { background: var(--surface-raised); box-shadow: var(--shadow), var(--rim); }
+.att-viewer-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+@media (pointer: coarse) { .att-viewer-btn { min-height: 44px; } }
+@media (max-width: 860px) { .att-viewer { padding: 64px 12px 12px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gen-wait::before { animation: none; }
+  .gen-bar > span { transition: none; }
+}

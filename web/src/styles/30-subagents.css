@@ -1,0 +1,157 @@
+/* 30-subagents — sub-agents (Subagents.tsx). */
+
+/* ---- sub-agents (Subagents.tsx, 10.10.2026) ----
+   One card per sub-agent under the paragraph that launched it, the live ones
+   as rows over the composer, and the agent's own transcript in a sheet. Its
+   messages never enter the parent's transcript. Machinery, so quiet: the
+   sunken ground, small type, a status mark (8×8, radius 2) — not a new hue. */
+.run-row-wrap { display: contents; }
+.sa-cards { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; max-width: var(--chat-measure); }
+/* The session's own turn as a card of the same kind (`SessionWorkCard`,
+   14.10.2026): the model, «Читаю файл», calls and clock, the last steps. It
+   replaced the bare «Думаю · 1:42» line under the transcript. */
+.sa-card.sa-self { max-width: var(--chat-measure); margin: 6px 0 2px; }
+/* 19.10.2026, by request («внятное, текстом»): a raised card instead of the
+   sunken well — the steps are sentences in the body face, not tool lines in
+   mono; the task is the card's title, who works on it a quiet line under it;
+   the trail hangs on a hairline with the running step's pulse on it. */
+.sa-card {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  background: var(--surface-raised); box-shadow: var(--shadow-sm), var(--rim);
+  border-radius: var(--radius-md); padding: 10px 14px 12px;
+  font-size: var(--size-small); color: var(--text);
+}
+.sa-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sa-kind { font-size: var(--size-meta); color: var(--text-muted); flex: 0 0 auto; }
+.sa-desc { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-card .sa-desc { font-size: var(--size-card); font-weight: 600; line-height: 1.4; }
+.sa-meta { flex: 0 0 auto; font-size: var(--size-meta); color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sa-who { font-size: var(--size-meta); color: var(--text-faint); padding-left: 16px; margin-top: -2px; }
+.sa-stream {
+  list-style: none; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  margin: 4px 0 0 3px; padding: 0 0 0 13px; border-left: 1px solid var(--divider);
+}
+.sa-stream.all { max-height: 20em; overflow-y: auto; }
+.sa-past, .sa-now { position: relative; font-size: var(--size-small); line-height: 1.5; min-width: 0; }
+.sa-step { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-past { color: var(--text-muted); }
+.sa-now { color: var(--text); }
+/* The running step's mark sits ON the trail line, like the head's own mark. */
+.sa-now::before {
+  content: ""; position: absolute; left: -17px; top: calc(0.75em - 3px);
+  width: 7px; height: 7px; border-radius: 2px; background: var(--brand);
+  animation: ccpulse 1.6s ease-in-out infinite;
+}
+.sa-quiet { color: var(--orange-text); }
+/* «Что сделано» — a finished turn's recap: one quiet line that opens. */
+.sa-card.sa-recap { max-width: var(--chat-measure); margin: 8px 0 4px; padding: 0; }
+.sa-recap-head {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 8px 14px; cursor: pointer; border-radius: var(--radius-md);
+}
+.sa-recap-head:hover { background: var(--surface-hover); }
+.sa-recap-head:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.sa-card.sa-recap .sa-desc { font-size: var(--size-small); color: var(--text-muted); }
+.sa-card.sa-recap.open .sa-desc { color: var(--text); }
+.sa-recap .sa-stream { margin: 0 14px 12px 17px; }
+.sa-chev { flex: 0 0 auto; color: var(--text-faint); transition: transform var(--dur) var(--ease); }
+.sa-recap.open .sa-chev { transform: rotate(180deg); }
+.sa-summary {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: var(--size-meta); line-height: 1.5; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; padding-left: 16px;
+}
+.sa-summary.open { display: block; -webkit-line-clamp: unset; max-height: 24em; overflow-y: auto; color: var(--text); }
+.sa-actions { display: flex; align-items: center; gap: 14px; padding-left: 16px; min-height: 20px; }
+.sa-link {
+  background: none; border: none; padding: 0; cursor: pointer; font: inherit; font-size: var(--size-meta);
+  color: var(--text-muted); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border);
+}
+.sa-link:hover { color: var(--text); text-decoration-color: currentColor; }
+.sa-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 2px; }
+.sa-link.danger:hover { color: var(--red); }
+.sa-word { font-size: var(--size-meta); color: var(--text-faint); }
+.sa-mark { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.sa-mark.running { background: var(--brand); animation: ccpulse 1.6s ease-in-out infinite; }
+.sa-mark.idle { border: 1px solid var(--text-faint); }
+svg.sa-mark { width: 12px; height: 12px; border-radius: 0; }
+svg.sa-mark.done { color: var(--text-muted); }
+svg.sa-mark.failed { color: var(--red); }
+svg.sa-mark.stopped { color: var(--text-faint); }
+.sa-card.failed .sa-summary { color: var(--red); }
+@media (prefers-reduced-motion: reduce) { .sa-mark.running, .sa-now::before { animation: none; } .sa-chev { transition: none; } }
+
+.sa-panel {
+  display: flex; flex-direction: column; gap: 4px; margin: 8px 0 2px; max-width: var(--chat-measure);
+  background: var(--surface-sunken); border-radius: var(--radius-sm); padding: 8px 12px;
+}
+.sa-panel-head { display: flex; align-items: center; gap: 8px; font-size: var(--size-meta); color: var(--text-muted); }
+.sa-panel-head .sa-link { margin-left: auto; }
+.sa-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sa-row { display: flex; flex-direction: column; gap: 2px; font-size: var(--size-small); min-width: 0; }
+.sa-row-line { display: flex; align-items: center; gap: 10px; min-height: 28px; min-width: 0; }
+.sa-row-more { display: flex; flex-direction: column; gap: 6px; padding: 0 0 8px 18px; }
+.sa-row.completed .sa-desc, .sa-row.failed .sa-desc, .sa-row.stopped .sa-desc { color: var(--text-muted); }
+.sa-row + .sa-row { border-top: 1px solid var(--divider); }
+.sa-row-main {
+  all: unset; box-sizing: border-box; display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 auto; overflow: hidden;
+  cursor: pointer; font-size: var(--size-small); color: var(--text);
+}
+.sa-row-main:disabled { cursor: default; }
+.sa-row-main:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 4px; }
+.sa-row-main .sa-desc { flex: 0 1 auto; }
+.sa-count { flex: 0 0 auto; font-size: var(--size-meta); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sa-owner { flex: 0 1 auto; font-size: var(--size-meta); color: var(--text-faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-row-now { font-size: var(--size-meta); color: var(--text-faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (pointer: coarse) { .sa-row { min-height: 44px; } .sa-link { padding: 10px 0; } }
+/* A phone has no room for task and counters on one line: the task keeps the
+   line, the counters drop under it, the panel row's actions too. */
+@media (max-width: 560px) {
+  .sa-head { flex-wrap: wrap; row-gap: 2px; }
+  .sa-head .sa-desc { flex-basis: calc(100% - 120px); }
+  .sa-head .sa-meta { flex-basis: 100%; padding-left: 16px; }
+  .sa-row-line { flex-wrap: wrap; row-gap: 0; padding: 4px 0; }
+  .sa-row-main { flex-basis: calc(100% - 20px); }
+  .sa-row-now { display: none; }
+  .sa-row .sa-meta { margin-right: auto; }
+}
+
+.sa-sheet-scrim { position: fixed; inset: 0; z-index: 90; background: var(--scrim); display: flex; justify-content: flex-end; }
+.sa-sheet {
+  width: min(760px, 100%); height: 100%; display: flex; flex-direction: column;
+  background: var(--bg); box-shadow: var(--shadow-xl), var(--rim);
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.sa-sheet-head { display: flex; align-items: center; gap: 10px; padding: 12px var(--pane-inset); border-bottom: 1px solid var(--divider); }
+.sa-sheet-title { font-size: var(--size-card); font-weight: 600; min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-close { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: var(--radius-sm); line-height: 0; }
+.sa-close:hover { color: var(--text); background: var(--chip); }
+.sa-sheet-body { flex: 1 1 auto; overflow-y: auto; padding: 12px var(--pane-inset) 32px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* The sheet slides in from the right and the scrim fades under it (10.10.2026,
+   with the browser sheet). `SideSheet` is the one markup for both sheets. */
+@keyframes sa-sheet-in { from { transform: translateX(100%); } }
+@keyframes sa-scrim-in { from { opacity: 0; } }
+.sa-sheet-scrim { animation: sa-scrim-in var(--dur) var(--ease); }
+.sa-sheet { animation: sa-sheet-in var(--dur) var(--ease); }
+@media (prefers-reduced-motion: reduce) { .sa-sheet-scrim, .sa-sheet { animation: none; } }
+/* A screen rather than a column of text — the cloud browser's 1440×900. */
+.sa-sheet.wide { width: min(1280px, 100%); }
+@media (max-width: 860px) { .sa-sheet, .sa-sheet.wide { width: 100%; } }
+
+/* The plan (07.11.2026): «3/7 · what is in progress» pinned over the composer
+   while the session works, and the same line + bar on a helper's card. Tokens
+   only; the bar's fill is `--brand` on the sunken well, 3px. */
+.plan-bar { height: 3px; border-radius: 2px; background: var(--surface-sunken); overflow: hidden; }
+.plan-bar-fill { height: 100%; border-radius: 2px; background: var(--brand); transition: width var(--dur) var(--ease); }
+.plan-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--size-meta); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.plan-strip { width: 100%; max-width: 760px; margin: 0 auto 8px; padding: 0 12px; box-sizing: border-box; }
+.plan-strip-line { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; padding: 0; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.plan-strip-line:hover .plan-text { color: var(--text); }
+.plan-strip-line:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; border-radius: var(--radius-sm); }
+.plan-strip-line .plan-text { flex: 1 1 auto; }
+.plan-chev { flex: 0 0 auto; color: var(--text-faint); transition: transform var(--dur) var(--ease); }
+.plan-strip.open .plan-chev { transform: rotate(180deg); }
+.plan-strip-list { max-height: 40vh; overflow-y: auto; margin-bottom: 4px; border-radius: var(--radius-md); background: var(--surface-sunken); }
+.plan-line-card { display: flex; flex-direction: column; gap: 4px; padding-left: 16px; margin-top: 2px; }
+.plan-row-count { flex: 0 0 auto; font-size: var(--size-meta); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+@media (pointer: coarse) { .plan-strip-line { min-height: 36px; } }
+@media (prefers-reduced-motion: reduce) { .plan-bar-fill, .plan-chev { transition: none; } }

@@ -1,0 +1,236 @@
+/* 16-install — the public installation guide (html.install-document), the landing page, quota rows. */
+
+/* ===================== Public installation guide ===================== */
+html.install-document { height: auto; min-height: 100%; overflow-y: auto; }
+html.install-document body { height: auto; min-height: 100%; overflow: visible; }
+/* `position: static` is the load-bearing half, and its absence is why none of
+   the public pages scrolled. The app pins `#root { position: fixed; inset: 0 }`
+   so the shell measures against the viewport rect; a fixed box is out of flow,
+   so releasing only its HEIGHT here left it a viewport-sized window with the
+   document still 100% tall and nothing to scroll. Measured 22.09.2026 on prod:
+   `/install/app` laid out 2807px of content inside an 900px `#root`, and
+   `document.scrollHeight` was 900 — everything below the first screen was not
+   merely off-view but unreachable, on the very pages whose whole job is to be
+   read to the end. Restore the element to normal flow and `inset` stops
+   applying. */
+html.install-document #root { position: static; height: auto; min-height: 100%; }
+.install-page {
+  min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--sans);
+}
+.install-nav {
+  display: flex; align-items: center; justify-content: space-between; width: min(1040px, calc(100% - 32px));
+  margin: 0 auto; padding: var(--space-4) 0; border-bottom: 1px solid var(--divider);
+}
+.install-brand { color: var(--text); font-size: 18px; text-decoration: none; }  /* off-ladder: the /install landing has a hero; the app does not */
+.auth-guide-link { display: inline-block; margin-top: var(--space-3); color: var(--link); font-size: var(--size-meta); text-decoration: none; }
+.install-hero {
+  width: min(800px, calc(100% - 32px)); margin: 0 auto; padding: 80px 0 64px; text-align: center;
+}
+.install-kicker { color: var(--link); font-size: 12px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-hero h1 { margin: var(--space-4) 0; font-family: var(--title); font-size: clamp(36px, 7vw, 64px); line-height: 1.04; letter-spacing: -2px; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-hero > p { max-width: 680px; margin: 0 auto; color: var(--text-muted); font-size: 17px; line-height: 1.65; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-trust { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); margin-top: var(--space-6); }
+.install-trust span { padding: 7px var(--space-3); border: 1px solid var(--divider); border-radius: var(--radius-panel); background: var(--surface); color: var(--text-muted); font-size: 12px; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-section, .install-warning {
+  width: min(800px, calc(100% - 32px)); margin: 0 auto;
+}
+.install-section h2, .install-warning h2 { margin: 0 0 var(--space-2); font-size: 20px; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-section p, .install-warning p { margin: 0; color: var(--text-muted); line-height: 1.65; }
+.install-command-card { padding: var(--space-5); border: 1px solid var(--divider); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-sm); }
+.install-os-tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); padding: var(--space-1); border-radius: var(--radius-list); background: var(--surface-hover); }
+.install-os-tabs button { flex: 1; padding: 9px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font-weight: 600; }
+.install-os-tabs button.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow-xs); }
+.install-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.install-fields label { display: flex; flex-direction: column; gap: 6px; color: var(--text-muted); font-size: 12px; font-weight: 600; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-fields input { width: 100%; padding: 10px var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-list); background: var(--bg); color: var(--text); font: var(--size-body) var(--mono); outline: none; }  /* 16px: iOS Safari zooms the page on focus below that */  /* off-ladder: the /install landing has a hero; the app does not */
+.install-fields input:focus { border-color: var(--action); box-shadow: 0 0 0 3px var(--focus-ring); }
+.install-command-card pre, .install-admin pre { overflow-x: auto; margin: var(--space-4) 0; padding: var(--space-4); border-radius: var(--radius-list); background: var(--terminal-bg); color: var(--terminal-text); font: 12px/1.65 var(--mono); white-space: pre; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-copy { width: 100%; justify-content: center; }
+/* Personal access page (/access): a plain stack of cards, same width as the
+   install flow, since there are no numbered steps to hang them off. */
+.access-cards {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  width: min(800px, calc(100% - 32px)); margin: 0 auto; padding-bottom: 64px;
+}
+.install-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.install-hint { margin-top: var(--space-3); color: var(--text-muted); font-size: 12px; line-height: 1.7; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-hint code { font-family: var(--mono); }
+.install-sub { margin: var(--space-4) 0 0; color: var(--text-muted); font-size: 12px; font-weight: 600; }  /* off-ladder: the /install landing has a hero; the app does not */
+/* Quota bars on the access page — the shared subscription for employees, the
+   personal ceiling for a community seat. Square ends, like every other gauge.
+   (These once pointed at `--text-2` / `--surface-2` / `--primary`, none of which
+   exist, so the fill was transparent and the label inherited body colour.) */
+.quota-row { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: var(--space-3); margin: var(--space-3) 0; }
+.quota-label { color: var(--text-muted); font-size: var(--size-meta); }
+.quota-val { color: var(--text-muted); font: var(--size-meta) var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.quota-bar { height: 8px; border-radius: 2px; background: var(--surface-sunken); overflow: hidden; }
+.quota-fill { height: 100%; border-radius: 2px; background: var(--action); transition: width .3s var(--ease); }
+.quota-fill.warn { background: var(--orange); }
+.quota-fill.crit { background: var(--red); }
+@media (max-width: 620px) {
+  .quota-row { grid-template-columns: 1fr; gap: var(--space-1); }
+  .quota-val { justify-self: start; }
+}
+/* Screenshots of the product on the public page.
+   `width`/`height` are on the <img> itself so the box is reserved before the
+   file arrives — without them every picture on a long page shoves the prose
+   someone is reading down by its own height, one image at a time. The frame is
+   a card without a border, like everything else here: the float shadow is what
+   separates it, per DESIGN.md. */
+.install-shot { width: min(800px, calc(100% - 32px)); margin: var(--space-6) auto 0; }
+.install-shot img {
+  display: block; width: 100%; height: auto; margin: 0 auto; border-radius: var(--radius-panel);
+  background: var(--surface); box-shadow: var(--shadow-lg), var(--rim);
+}
+.install-shot figcaption { margin-top: var(--space-3); color: var(--text-muted); font-size: var(--size-meta); line-height: 1.6; text-align: center; }
+/* A phone is 390px of a 2:1 portrait: shown full-bleed it is a column of
+   thumbnail-sized text. Capped and centred, side by side where there is room. */
+.install-shot--phone { width: min(300px, calc(100% - 32px)); }
+.install-shot-row { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-6); width: min(800px, calc(100% - 32px)); margin: 0 auto; }
+.install-shot-row .install-shot { width: min(430px, 100%); margin-top: var(--space-6); }
+.install-shot-row .install-shot--phone { width: min(280px, 100%); }
+/* The public page (24.09.2026, fourth pass): layout from a GPT-image mockup —
+   hero in two columns with the product and a phone over its corner, three step
+   cards in a row, feature rows with check lists, questions beside their
+   heading, a closing banner. Canon holds: ink buttons, ember only as marks. */
+.lp-nav, .lp-footer { width: min(1200px, calc(100% - 32px)); }
+.lp-nav-actions { display: flex; align-items: center; gap: var(--space-4); }
+.lp-nav-link { color: var(--text-muted); font-size: var(--size-meta); font-weight: 600; text-decoration: none; }
+.lp-nav-link:hover { color: var(--text); }
+.lp-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: var(--space-8); align-items: center; width: min(1200px, calc(100% - 32px)); margin: 0 auto; padding: 64px 0 var(--space-8); }
+.lp-hero h1 { margin: var(--space-3) 0 var(--space-4); font-family: var(--title); font-size: clamp(34px, 3.4vw, 48px); line-height: 1.06; letter-spacing: -1.2px; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-hero-text > p { margin: 0; color: var(--text-muted); font-size: 17px; line-height: 1.6; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-term { margin-top: var(--space-6); padding: var(--space-3); border-radius: var(--radius-panel); background: var(--terminal-bg); box-shadow: var(--shadow-lg), var(--rim); }
+.lp-term-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.lp-term .install-os-tabs { margin: 0; flex: 0 0 auto; background: color-mix(in srgb, var(--terminal-text) 10%, transparent); }
+.lp-term .install-os-tabs button { padding: 6px var(--space-3); color: color-mix(in srgb, var(--terminal-text) 70%, transparent); }
+.lp-term .install-os-tabs button.active { background: color-mix(in srgb, var(--terminal-text) 18%, transparent); color: var(--terminal-text); box-shadow: none; }
+.lp-term-copy { background: var(--terminal-text); color: var(--terminal-bg); border: 0; }
+.lp-term pre { margin: var(--space-3) 0 0; padding: var(--space-1) var(--space-2); color: var(--terminal-text); font: 14px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-term pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+.lp-hero-cta { margin-top: var(--space-6); }
+.lp-hero-note { margin: var(--space-3) 0 0; color: var(--text-muted); font-size: var(--size-meta); line-height: 1.6; }
+.lp-hero-note a, .lp-row a, .lp-faq a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; }
+.lp-hero-visual { position: relative; padding: 0 56px 64px 0; }
+.lp-hero-window { display: block; width: 100%; height: auto; border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-lg), var(--rim); }
+.lp-hero-phone { position: absolute; right: 0; bottom: 0; width: 30%; height: auto; border: 6px solid var(--ink); border-radius: 22px; background: var(--surface); box-shadow: var(--shadow-lg), var(--rim); }  /* off-ladder: a phone bezel, drawn once */
+.lp-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); width: min(1200px, calc(100% - 32px)); margin: var(--space-4) auto 0; padding: 0; list-style: none; counter-reset: lp-step; }
+.lp-steps li { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-5); border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: var(--shadow-sm), var(--rim); counter-increment: lp-step; }
+.lp-steps li::before { content: "0" counter(lp-step); color: var(--brand); font: 600 var(--size-meta) var(--mono); letter-spacing: var(--ls-caps); }
+.lp-steps b { font-size: 17px; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-steps span { color: var(--text-muted); font-size: 14px; line-height: 1.55; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-row { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: var(--space-8); align-items: center; width: min(1200px, calc(100% - 32px)); margin: 0 auto; padding: 96px 0 0; }
+.lp-row--flip .lp-row-text { order: 2; }
+.lp-row h2, .lp-faq h2, .lp-final h2 { margin: var(--space-3) 0 var(--space-3); font-family: var(--title); font-size: clamp(26px, 3vw, 36px); line-height: 1.12; letter-spacing: -0.6px; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-row p { margin: 0; color: var(--text-muted); font-size: 16px; line-height: 1.65; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-row .install-shot { width: 100%; margin: 0; }
+.lp-checks { display: flex; flex-direction: column; gap: var(--space-2); margin: var(--space-4) 0 0; padding: 0; list-style: none; }
+.lp-checks li { display: flex; gap: var(--space-2); align-items: baseline; color: var(--text); font-size: 15px; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-checks li::before { content: ""; flex: 0 0 8px; width: 8px; height: 8px; border-radius: 2px; background: var(--brand); transform: translateY(-1px); }
+.lp-server { align-items: start; }
+.lp-cmd { overflow-x: auto; margin: 0; padding: var(--space-4); border-radius: var(--radius-panel); background: var(--terminal-bg); color: var(--terminal-text); font: 14px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; box-shadow: var(--shadow-sm), var(--rim); }  /* off-ladder: the public page has a hero; the app does not */
+.lp-cmd code, .lp-row pre > code { padding: 0; background: none; color: inherit; font-size: inherit; }
+.lp-row code, .lp-faq code { font-family: var(--mono); font-size: 0.88em; padding: 1px 6px; border-radius: var(--radius-sm); background: var(--surface-sunken); }
+.lp-row .lp-muted { margin-top: var(--space-3); font-size: var(--size-meta); }
+.lp-more { margin-top: var(--space-4); }
+.lp-more > summary, .lp-faq summary { cursor: pointer; font-family: var(--sans); letter-spacing: 0; text-transform: none; }
+.lp-more > summary { color: var(--text-muted); font-size: var(--size-meta); font-weight: 600; }
+.lp-more .install-command-card { margin-top: var(--space-3); }
+.lp-faq { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: var(--space-8); width: min(1200px, calc(100% - 32px)); margin: 0 auto; padding: 96px 0 0; }
+.lp-faq-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.lp-faq-list details { padding: var(--space-3) var(--space-4); border-radius: var(--radius-list); background: var(--surface-raised); box-shadow: var(--shadow-sm), var(--rim); }
+.lp-faq summary { color: var(--text); font-size: 15px; font-weight: 600; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-faq details p { margin: var(--space-2) 0 0; color: var(--text-muted); font-size: 15px; line-height: 1.6; }  /* off-ladder: the public page has a hero; the app does not */
+.lp-final { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); width: min(1200px, calc(100% - 32px)); margin: 96px auto 72px; padding: var(--space-8); border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: var(--shadow-sm), var(--rim); }
+.lp-final h2 { margin-top: 0; }
+.lp-final p { margin: 0; color: var(--text-muted); }
+.lp-cta { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 1000px) {
+  .lp-hero, .lp-row, .lp-faq { grid-template-columns: 1fr; }
+  .lp-row--flip .lp-row-text { order: 0; }
+  .lp-hero-visual { padding: 0 40px 48px 0; }
+  .lp-steps { grid-template-columns: 1fr; }
+  .lp-final { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 620px) {
+  .lp-hero { padding-top: 40px; gap: var(--space-6); }
+  .lp-hero-visual { padding: 0 24px 40px 0; }
+  .lp-row, .lp-faq { padding-top: 64px; }
+  .lp-final { margin-top: 64px; padding: var(--space-5); }
+  .lp-nav-link { display: none; }
+}
+.install-note { margin-top: var(--space-4) !important; color: var(--text-muted); font-size: var(--size-meta); line-height: 1.6; }
+.install-note a { color: var(--link); text-decoration: none; }
+
+.install-section { padding: 56px 0; border-top: 1px solid var(--divider); }
+.install-section ol { margin: var(--space-5) 0 0; padding-left: var(--space-6); color: var(--text-muted); line-height: 1.8; }
+.install-section code { font-family: var(--mono); }
+.install-admin { padding-bottom: 64px; }
+.install-warning { margin-bottom: 64px; padding: var(--space-5); border: 1px solid color-mix(in srgb, var(--orange) 45%, var(--divider)); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--orange) 8%, var(--bg)); }
+.install-footer { display: flex; justify-content: space-between; width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: var(--space-5) 0; border-top: 1px solid var(--divider); color: var(--text-faint); font-size: 12px; }  /* off-ladder: the /install landing has a hero; the app does not */
+.install-footer a { color: var(--link); text-decoration: none; }
+
+@media (max-width: 620px) {
+  .install-hero { padding: 56px 0 40px; text-align: left; }
+  .install-hero h1 { letter-spacing: -1.2px; }
+  .install-trust { justify-content: flex-start; }
+  .install-command-card { padding: var(--space-4); }
+  .install-fields { grid-template-columns: 1fr; }
+  .install-footer { flex-direction: column; gap: var(--space-2); }
+}
+
+/* Context budget for the focused run — a thin bar plus the number, sitting with
+   the composer tools. Muted until it approaches the auto-compact threshold, at
+   which point it takes the warning tone: that is the moment the user can still
+   act (compact by hand, or wrap up) before the CLI decides for them. */
+.ctx { display: inline-flex; align-items: center; gap: 6px; font-size: var(--size-micro); color: var(--text-faint);
+  font-variant-numeric: tabular-nums; user-select: none; }
+/* The track was `--surface`, which was right while this rode inside the sunken
+   composer box and wrong the moment it moved to the footer line: on `--surface`
+   the track vanished and a 9% fill read as a speck of dirt at the left margin,
+   with no scale to belong to. `--chip` is the same tone the sunken box used,
+   so the bar keeps its shape against whichever surface it sits on. */
+.ctx-bar { width: 34px; height: 5px; border-radius: 2px; background: var(--chip); overflow: hidden; flex: 0 0 auto; box-shadow: inset 0 0 0 1px var(--divider); }
+.ctx-bar i { display: block; height: 100%; border-radius: 2px; background: var(--text-faint);
+  transition: width var(--dur) var(--ease); }
+/* The TEXT takes `--orange-text`, the bar fill takes `--orange`, and the two
+   tokens say why in their own definitions: `--orange` is «fill / graphics»,
+   `--orange-text` is «accessible gold for small text». This line had the
+   graphics gold on the label — #f2a900 on the canvas is 1.93:1, against a house
+   rule of ≥4.5:1 for every text tone in both themes, at the SMALLEST size tier.
+   `--orange-text` is 5.04:1 light and 11.93:1 dark. A 5px bar is a graphic and
+   keeps the saturated one. */
+.ctx.warn { color: var(--orange-text); }
+.ctx.warn .ctx-bar i { background: var(--orange); }
+
+/* --- Memory: what the hub remembers for this user ------------------------ */
+/* Master-detail: notes on the left, the selected body on the right. Selection
+   is a solid ember plate with ink text, per DESIGN.md — same as every other
+   list in the app. */
+.mem-layout { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.mem-refresh { margin-left: auto; }
+.mem-list { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 160px); overflow-y: auto; }
+.mem-filter { font-size: var(--size-meta); padding: 6px 10px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.mem-group { display: flex; flex-direction: column; gap: 2px; }
+.mem-group-head { display: flex; align-items: baseline; gap: 8px; padding: 0 4px 4px; }
+.mem-group-name { font-size: var(--size-micro); font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--link); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem-group-count { margin-left: auto; font-size: var(--size-micro); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.mem-row { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 6px 10px; border: 0; background: none; color: var(--text); border-radius: var(--radius-list); cursor: pointer; font-size: var(--size-small); transition: background var(--dur-fast) var(--ease); }
+.mem-row:hover { background: var(--surface-hover); }
+.mem-row.active { background: var(--select); color: var(--on-select); }
+.mem-row-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mem-row-when { margin-left: auto; font-size: var(--size-micro); color: var(--text-faint); white-space: nowrap; }
+.mem-row.active .mem-row-when { color: var(--on-select); opacity: 0.75; }
+.mem-body { background: var(--surface); border: 1px solid var(--divider); border-radius: var(--radius-panel); padding: 16px; min-height: 240px; display: flex; flex-direction: column; gap: 12px; }
+.mem-body-head { display: flex; flex-direction: column; gap: 2px; border-bottom: 1px solid var(--divider); padding-bottom: 10px; }
+.mem-body-title { font-family: var(--mono); font-size: var(--size-small); font-weight: 600; word-break: break-all; }
+.mem-body-meta { font-size: var(--size-micro); color: var(--text-faint); }
+.mem-body-text { font-size: var(--size-body); line-height: 1.65; overflow-x: auto; }
+.mem-body-loading { font-size: var(--size-small); color: var(--text-faint); }
+.mem-body-error { font-size: var(--size-small); color: var(--negative); }
+@media (max-width: 900px) { .mem-layout { grid-template-columns: minmax(0, 1fr); } .mem-list { max-height: none; } }
+.mem-delete { margin-top: 6px; align-self: flex-start; }
+.mem-index { font-family: var(--mono); font-size: var(--size-micro); color: var(--text-faint); margin-right: 6px; }
+/* Gold is the "changed / worth a look" tone in this system, not an error — a
+   fat index is a nudge to prune, not a failure. */
+.mem-index.heavy { color: var(--orange-text); font-weight: 700; }

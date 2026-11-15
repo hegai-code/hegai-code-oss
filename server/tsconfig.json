@@ -1,0 +1,26 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    // These CLIs are Node, but several of them DRIVE A BROWSER: the callbacks
+    // handed to puppeteer's `$eval`/`evaluate` are serialised and run in the
+    // page, so their bodies legitimately speak `Element` and `getComputedStyle`
+    // (`dictation-smoke.ts`). Without the DOM lib those nine lines could not
+    // name the types they actually have, and `npm run build` was red on `main`.
+    //
+    // The cost, stated plainly so nobody discovers it the hard way: DOM globals
+    // are now visible to the NODE half of this workspace too, so a CLI that
+    // reaches for `document` outside an `evaluate` body will compile and then
+    // fail at runtime. TypeScript cannot scope a lib to part of a program; the
+    // alternative was a second tsconfig for nine lines of browser code.
+    //
+    // The older smokes dodge this by passing evaluate() a STRING, which is not
+    // type-checked at all (see `compact-smoke.ts`). That is a weaker position,
+    // not a stricter one — it buys compilation by giving up checking.
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
+  },
+  "references": [{ "path": "../shared" }],
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,332 @@
+/* 24-files — Файлы: the file manager (list, grid, tree, breadcrumbs). */
+
+/* ---------------------------------------------------------------------------
+   Файлы — the file manager
+   Tokens only: no hardcoded colour, radius, shadow or spacing. Rectangles, not
+   circles. The row grid is `.mtable`'s, overridden only in its columns, so this
+   screen cannot drift away from the sessions table it borrows from.
+--------------------------------------------------------------------------- */
+.files { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+.files-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; border-bottom: 1px solid var(--divider);
+  background: var(--surface);
+  /* The row menus are `<details>` popovers; they must float over the list. */
+  position: relative; z-index: 20;
+}
+.files-bar-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+/* A path is the data layer, so it speaks in mono — never the interface voice. */
+.fcrumbs {
+  display: flex; align-items: center; gap: 4px; min-width: 0;
+  font-family: var(--mono); font-size: var(--size-meta);
+  overflow: hidden; white-space: nowrap;
+}
+.fcrumb { color: var(--text-muted); text-decoration: none; padding: 2px 4px; border-radius: var(--radius-list); }
+.fcrumb:hover { color: var(--text); background: var(--surface-hover); }
+.fcrumb-sep { color: var(--text-muted); }
+
+.files-note {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 14px 0; padding: 8px 12px;
+  border-radius: var(--radius-list); background: var(--chip);
+  font-size: var(--size-small); color: var(--text-muted);
+}
+.files-offline { color: var(--text); }
+.files-err {
+  margin: 8px 14px 0; padding: 8px 12px;
+  border-radius: var(--radius-list);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--red); font-size: var(--size-small);
+}
+
+/* Floors spelled out: a grid track with no minimum is how a pane pushes the
+   page wider than the viewport on a phone. */
+.files-panes {
+  flex: 1; min-height: 0;
+  display: grid; grid-template-columns: var(--ftree-w, 240px) minmax(0, 1fr);
+  gap: 0;
+}
+.files-panes.with-prev { grid-template-columns: var(--ftree-w, 240px) minmax(0, 1fr) minmax(0, 420px); }
+
+.ftree {
+  overflow: auto; border-right: 1px solid var(--divider);
+  padding: 8px 0; font-size: var(--size-small);
+}
+.ftree-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px 5px 0; cursor: pointer; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ftree-row:hover { background: var(--surface-hover); color: var(--text); }
+/* The folder you are IN — `--here`, like every other "you are here" in the
+   shell. Selection proper (a multi-selected file in the list beside this tree)
+   keeps the solid `--select` plate. */
+.ftree-row.active { background: var(--here); color: var(--text); font-weight: 650; }
+.ftree-row .tw { color: var(--text-faint); width: 12px; flex: 0 0 auto; }
+.ftree-name { overflow: hidden; text-overflow: ellipsis; }
+
+.files-main { position: relative; overflow: auto; padding: 14px; min-width: 0; }
+
+/* Only the columns differ from `.mtable`. Everything else — hover, dividers,
+   row height, truncation — is inherited on purpose. */
+.mtable.files .mtable-headrow,
+.mtable.files .mtable-row {
+  grid-template-columns: 30px minmax(120px, 3fr) 90px 100px 38px;
+  /* A row is a flex ITEM of `.mtable` (a column flex container), so its
+     automatic minimum is its min-content width — and a row that refuses to
+     shrink is wider than the table that holds it, whatever the track sizes say.
+     Measured: 554px of row inside 362px of table. */
+  min-width: 0;
+}
+.fl-kind { display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.fl-name {
+  font-size: var(--size-body); font-weight: 500;
+  display: flex; align-items: center; gap: 6px;
+  /* Without this the flex item refuses to shrink below its longest word and
+     drags the row past the viewport. */
+  min-width: 0;
+}
+.fl-name-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.fl-link { color: var(--brand); font-size: var(--size-micro); }
+.fl-size, .fl-time {
+  font-family: var(--mono); font-size: var(--size-meta); color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.mtable-row.fl-row.selected { background: var(--select); color: var(--on-select); }
+.mtable-row.fl-row.selected .fl-size,
+.mtable-row.fl-row.selected .fl-time,
+.mtable-row.fl-row.selected .fl-kind { color: var(--on-select); }
+.fl-actions { padding: 0 !important; display: flex; align-items: center; justify-content: center; }
+.fl-truncated {
+  padding: 10px 12px; font-size: var(--size-meta); font-family: var(--mono);
+  color: var(--text-muted); border-top: 1px solid var(--divider);
+}
+
+/* Row menu: the `<details>` popover this app already uses everywhere else. */
+.fl-more { position: relative; }
+.fl-more > summary {
+  list-style: none; cursor: pointer; width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-list); color: var(--text-muted); opacity: 0;
+}
+.fl-more > summary::-webkit-details-marker { display: none; }
+.mtable-row:hover .fl-more > summary, .fl-more[open] > summary { opacity: 1; }
+.fl-more > summary:hover { background: var(--surface-hover); color: var(--text); }
+.fl-more .ws-more-pop { right: 0; left: auto; }
+/* Touch has no hover, so an action revealed by hover is an action that does not
+   exist there. Same rule the project card menu already carries. */
+@media (hover: none) { .fl-more > summary { opacity: 1; } }
+
+/* Always visible — this is the section's primary action, not a row affordance. */
+.sts { position: relative; }
+.sts > summary {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center;
+  gap: 6px; padding: 6px 12px;
+}
+.sts > summary::-webkit-details-marker { display: none; }
+.sts-summary.is-disabled { opacity: 0.5; pointer-events: none; }
+.sts-pop { right: 0; left: auto; min-width: 220px; }
+.sts-sep {
+  padding: 6px 12px; font-family: var(--mono); font-size: var(--size-micro);
+  letter-spacing: var(--ls-caps); text-transform: uppercase; color: var(--text-faint);
+  border-top: 1px solid var(--divider); margin-top: 4px;
+}
+.sts-new { border-top: 1px solid var(--divider); margin-top: 4px; }
+
+/* Transient drop affordance. Dashed only while a drag is in the air — it is
+   state, never chrome. */
+.files-drop {
+  position: absolute; inset: 14px; pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px dashed var(--brand); border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+  font-family: var(--mono); font-size: var(--size-small); color: var(--text);
+}
+
+.files-up {
+  position: sticky; bottom: 0; margin-top: 12px;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border-radius: var(--radius-panel);
+  background: var(--surface-raised); box-shadow: var(--shadow-lg), var(--rim);
+}
+.files-up-row { display: flex; align-items: center; gap: 10px; font-size: var(--size-small); }
+.files-up-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.files-up-size, .files-up-err {
+  font-family: var(--mono); font-size: var(--size-meta); color: var(--text-muted);
+}
+.files-up-err { color: var(--red); }
+/* Square ends: a progress bar here reads as an instrument, not a game HUD. */
+.files-up-fill { display: block; height: 100%; background: var(--brand); }
+.files-up-row.done .files-up-fill { background: var(--green); }
+
+.files-prev {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  border-left: 1px solid var(--divider); background: var(--surface);
+}
+.files-prev-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px 8px; }
+.files-prev-title { flex: 1; min-width: 0; }
+.files-prev-name { font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.files-prev-meta {
+  display: flex; align-items: center; gap: 8px; margin-top: 4px;
+  font-family: var(--mono); font-size: var(--size-meta); color: var(--text-muted);
+}
+.files-prev-copy { padding: 2px 6px; font-size: var(--size-micro); }
+.files-prev-actions { display: flex; align-items: center; gap: 8px; padding: 0 14px 10px; }
+.files-prev-body { flex: 1; overflow: auto; padding: 0 14px 14px; min-height: 0; }
+.files-prev-loading { color: var(--text-faint); font-size: var(--size-small); padding: 12px 0; }
+.files-prev-img { max-width: 100%; border-radius: var(--radius-list); }
+.files-trunc {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  font-family: var(--mono); font-size: var(--size-meta); color: var(--text-muted);
+}
+/* Wide content scrolls inside its own box; the page never scrolls sideways. */
+.files-prev-body pre { overflow-x: auto; }
+
+.files-shelf-group { margin-bottom: 20px; }
+.files-shelf-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  font-size: var(--size-card); font-weight: 500;
+}
+.files-shelf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+/* Cards carry no border — the green-tinted float separates them — plus --rim so
+   they still read on near-black. */
+.root-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 14px; border-radius: var(--radius-panel);
+  background: var(--surface-raised); box-shadow: var(--shadow-xs), var(--rim);
+  text-decoration: none; color: var(--text);
+  transition: box-shadow 0.2s var(--ease);
+}
+.root-card:hover { box-shadow: var(--shadow-lg), var(--rim); }
+.root-card-name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+/* Plain LTR truncation. `direction: rtl` is the usual trick for clipping a path
+   from the left, and it is wrong here: it reorders the leading separator to the
+   end, so `/Users/x/proj` renders as `Users/x/proj/`. The card's title already
+   carries the directory name, so losing the tail costs nothing — and the full
+   path is in `title`. */
+.root-card-path {
+  font-family: var(--mono); font-size: var(--size-micro); color: var(--text-muted);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+
+@media (max-width: 1200px) {
+  /* The preview replaces the list rather than squeezing beside it. */
+  .files-panes.with-prev { grid-template-columns: var(--ftree-w, 240px) minmax(0, 1fr); }
+  .files-panes.with-prev .files-main { display: none; }
+}
+@media (max-width: 980px) {
+  .files-panes, .files-panes.with-prev { grid-template-columns: minmax(0, 1fr); }
+  .ftree { display: none; }
+}
+@media (max-width: 860px) {
+  .files-bar { flex-wrap: wrap; gap: 8px; }
+  .fcrumbs { order: 2; width: 100%; }
+  .files-bar-actions { margin-left: 0; }
+  /* 44px targets: a menu item sized for a mouse is unusable with a thumb. */
+  .fl-more .ws-more-item { padding: 12px 14px; }
+  /* The desktop grid floors at ~378px before padding, so at 390 the size column
+     is cut mid-word, the date is off-screen entirely and the row menu is
+     unreachable — and `body { overflow: hidden }` means unreachable literally,
+     not "scroll right". The date is what a phone can afford to lose: a name and
+     a size answer "which file", a date almost never does on the small screen. */
+  .mtable.files .mtable-headrow,
+  .mtable.files .mtable-row { grid-template-columns: 24px minmax(0, 1fr) 68px 34px; }
+  .mtable.files .mtable-headrow > span,
+  .mtable.files .mtable-row > span { padding: 9px 8px; }
+  /* Both the cell and its header, or the fifth child wraps onto a phantom row. */
+  .fl-time,
+  .mtable.files .mtable-headrow > span:nth-child(4) { display: none; }
+  .files-prev { border-left: none; }
+  .files-up { padding-bottom: calc(10px + var(--sab)); }
+}
+
+/* --- проводник: жесты (перенос, курсор, сортировка, переименование) --- */
+/* The keyboard cursor, distinct from selection: a thin brand rule rather than a
+   fill, so an arrow-key walk does not look like six selected rows. */
+.mtable.files .mtable-row.fl-row.active { box-shadow: inset 2px 0 0 var(--brand); }
+.mtable.files .mtable-row.fl-row.selected.active { box-shadow: inset 2px 0 0 var(--on-select); }
+/* Drop target for a MOVE — the same selected plate the row uses, so "this is
+   where it lands" reads with no new colour. */
+.mtable.files .mtable-row.fl-row.drop-into,
+.fcrumb.drop-into { background: var(--select); color: var(--on-select); }
+.mtable.files .mtable-row.fl-row[draggable='true'] { cursor: default; }
+
+.fl-th { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 4px; }
+.fl-th:hover { color: var(--text); }
+.fl-th.sorted { color: var(--text); }
+.fl-sortmark { font-size: var(--size-nano); color: var(--brand); }
+
+/* Rename in place: the input takes the cell, not a dialog. */
+.fl-rename {
+  width: 100%; min-width: 0; font: inherit; color: var(--text);
+  background: var(--surface); border: 1px solid var(--focus-ring);
+  border-radius: var(--radius-list); padding: 2px 6px;
+}
+
+/* Right-click menu. `ContextMenu` owns the positioning now (see `.ctxmenu`);
+   this only lifts it above the file grid. */
+.fl-ctx { z-index: 80; }
+
+/* The list itself is focusable for the arrow keys; the ring must not look like
+   a selection. */
+.mtable.files:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+
+/* --- проводник: режим значков ------------------------------------------ */
+/* Finder's default view, and the half a list cannot do: a folder of photos
+   that looks like photos. Tones reuse the four avatar tokens — the palette
+   does not grow for this. */
+.fglyph { display: inline-flex; align-items: center; justify-content: center; }
+.fglyph-code  { color: var(--ftype-code); }
+.fglyph-doc   { color: var(--ftype-doc); }
+.fglyph-media { color: var(--ftype-media); }
+.fglyph-data  { color: var(--ftype-data); }
+.fglyph-muted { color: var(--text-muted); }
+.mtable-row.fl-row.selected .fglyph { color: var(--on-select); }
+
+.fgrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 6px; align-content: start; padding: 2px;
+}
+.fgrid:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: var(--radius-panel); }
+.fgrid-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 8px 10px; border-radius: var(--radius-panel);
+  cursor: default; min-width: 0; text-align: center;
+  transition: background 0.14s var(--ease);
+}
+.fgrid-cell:hover { background: var(--surface-hover); }
+.fgrid-cell.selected { background: var(--select); color: var(--on-select); }
+.fgrid-cell.selected .fgrid-meta, .fgrid-cell.selected .fglyph { color: var(--on-select); }
+/* The keyboard cursor reads as a ring, not a fill — otherwise an arrow walk
+   looks like a growing selection. */
+.fgrid-cell.active { box-shadow: inset 0 0 0 2px var(--brand); }
+.fgrid-cell.drop-into { background: var(--select); color: var(--on-select); }
+
+.fgrid-art {
+  width: 100%; height: 62px; display: flex; align-items: center; justify-content: center;
+}
+/* Square-cornered like everything else; a thumbnail is a preview, not a badge. */
+.fgrid-thumb {
+  max-width: 100%; max-height: 62px; object-fit: contain;
+  border-radius: var(--radius-list); background: var(--surface-sunken);
+}
+/* Two lines, always — a wrapping name used to push its size down and leave the
+   row visibly ragged. Finder reserves the same height for every label. */
+.fgrid-name {
+  font-size: var(--size-small); line-height: 1.25; width: 100%;
+  height: calc(1.25em * 2);
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.fgrid-meta { font-family: var(--mono); font-size: var(--size-micro); color: var(--text-muted); }
+
+.fcrumb-machine { color: var(--text); font-weight: 500; }
+
+@media (max-width: 860px) {
+  .fgrid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+  .fgrid-art { height: 52px; }
+  .fgrid-thumb { max-height: 52px; }
+}

@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.HegaiCode" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">@font/onest</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#101F18</item>
+    </style>
+    <!-- Cold start: the icon's navy with its wordmark, then the app theme (androidx SplashScreen, API 23+). -->
+    <style name="Theme.HegaiCode.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.HegaiCode</item>
+    </style>
+</resources>

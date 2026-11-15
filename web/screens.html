@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Screens — Hegai Code</title>
+    <!-- The same icon index.html declares. Without it Chrome asks for
+         /favicon.ico once per browser session and the 404 fails the run — the
+         console check is there to catch a real missing asset, so the harness
+         must not manufacture one of its own. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // The theme is picked by ?theme=dark, not by the OS, so a headless
+      // screenshot can ask for either without touching system settings.
+      var q = new URLSearchParams(location.search);
+      document.documentElement.dataset.theme =
+        q.get('theme') === 'dark' || q.get('theme') === 'vscode' ? q.get('theme') : 'light';
+      // `?sat=54` forces the safe-area top inset a phone reports and a desktop
+      // never does. Everything that lives under the clock — the top bar, the
+      // drawer, the scroller's padding — is laid out against an inset of 0
+      // here otherwise, which is precisely why a bug in that strip could not
+      // be photographed without a phone in hand. See --sat in styles.css.
+      var sat = q.get('sat');
+      if (sat) document.documentElement.style.setProperty('--sat', `${parseInt(sat, 10)}px`);
+      // `?sab=34` is the same for the home indicator at the bottom. Both went
+      // from "always 0" to a real value the day the app took the status bar
+      // over (black-translucent), which is how a bottom gap appeared in a
+      // layout nobody had touched.
+      var sab = q.get('sab');
+      if (sab) document.documentElement.style.setProperty('--sab', `${parseInt(sab, 10)}px`);
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/screens.tsx"></script>
+  </body>
+</html>

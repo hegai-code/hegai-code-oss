@@ -1,0 +1,63 @@
+/* 31-browser-sheet — the cloud browser sheet (BrowserSheet). */
+
+/* ---- Облачный браузер (BrowserSheet, 10.10.2026) ----
+   Head as every sheet; under it one toolbar row (← → ⟳, the address, tabs when
+   there are several, «Вставить текст»), then the remote screen to the edges.
+   Inputs are wells with the inset hairline, like the side panel's search. */
+.bs-body { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.bs-toolbar { display: flex; align-items: center; gap: 4px; padding: 8px var(--pane-inset); border-bottom: 1px solid var(--divider); min-width: 0; }
+.bs-btn { flex: none; width: 32px; height: 32px; }
+.bs-btn:disabled { opacity: 0.38; cursor: default; }
+.bs-url { flex: 1 1 auto; min-width: 0; display: flex; margin: 0 4px; }
+.bs-field {
+  min-width: 0; padding: 5px 10px; border: none; border-radius: var(--radius-md);
+  background: var(--surface-sunken); color: var(--text); box-shadow: inset 0 0 0 1px var(--divider);
+  font: var(--size-small)/1.4 var(--sans); outline: none;
+}
+.bs-field::placeholder { color: var(--text-faint); }
+.bs-field:focus { box-shadow: inset 0 0 0 1px var(--border), 0 0 0 3px var(--focus-ring); }
+.bs-url .bs-field { flex: 1 1 auto; width: 100%; min-height: 32px; }
+select.bs-field { cursor: pointer; min-height: 30px; text-overflow: ellipsis; }
+.bs-pick { max-width: 220px; }
+.bs-tabs { flex: 0 1 auto; max-width: 200px; min-height: 32px; }
+.bs-paste-btn { flex: none; min-height: 32px; padding: 5px 12px; }
+.bs-paste-btn[aria-expanded="true"] { background: var(--border); }
+.bs-paste { display: flex; flex-direction: column; gap: 8px; padding: 8px var(--pane-inset) 10px; border-bottom: 1px solid var(--divider); }
+.bs-paste textarea { width: 100%; min-height: 4.5em; resize: vertical; font-size: var(--size-body); line-height: 1.5; }
+.bs-paste-actions { display: flex; gap: 8px; }
+.bs-attn { margin: 8px var(--pane-inset) 0; padding: 6px 12px; border-radius: var(--radius-md); background: var(--attn-soft); color: var(--text); font-size: var(--size-small); line-height: 1.5; }
+.team-page .bs-attn { margin: 0; }
+.team-form .bs-field { min-height: 36px; font-size: var(--size-body); }
+.bs-prof-actions { display: flex; gap: var(--space-2); flex: none; }
+/* A phone has no room for the name and two buttons on one line: the buttons
+   drop under the name, on its left edge. */
+@media (max-width: 560px) {
+  .bs-prof { flex-wrap: wrap; padding-block: var(--space-3); }
+  .bs-prof > span { flex-basis: calc(100% - 40px); }
+  .bs-prof-actions { flex-basis: 100%; padding-left: 29px; }
+}
+.bs-error { color: var(--negative); font-size: var(--size-small); }
+.bs-error-line { padding: 6px var(--pane-inset); border-bottom: 1px solid var(--divider); }
+.bs-note { padding: 24px var(--pane-inset); color: var(--text-muted); font-size: var(--size-small); }
+.bs-screen-wrap { position: relative; flex: 1 1 auto; min-height: 0; background: var(--bg); }
+.bs-screen { position: absolute; inset: 0; }
+.bs-overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 24px; text-align: center; background: var(--bg); color: var(--text-muted); font-size: var(--size-small);
+}
+.bs-overlay b { color: var(--text); font-size: var(--size-card); font-weight: 600; }
+.bs-overlay .btn { margin-top: 10px; }
+.bs-empty {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 32px var(--pane-inset); text-align: center; color: var(--text-muted);
+}
+.bs-empty p { margin: 0; max-width: 46ch; color: var(--text); font-size: var(--size-body); line-height: 1.5; }
+@media (max-width: 560px) {
+  .bs-paste-label { display: none; }
+  .bs-paste-btn { padding: 5px 8px; }
+  .bs-tabs { max-width: 110px; }
+}
+@media (pointer: coarse) {
+  .bs-btn { width: 44px; height: 44px; }
+  .bs-url .bs-field, .bs-paste-btn, select.bs-field { min-height: 44px; }
+}

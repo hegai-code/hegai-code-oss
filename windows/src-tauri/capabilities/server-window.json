@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "server-window",
+  "description": "Выбор сервера (hubconf.rs): одна команда, которой окно «Сервер» сохраняет адрес хаба и перезапускает приложение. Только ЛОКАЛЬНОЕ окно `server` (страница из самого приложения). Ни один удалённый origin её не получает — страница хаба не должна уметь перенаправить приложение.",
+  "windows": ["server"],
+  "local": true,
+  "permissions": ["allow-shell-set-hub"]
+}

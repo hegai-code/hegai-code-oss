@@ -1,0 +1,25 @@
+{
+  "name": "Hegai Code",
+  "short_name": "Hegai",
+  "description": "Пульт для сессий Claude Code и Codex на всех твоих машинах.",
+  "id": "/w/",
+  "start_url": "/w/sessions",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "lang": "ru",
+  "dir": "ltr",
+  "categories": ["productivity", "developer"],
+  "background_color": "#f6f7f6",
+  "theme_color": "#f6f7f6",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Новая сессия", "short_name": "Новая", "url": "/w/new", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Сессии", "short_name": "Сессии", "url": "/w/sessions", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -1,0 +1,179 @@
+/* 04-sidebar — app layout and the side panel: account, search, settings entry. */
+
+/* ============================ layout ============================ */
+.body { display: flex; flex: 1; min-height: 0; position: relative; background: var(--bg); }
+/* right column — the topbar spans ONLY this column (sidebar runs full height) */
+.main-col { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+
+.sidebar {
+  position: relative;
+  /* 320, not 300: the fallback has to hold a session title at --size-small
+     next to its time and badges before the title starts ellipsising. The stored
+     width in appHooks.ts carries the same number. */
+  width: var(--sidebar-w, 320px); flex: 0 0 var(--sidebar-w, 320px);
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface); border-right: 1px solid var(--divider);
+  transition: width 0.16s var(--ease), flex-basis 0.16s var(--ease);
+}
+/* while dragging the resize handle, track the pointer with no easing lag */
+.sidebar.resizing { transition: none; }
+/* `.sidebar.collapsed` is back (27.09.2026): the panel slides to 0 width
+   instead of unmounting — see «The panel slides» at the end of the file. */
+/* drag handle on the right edge to resize */
+.sidebar-resize {
+  position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; z-index: 6;
+  cursor: col-resize; touch-action: none;
+}
+.sidebar-resize::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px;
+  background: transparent; transition: background 0.12s var(--ease);
+}
+.sidebar-resize:hover::after { background: var(--action); }
+/* sidebar header: wordmark + collapse (ChatGPT position) */
+.side-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 10px 6px 14px; flex: 0 0 auto; }
+.side-wordmark { font-family: var(--title); font-size: var(--size-lead); font-weight: 600; letter-spacing: -0.3px; color: var(--text); }
+.side-wordmark b { font-weight: 800; }
+.side-head-btn { background: none; border: none; color: var(--text-faint); padding: 6px; border-radius: var(--radius-sm); line-height: 0; cursor: pointer; }
+.side-head-btn:hover { color: var(--text); background: var(--surface-hover); }
+.side-head-btn.active { color: var(--link); background: var(--surface-hover); }
+
+/* The panel's foot: личный кабинет · тема · уведомления (SidePanel PanelFoot).
+   The account is the wide button — avatar and name — the other two are the
+   top bar's icon buttons, moved. A hairline, not a plate: it is the edge of
+   the list, not a second surface. */
+.side-foot {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+  padding: 8px 8px 10px; border-top: 1px solid var(--divider);
+}
+.side-acc {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 5px 8px;
+  border: none; border-radius: var(--radius-md); background: none; cursor: pointer;
+  color: var(--text); font: inherit; font-size: var(--size-small); font-weight: 600; text-align: left;
+}
+.side-acc:hover { background: var(--surface-hover); }
+.side-acc.active { background: var(--here); }
+.side-acc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-acc:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+/* The account popover, opened from the foot, opens AT the foot (the bell's
+   stays under the bar's right corner, where its button is now) — pinned to the
+   panel's bottom-left instead of hanging off the top bar's right corner. The
+   top bar still mounts them (their positioned host); `fixed` lifts them out
+   of it. */
+.topbar.acts-in-panel .settings-pop {
+  position: fixed; top: auto; right: auto; left: 10px; bottom: 60px; max-height: calc(100vh - 120px); overflow: auto;
+}
+
+/* `.side-foot` — «Входящие» and «Аккаунт» under the list — is gone. Both are
+   in the top bar, where the account IS the settings control now, and a panel
+   that ends in two rows of account chrome is a panel with less room for the
+   work. (The OTHER `.side-foot`, the connection strip further down, predates
+   this one and has no caller either.) */
+
+.topbar-brand b { color: var(--link); }
+
+/* desktop pan affordance for the folder chips (drag + wheel via DragScrollRow) */
+.folders {
+  cursor: grab; user-select: none;
+  mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 10px), transparent);
+}
+.folders.dragging { cursor: grabbing; }
+.folders.dragging .folder { pointer-events: none; }
+
+/* bottom account pill (ChatGPT position) */
+.side-account {
+  display: flex; align-items: center; gap: 10px; flex: 0 0 auto; width: calc(100% - 16px);
+  margin: 4px 8px 8px; padding: 8px 10px; border: none; background: none; cursor: pointer;
+  border-radius: var(--radius-list); text-align: left; transition: background 0.1s var(--ease);
+}
+.side-account:hover { background: var(--surface-hover); }
+.acc-avatar {
+  width: 32px; height: 32px; border-radius: var(--radius-md); flex: 0 0 auto;
+  display: grid; place-items: center;
+  background: var(--select); color: var(--on-select);
+  font-size: var(--size-meta); font-weight: 600;
+}
+/* The top bar's account button, where the gear used to be. 24px inside the
+   standard 36px `.icon-btn` box, so it sits on the same baseline as the theme
+   and bell glyphs beside it rather than bulging the row. */
+.acc-avatar-sm { width: 24px; height: 24px; font-size: 10px; border-radius: var(--radius-sm); }
+.acc-btn { padding: 0; }
+.acc-btn.active .acc-avatar-sm { box-shadow: 0 0 0 2px var(--focus-ring); }
+
+.acc-text { display: flex; flex-direction: column; min-width: 0; }
+.acc-name { font-size: var(--size-small); font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-sub { font-size: var(--size-micro); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* topbar wordmark shown only when the sidebar is collapsed */
+.topbar-brand { display: inline-flex; align-items: center; gap: 7px; font-family: var(--title); font-size: var(--size-card); font-weight: 600; color: var(--text); letter-spacing: -0.2px; }
+
+/* The account popover. Opened by the avatar in the top bar (it was a gear
+   until 23.09.2026), and it is the only home of the display name, the dev
+   token and the two list filters — which is why the avatar opens this rather
+   than linking straight to Настройки. `.sp-link` is that link, first. */
+.sp-link {
+  display: flex; align-items: center; gap: 8px; margin: -4px -4px 10px; padding: 8px 10px;
+  border-radius: var(--radius-sm); color: var(--text); font-size: var(--size-small); font-weight: 600;
+  text-decoration: none;
+}
+/* A button row (Браузер) wears the link rows' shape exactly. */
+button.sp-link { width: calc(100% + 8px); border: 0; background: transparent; font-family: inherit; text-align: left; cursor: pointer; }
+.sp-link:hover { background: var(--surface-hover); }
+.sp-link svg { color: var(--text-muted); }
+/* Настройки, then Проекты · Файлы · Команда: one tight group of links. */
+.sp-link:has(+ .sp-link) { margin-bottom: 0; }
+.sp-link + .sp-link { margin-top: 0; }
+
+.settings-pop {
+  position: absolute; top: 52px; right: 12px; z-index: 60; width: 300px;
+  background: var(--surface-raised); border: 1px solid var(--divider); border-radius: var(--radius-panel);
+  box-shadow: var(--shadow); padding: 14px;
+}
+.sp-title { font-size: var(--size-meta); font-weight: 700; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+.sp-row { display: flex; flex-direction: column; gap: 6px; }
+/* a checkbox reads as one line, not a stacked field */
+.sp-row.sp-check { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
+.sp-row.sp-check input { accent-color: var(--action); width: 15px; height: 15px; }
+.sp-label { font-size: var(--size-meta); color: var(--text-muted); font-weight: 500; }
+/* Тема — three plain choices in the account popover (27.09.2026). The pick
+   is a REAL choice, so it takes the --select plate. */
+.sp-theme { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-sunken); }
+.sp-theme button {
+  /* Sized by the label, not an equal quarter: an equal quarter clipped the
+     longest one. If the row still runs out (a larger text size), it wraps. */
+  flex: 1 1 auto; min-width: 0; padding: 6px 8px; border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer;
+  font: inherit; font-size: var(--size-meta); color: var(--text-muted); white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.sp-theme button:hover { color: var(--text); }
+.sp-theme button.on { background: var(--select); color: var(--on-select); }
+.sp-theme button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.sp-row:has(> .sp-theme) { margin-bottom: 12px; }
+/* Four themes in a 300px popover: a 2×2 grid. One row clipped «Как в системе»
+   and, content-sized, wrapped three-plus-one — which reads as a mistake. The
+   settings page has the width for one row. */
+.sp-theme[role="radiogroup"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.appearance .sp-theme[role="radiogroup"] { grid-template-columns: repeat(4, auto); justify-content: start; }
+.settings-pop .token {
+  width: 100%; background: var(--surface-hover); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 10px; font-family: var(--mono); font-size: var(--size-meta);
+}
+.settings-pop .token:focus { outline: none; border-color: var(--action); }
+.sp-conn { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: var(--size-meta); color: var(--text-muted); }
+/* prominent "New session" action at the top of the single sidebar (ChatGPT's
+   "New chat" position). Green = the one action color. */
+/* The old «connection status footer» `.side-foot` rule lived here. Nothing
+   draws that footer any more, but its later position in the file overrode the
+   account foot's padding and type (PanelFoot, above) — removed 27.09.2026. */
+.search-wrap { padding: 12px; }
+.search-box { position: relative; display: flex; align-items: center; }
+.search-box svg { position: absolute; left: 11px; color: var(--text-faint); pointer-events: none; }
+.search {
+  width: 100%; background: var(--surface-hover); color: var(--text); border: 1px solid transparent;
+  border-radius: var(--radius-md); padding: 9px 14px 9px 36px; font-size: var(--size-body);
+}
+.search::placeholder { color: var(--text-faint); }
+.search:focus { outline: none; border-color: var(--brand); }
+.sidebar-scroll { overflow-y: auto; flex: 1; padding: 4px 0 16px; }
+.empty { color: var(--text-faint); padding: 32px 16px; text-align: center; font-size: var(--size-small); }
+.scrim { display: none; }
+.notif-scrim { position: fixed; inset: 0; z-index: 30; background: transparent; }

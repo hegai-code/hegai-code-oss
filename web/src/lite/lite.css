@@ -1,0 +1,207 @@
+/*
+ * The light shell (remote.acme.test) — its own classes only, all `lt-`.
+ *
+ * Loaded AFTER `styles.css`, which it shares whole with the full client: the
+ * tokens, the transcript, the composer, buttons and modals are that file's and
+ * are not restated here. Everything below is layout for the three things the
+ * shell draws itself — the top bar, the home, a task's head — on the same
+ * tokens, the same type ladder and the same shape rules (DESIGN.md «Лёгкая
+ * оболочка»). No colour, radius or size is introduced in this file.
+ */
+
+/* ---- frame ---------------------------------------------------------------- */
+
+.lt-app { background: var(--bg); color: var(--text); }
+.lt-main { flex: 1; min-height: 0; display: flex; }
+
+.lt-top {
+  flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  height: 48px; padding: 0 var(--pane-inset);
+  padding-top: env(safe-area-inset-top, 0px); box-sizing: content-box;
+}
+.lt-brand {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  font-size: var(--size-card); font-weight: 600; color: var(--text); letter-spacing: var(--ls-title);
+}
+.lt-home-link { flex: 0 0 auto; text-decoration: none; border-radius: var(--radius-sm); }
+.lt-home-link:focus-visible, .lt-nav-link:focus-visible, .lt-row:focus-visible, .lt-head-btn:focus-visible, .lt-opt:focus-visible {
+  outline: 2px solid var(--focus-ring); outline-offset: 1px;
+}
+.lt-nav { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.lt-nav-link {
+  display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px;
+  border: none; background: none; border-radius: var(--radius-sm); cursor: pointer;
+  font: inherit; font-size: var(--size-small); color: var(--text-muted); text-decoration: none; white-space: nowrap;
+}
+.lt-nav-link:hover { background: var(--surface-hover); color: var(--text); }
+.lt-nav-link.here { background: var(--here); color: var(--text); }
+
+.lt-quiet {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--size-small); color: var(--text-muted); text-decoration: underline; text-underline-offset: 3px;
+}
+.lt-quiet:hover { color: var(--text); }
+.lt-door-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.lt-ph-actions { margin-top: var(--space-4); display: flex; justify-content: center; flex-wrap: wrap; gap: var(--space-2); }
+.lt-ph-actions .btn { text-decoration: none; }
+
+/* A report or a placeholder fills the main area as it does in the full shell. */
+.lt-main > .placeholder { margin: auto; }
+/* An open report is a screen with its own head (20.10.2026): on a phone the
+   home bar goes, the way it does in a task, and `.rep-head` takes the notch
+   (10-columns.css). Otherwise both bars carried the safe-area inset. */
+@media (max-width: 860px) {
+  .lt-app:has(.rep-view) > .lt-top { display: none; }
+}
+
+/* ---- home ----------------------------------------------------------------- */
+
+.lt-home { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.lt-home-inner {
+  width: 100%; max-width: calc(var(--chat-measure) + 2 * var(--pane-inset)); margin: 0 auto;
+  padding: clamp(24px, 9vh, 96px) var(--pane-inset) calc(var(--space-8) + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: var(--space-6);
+}
+.lt-ask {
+  margin: 0; text-align: center;
+  font: 600 var(--size-screen)/var(--lh-title) var(--title); letter-spacing: var(--ls-title);
+}
+
+.lt-block {
+  display: grid; gap: var(--space-2); justify-items: start;
+  padding: var(--space-4); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-sm), var(--rim);
+  font-size: var(--size-small);
+}
+.lt-block b { font-size: var(--size-card); font-weight: 600; }
+.lt-block p { margin: 0; color: var(--text-muted); line-height: var(--lh-body); }
+.lt-block .btn { text-decoration: none; }
+
+/* The composer is the full client's start composer; here it is not docked. */
+.lt-composer { padding: 0; }
+.lt-composer .composer-box { max-width: none; margin: 0; }
+.lt-composer textarea { min-height: 56px; }
+/* One row at every width: the project's name gives way (to an ellipsis), the
+   buttons around it do not. The start composer lets this row wrap, which on a
+   phone stacked «+», the chip and «План» into three. */
+.lt-composer .composer-left.lt-where { position: relative; flex: 1 1 0; min-width: 0; flex-wrap: nowrap; }
+.lt-composer .composer-left.lt-where > .tgt-chip { flex: 0 1 auto; min-width: 0; }
+.lt-note { margin: var(--space-2) var(--space-1) 0; font-size: var(--size-meta); color: var(--text-muted); line-height: var(--lh-body); }
+.lt-note.err { color: var(--red); }
+
+/* Plan first, or do. `--send` when on — one of the few places DESIGN.md lets
+   that blue out of the send button («Режим планирования» включён). */
+.plan-toggle {
+  flex: 0 0 auto; height: 30px; padding: 0 10px;
+  border: none; border-radius: var(--radius-sm); background: none; cursor: pointer;
+  font: inherit; font-size: var(--size-small); color: var(--text-muted);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.plan-toggle:hover { background: var(--surface-hover); color: var(--text); }
+.plan-toggle.on, .plan-toggle.on:hover { background: var(--send); color: var(--on-send); }
+.plan-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+/* The project sheet opens DOWN from its chip: the box is at the top of the
+   page here, where the full client's tray is docked at the bottom. */
+.lt-pop {
+  position: absolute; z-index: 40; left: 0; top: calc(100% + 6px);
+  width: min(360px, calc(100vw - 2 * var(--pane-inset)));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface-raised); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), var(--rim), inset 0 0 0 1px var(--divider);
+  animation: pop var(--dur-fast) var(--ease);
+}
+.lt-pop-list { max-height: min(340px, 50vh); overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
+.lt-opt {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 6px 8px;
+  border: none; background: none; border-radius: var(--radius-sm); cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--size-small); color: var(--text);
+}
+.lt-opt:hover { background: var(--surface-hover); }
+.lt-opt.sel, .lt-opt.sel:hover { background: var(--here); }
+.lt-opt > svg { flex: 0 0 auto; color: var(--text-muted); }
+.lt-opt-more { color: var(--text-muted); padding-left: 33px; }
+.lt-opt-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-opt-where { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--size-meta); color: var(--text-muted); }
+
+/* ---- the three piles ------------------------------------------------------ */
+
+.lt-pile { display: flex; flex-direction: column; gap: var(--space-2); }
+.lt-pile > h2 { margin: 0 var(--space-1); }
+.lt-pile-n { margin-left: 6px; font-family: var(--sans); font-variant-numeric: tabular-nums; letter-spacing: 0; color: var(--text-muted); }
+.lt-rows {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm), var(--rim);
+}
+.lt-row {
+  display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: var(--space-2) var(--space-4);
+  color: var(--text); text-decoration: none;
+}
+.lt-row + .lt-row { box-shadow: inset 0 1px 0 var(--divider); }
+.lt-row:hover { background: var(--surface-hover); }
+/* The leading slot speaks the product's one language for a session's state: a
+   pulsing agent mark while it works, an 8×8 square otherwise. */
+.lt-row-mark { flex: 0 0 16px; display: grid; place-items: center; }
+.lt-row-mark > i { width: 8px; height: 8px; border-radius: 2px; background: transparent; }
+.lt-row.attention .lt-row-mark > i, .lt-row.unread .lt-row-mark > i { background: var(--attn); }
+.lt-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.lt-row-title { font-size: var(--size-card); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-row.attention .lt-row-title, .lt-row.unread .lt-row-title { font-weight: 600; }
+.lt-row-sub { display: flex; gap: 8px; min-width: 0; font-size: var(--size-meta); color: var(--text-muted); }
+.lt-row-proj { flex: 0 0 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-row-what { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lt-row-proj + .lt-row-what::before { content: "·"; margin-right: 8px; }
+.lt-row.attention .lt-row-what { color: var(--text); }
+.lt-row-time { flex: 0 0 auto; font-size: var(--size-meta); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.lt-empty { margin: 0; text-align: center; font-size: var(--size-small); color: var(--text-muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- a task --------------------------------------------------------------- */
+
+.lt-task { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* The only bar on this screen, so it carries the top inset the app bar does. */
+.lt-task-head {
+  flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2);
+  height: 48px; padding: 0 var(--pane-inset); border-bottom: 1px solid var(--divider);
+  padding-top: env(safe-area-inset-top, 0px); box-sizing: content-box;
+}
+.lt-task-head > .icon-btn { flex: 0 0 auto; display: grid; place-items: center; text-decoration: none; }
+.lt-task-titles { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.lt-task-proj { flex: 0 1 auto; min-width: 0; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--size-card); color: var(--text-muted); }
+.lt-task-sep { flex: 0 0 auto; color: var(--text-faint); }
+.lt-task-title { flex: 1 1 auto; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--size-card); font-weight: 600; }
+.lt-head-btn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px;
+  border: none; background: none; border-radius: var(--radius-sm); cursor: pointer;
+  font: inherit; font-size: var(--size-small); color: var(--text-muted); text-decoration: none; white-space: nowrap;
+}
+.lt-head-btn:hover { background: var(--surface-hover); color: var(--text); }
+.lt-head-btn.on { background: var(--here); color: var(--text); }
+
+.lt-changes {
+  flex: 0 0 auto; max-height: 40vh; overflow-y: auto;
+  padding: var(--space-3) var(--pane-inset); border-bottom: 1px solid var(--divider); background: var(--surface);
+}
+/* The transcript's measure, so the list reads as part of the same column. */
+.lt-changes > * { max-width: var(--chat-measure); margin-left: auto; margin-right: auto; }
+.lt-changes-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font-size: var(--size-small); font-weight: 600; }
+.lt-changes-branch { margin-left: 6px; font-family: var(--mono); font-size: var(--size-meta); font-weight: 400; color: var(--text-muted); }
+.lt-changes-list { margin-top: var(--space-2); margin-bottom: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.lt-changes-list li { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.lt-change-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-family: var(--mono); font-size: var(--size-meta); }
+.lt-change-kind { flex: 0 0 auto; font-size: var(--size-meta); color: var(--text-muted); }
+
+/* ---- phone ---------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .lt-nav-link { padding: 0 8px; }
+  .lt-home-inner { padding-top: var(--space-6); gap: var(--space-5); }
+  .lt-row { min-height: 60px; }
+  /* The label goes, the arrow stays: the title needs the row. */
+  .lt-head-btn-text, .lt-wide { display: none; }
+  .lt-task-proj, .lt-task-sep { display: none; }
+}
+@media (pointer: coarse) {
+  .lt-nav-link, .lt-head-btn, .plan-toggle { min-height: 44px; }
+  .lt-opt { min-height: 44px; }
+}

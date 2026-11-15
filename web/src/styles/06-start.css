@@ -1,0 +1,371 @@
+/* 06-start — main column and the start screen: composer target, project table, running-now strip, server cards. */
+
+/* ============================ main ============================ */
+.main { flex: 1; min-width: 0; min-height: 0; display: flex; background: var(--bg); }
+.placeholder { margin: auto; text-align: center; color: var(--text-faint); padding: 40px; }
+/* empty-state sub-text (board / table / profile "no sessions" messages) */
+.ph-sub { margin-top: 10px; font-size: var(--size-body); max-width: 400px; line-height: 1.6; color: var(--text-muted); }
+
+/* ---------- start screen (ChatGPT-style empty state) ---------- */
+/* The new-chat screen follows the same vertical contract as a session:
+   information uses the flexible space above, while the composer remains at the
+   bottom in normal flex flow. It is not fixed, so a phone keyboard can shrink
+   the available height without covering the input. */
+.startscreen {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  /* A new chat can also live inside a split pane. The viewport may still be
+     desktop-wide while this screen is only 300px across, so its composer must
+     respond to the screen's own inline size rather than a viewport query. */
+  container: start / inline-size;
+}
+.start-scroll {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; overflow-x: hidden; overflow-y: auto;
+}
+/* 1080, not 720: live work can use the wide measure, while the composer keeps
+   its 760px reading measure. */
+.start-inner {
+  flex: 1; min-width: 0;
+  margin: 0 auto; width: 100%; max-width: 1080px;
+  padding: 40px 24px 18px;
+  display: flex; flex-direction: column;
+}
+.start-dock {
+  flex: 0 0 auto; min-width: 0;
+  background: var(--bg);
+}
+.start-dock-inner {
+  width: 100%; max-width: 1080px; margin: 0 auto;
+  padding: 0 24px max(14px, calc(var(--sab) - 10px));
+}
+/* Reading measure, centred inside the wider column. */
+.start-composer .composer-box { max-width: 760px; margin: 0 auto; }
+/* `.start-title` — «Рад видеть, N.» — stood here, and it was one of the three
+   sanctioned serif places. The screen no longer greets anyone: it is the
+   composer and the two decisions it needs, and a headline above them was the
+   first of several things on it that were not the task. The other two serif
+   places (the agent's thinking block, blockquotes in its prose) are unchanged;
+   DESIGN.md's "exactly three" is now two. */
+/* the start composer reuses .composer/.composer-box but is centered, not docked */
+/* `.composer.start-composer`, not `.start-composer`: `.composer` is declared
+   later with the same weight, so its docked border-top won and drew a stray
+   rule across the screen above the field. */
+.composer.start-composer { padding: 0; margin-bottom: 0; border-top: none; background: none; }
+.start-composer .composer-box { box-shadow: var(--shadow-sm); }
+/* `.composer.start-composer`: the bare `.start-composer textarea` lost to the
+   later `.composer textarea` (same weight), so the field sat at 44px. */
+.composer.start-composer textarea { min-height: 104px; }
+/* The left group WRAPS rather than clips, at any width. A column of the split
+   is narrow on a wide screen where no viewport query fires, and clipping the
+   group (the fix before this) cut Claude/Codex down to «Clau» with the model
+   pill hidden behind it — the choice you are about to make, unreadable
+   (25.09.2026). Now «+», Claude/Codex and the model pill drop to a second
+   line inside the capsule; the microphone and Send stay pinned bottom-right.
+   While the row fits, nothing changes. */
+.start-composer .composer-actions { align-items: flex-end; }
+.start-composer .composer-left { flex: 1 1 0; min-width: 0; flex-wrap: wrap; row-gap: 6px; overflow: visible; }
+.start-composer .composer-left > * { flex: 0 0 auto; }
+.start-composer .run-pick { max-width: 100%; }
+.start-composer .composer-right, .start-composer .send-round { flex: 0 0 auto; }
+
+/* In a split pane the four composer choices no longer fit on one line. Keep
+   the agent choice together on the first row and give model / voice / send a
+   second row of their own; the model gives way before either round action. */
+@media (min-width: 861px) {
+  @container start (max-width: 520px) {
+    .start-inner { padding: 16px 12px 12px; }
+    .start-dock-inner { padding-inline: 12px; }
+    .start-composer .composer-actions {
+      flex-wrap: wrap; align-items: center;
+      gap: 4px; padding: 4px 6px 8px 8px;
+    }
+    .start-composer .composer-left { flex: 1 1 100%; gap: 4px; }
+    .start-composer .composer-right {
+      flex: 1 1 100%; min-width: 0; justify-content: flex-end;
+    }
+    .start-composer .run-pick-wrap { flex: 1 1 auto; min-width: 0; }
+    .start-composer .run-pick { width: 100%; }
+    /* The wrapper grows leftward from mic/send. The normal right anchor then
+       puts a 232px menu outside this 300px pane, where `.startscreen` clips it. */
+    .start-composer .composer-right .run-pick-pop { left: 0; right: auto; }
+    .start-composer .agent-opt { padding: 3px 7px; }
+  }
+}
+
+/* ---- WHERE: two buttons on a tray above the field (27.09.2026) ----
+   Server and project, the way Codex draws its «папка · Локальный · main» row
+   and the phone app its project chip. It replaced a shelf of machine cards
+   under the composer that grew with the fleet. The tray tucks 12px under the
+   capsule (negative margin + the capsule's z-index), so the two read as one
+   object; it is inset 16px a side so the capsule stays the widest thing. */
+.start-target {
+  position: relative; display: flex; align-items: center; gap: 2px;
+  width: calc(100% - 32px); max-width: 728px; margin: 0 auto -12px; padding: 5px 8px 17px;
+  background: var(--chip); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.start-composer .composer-box { position: relative; z-index: 1; }
+.tgt-chip {
+  /* One line always: on a phone the two names shrink to an ellipsis rather
+     than wrap the tray into two rows. */
+  flex: 0 1 auto; display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 30px; padding: 0 8px;
+  border: none; background: none; border-radius: var(--radius-sm); cursor: pointer;
+  color: var(--text-muted); font: inherit; font-size: var(--size-small);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+/* The server gives way first: the project is the name you are choosing. */
+.tgt-chip:first-child { flex-shrink: 3; }
+.tgt-chip:hover, .tgt-chip.open { background: var(--surface-hover); color: var(--text); }
+.tgt-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.tgt-label { min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tgt-where { flex: 0 0 auto; font-family: var(--mono); font-size: var(--size-micro); color: var(--text-faint); }
+.tgt-caret { flex: 0 0 auto; color: var(--text-faint); }
+/* A server with no connection says so on the button, not only in the list. */
+.tgt-off { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 2px; background: var(--attn); }
+/* The target tray is docked at the bottom, so its dropdowns open upward into
+   the flexible region instead of falling below the viewport. */
+.proj-pop.tgt-pop {
+  left: 0; transform: none; top: auto; bottom: calc(100% - 8px);
+  width: min(380px, calc(100vw - 32px));
+}
+.tgt-pop .proj-pop-list { max-height: 340px; padding-top: 6px; }
+.tgt-pop .proj-pop-search + .proj-pop-list { padding-top: 0; }
+/* A phone keyboard can leave less room above the dock than this list needs.
+   On a short visual viewport it becomes a bounded sheet: search and actions
+   stay visible while only the rows scroll. */
+@media (max-height: 600px) {
+  .proj-pop.tgt-pop {
+    position: fixed; z-index: 80;
+    inset: max(8px, env(safe-area-inset-top)) 16px max(8px, env(safe-area-inset-bottom));
+    width: auto; max-width: 380px; margin: 0 auto;
+  }
+  .tgt-pop .proj-pop-list { flex: 1 1 auto; min-height: 0; max-height: none; }
+}
+.tgt-item .pc-pick { padding: 7px 4px 7px 8px; }
+.tgt-state {
+  flex: 0 0 auto; margin-left: auto; font-family: var(--mono); font-size: var(--size-micro); color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%;
+}
+.tgt-state.off { color: var(--text-muted); }
+.tgt-item .po-machine { margin-left: auto; }
+.tgt-foot {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px 8px;
+  border-top: 1px solid var(--divider);
+}
+/* Project creation and ownership forms stay in the flexible region above
+   the composer; server/project selection itself lives in .start-target. */
+.start-project { position: relative; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ---- the project TABLE ----
+   It was a shelf of cards ABOVE the composer, grouped into a wrapped row per
+   machine. With nine machines that is nine rows and ~700px before the field you
+   came to type in, and the row still could not show everything — each carried a
+   «+N» tail. Project choice now lives in the compact target tray attached to
+   the composer; only its auxiliary forms remain in this region. */
+.start-project { position: relative; margin-top: 18px; display: flex; flex-direction: column; gap: 6px; }
+
+/* ---- «Сейчас в работе», above the composer ----
+   The one thing on this screen you cannot reach from the composer, and on a
+   phone the only place it can be said at all: below 861px the context column
+   that carries the project tree is not mounted. Deliberately NOT a session
+   list — it holds only sessions with a writer attached, which is usually none
+   and occasionally three, and it disappears entirely when there are none. The
+   full history stays one ☰ away; the live tail can be expanded in place. */
+/* `min-width: 0` at every level down to the row, and it is not belt-and-braces.
+   A column flex container sizes to its widest item's MAX-content unless told
+   otherwise, and `.sl-row` is a nowrap flex line containing a session title —
+   so without these the section quietly sets the width of the whole page and
+   pushes the bottom composer off the right edge of a 390px screen. Caught by
+   the overflow assertion in `npm run shot`, which is what it is for. */
+.start-live { position: relative; min-width: 0; margin-bottom: 18px; display: flex; flex-direction: column; gap: 6px; }
+/* The block speaks the side panel's type, not a table's (28.09.2026, by
+   request: «почему они не как в боковом меню»). The label is the panel's
+   group label (`.sidepanel .pc-name`), a row is its session row
+   (`.sidepanel .pc-sess`, `--size-nav` at regular weight), the location is
+   its small print in the text's own face, and «ещё N в работе» is said the
+   way «работает…» is — faint sans, not an underlined mono link. */
+.sl-head { display: flex; align-items: baseline; gap: 6px; padding: 0 8px; }
+.sl-head-title { font-size: var(--size-meta); font-weight: 600; color: var(--text-muted); }
+.sl-count { font-size: var(--size-meta); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.sl-list { list-style: none; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; }
+.sl-list > li { min-width: 0; }
+.sl-row {
+  display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 32px; box-sizing: border-box; overflow: hidden;
+  padding: 5px 8px; border-radius: var(--radius-sm);
+  color: var(--text); text-decoration: none;
+}
+.sl-row:hover { background: var(--surface-hover); }
+.sl-bolt { flex: 0 0 auto; color: var(--live); }
+.sl-title {
+  flex: 1 1 0; min-width: 0; font-size: var(--size-nav); color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* The data layer: where this is running. The session title gives way first;
+   within the location the project may shorten, but the server stays whole. */
+.sl-where {
+  flex: 0 0 auto; min-width: 0; max-width: 62%;
+  display: flex; align-items: center; font-size: var(--size-micro);
+  color: var(--text-faint); white-space: nowrap;
+}
+.sl-project { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sl-sep, .sl-machine { flex: 0 0 auto; }
+.sl-rest { padding: 4px 8px 0; }
+.sl-more {
+  border: none; background: none; cursor: pointer; padding: 0;
+  font: inherit; font-size: var(--size-micro); color: var(--text-faint);
+}
+.sl-more:hover { color: var(--text); }
+.sl-more:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.proj-table-head {
+  display: flex; align-items: center; gap: 10px; padding: 0 2px;
+  font-family: var(--mono); font-size: var(--size-micro); color: var(--text-faint);
+}
+.pt-title { text-transform: uppercase; letter-spacing: 1px; }
+.pt-spacer { flex: 1 1 auto; }
+.pt-link {
+  border: none; background: none; cursor: pointer; padding: 0;
+  font: inherit; color: var(--link); text-decoration: underline; text-underline-offset: 2px;
+}
+.pt-btn {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  border: none; background: none; cursor: pointer; padding: 3px 7px; border-radius: var(--radius-sm);
+  font: 500 var(--size-meta)/1.2 var(--sans); color: var(--link);
+  transition: background var(--dur-fast) var(--ease);
+}
+.pt-btn:hover { background: var(--surface-hover); }
+
+/* ---- a card per server ----
+   A flat list sorted by recency put projects nobody had touched in seven
+   months at the bottom of the picker — an archive, not a launcher — and
+   answered «where does this run» with a column repeated on every row. Cards
+   answer it once, in a heading, and the grid spends width instead of height:
+   six machines are two rows, not six. Only recent work is on them
+   (`PROJECT_WINDOW_MS`); the rest is one press away behind «Найти». */
+.proj-cards {
+  display: grid; gap: 10px; align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+}
+.proj-table-empty { padding: 14px 12px; color: var(--text-faint); font-size: var(--size-small); }
+
+.proj-card {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 8px 8px;
+  background: var(--surface-raised); border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--divider);
+}
+.pc-top { display: flex; align-items: center; gap: 8px; padding: 0 4px 6px; min-width: 0; }
+.pc-icon {
+  flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px;
+  border-radius: var(--radius-sm); background: var(--surface-sunken); color: var(--text-muted);
+}
+.pc-id { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pc-machine {
+  font-size: var(--size-small); font-weight: 650; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pc-state {
+  display: flex; align-items: center; gap: 5px; min-width: 0;
+  font-family: var(--mono); font-size: var(--size-nano); color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A square, not a dot — `border-radius: 50%` does not appear in this system. */
+.pc-mark { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 2px; background: var(--live); }
+.proj-card.off .pc-mark { background: var(--attn); }
+.proj-card.off .pc-machine { color: var(--text-muted); }
+.pc-menu-wrap { margin-left: auto; }
+
+.pc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.pc-item { display: flex; align-items: stretch; border-radius: var(--radius-sm); min-width: 0; }
+.pc-item:hover { background: var(--surface-hover); }
+.pc-item.sel { background: var(--here); }
+.pc-pick {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px;
+  border: none; background: none; cursor: pointer; text-align: left;
+  padding: 6px 2px 6px 6px; color: inherit; font: inherit;
+}
+.pc-fold { flex: 0 0 auto; display: inline-flex; color: var(--text-faint); }
+.pc-item.sel .pc-fold { color: var(--text); }
+.pc-name {
+  min-width: 0; font-size: var(--size-small); color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pc-item.sel .pc-name { font-weight: 650; }
+.pcp-where { flex: 0 0 auto; font-family: var(--mono); font-size: var(--size-nano); color: var(--text-faint); }
+.pcp-run { flex: 0 0 auto; color: var(--text); animation: ccpulse 2s ease-in-out infinite; }
+.pc-more { padding: 4px 6px 2px; }
+.pc-row-menu { flex: 0 0 auto; align-items: center; }
+
+.pcp-more > summary { width: 24px; border-radius: var(--radius-sm); }
+
+/* The card shelf is gone: `.proj-card-pick`, `.pcp-wrap`, `.pcp-body`,
+   `.pcp-dot`, `.proj-group*`, `.proj-card-new`/`.proj-card-more` and the
+   wrapped `.proj-row` with them. The table replaced all of it; what survives is
+   the row menu below, which the table reuses. */
+
+.ppb-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ppb-machine { flex: 0 0 auto; font-family: var(--mono); font-size: var(--size-micro); font-weight: 400; color: var(--text-faint); }
+.ppb-caret { flex: 0 0 auto; color: var(--text-faint); font-size: var(--size-meta); line-height: 1; }
+.proj-pop {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 40;
+  width: min(380px, 92vw); display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-lg); animation: pop var(--dur-fast) var(--ease);
+}
+.proj-pop-search {
+  flex: 0 0 auto; margin: 8px; padding: 8px 14px; border: 1.5px solid transparent; border-radius: var(--radius-md);
+  background: var(--surface-hover); color: var(--text); font-size: var(--size-small);
+}
+.proj-pop-search:focus { outline: none; border-color: var(--brand); }
+.proj-pop-search::placeholder { color: var(--text-faint); }
+.proj-pop-list { max-height: 300px; overflow-y: auto; padding: 0 6px 6px; display: flex; flex-direction: column; gap: 1px; }
+.proj-opt {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; flex: 0 0 auto;
+  border: none; background: none; padding: 6px 8px; border-radius: var(--radius-md);
+  color: var(--text); font-size: var(--size-small); cursor: pointer;
+}
+.proj-opt:hover { background: var(--surface-hover); }
+/* the chosen project is the SOLID clay plate, same as every selected row */
+.proj-opt.active, .proj-opt.active:hover { background: var(--here); color: var(--text); font-weight: 650; }
+.po-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.po-machine { flex: 0 0 auto; font-family: var(--mono); font-size: var(--size-micro); color: var(--text-faint); }
+
+.proj-pop-empty { padding: 16px; text-align: center; color: var(--text-faint); font-size: var(--size-small); }
+
+/* drill-in project view — back header + session rows */
+.proj-head-bar {
+  display: flex; align-items: center; gap: 10px; padding: 4px 8px 8px 2px;
+  border-bottom: 1px solid var(--divider); margin-bottom: 4px;
+}
+.back-btn {
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: var(--radius-md);
+  display: grid; place-items: center; border: none; background: none; color: var(--text-muted); cursor: pointer;
+}
+.back-btn:hover { background: var(--surface-hover); color: var(--text); }
+.phb-main { flex: 1; min-width: 0; }
+.phb-name { font-size: var(--size-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phb-sub { font-size: var(--size-meta); color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projects-tree .sessions.drill { border-left: none; margin: 0 0 4px; padding: 0; }
+.show-more {
+  display: block; width: 100%; margin: 2px 0 10px; padding: 8px;
+  border: none; border-radius: var(--radius-md); background: none;
+  color: var(--link); font-size: var(--size-small); font-weight: 600; cursor: pointer;
+}
+.show-more:hover { background: var(--surface-hover); }
+
+/* explicit "resume <session>" target picker in the start composer */
+.target-chip {
+  max-width: 260px; background: var(--surface-hover); color: var(--text); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px 10px; font-size: var(--size-meta);
+}
+.target-chip:hover { border-color: var(--text-faint); }
+/* Below the composer there used to be `.start-rows` (five quick-action chips),
+   `.start-label` + `.start-cards` twice («Активная работа», «Недавние сессии»)
+   and the `.sc-*` innards of those cards. All of it drew the session list that
+   the context column draws beside this screen, so it is gone with them. */
+.start-empty { text-align: center; color: var(--text-faint); font-size: var(--size-body); margin-top: 24px; }
+
+/* Empty home: a machine is connected, no project yet. One sentence and one button. */
+.start-blank { display: grid; justify-items: center; gap: var(--space-3); margin: var(--space-8) auto 0; max-width: 420px; text-align: center; }
+.start-blank h2 { margin: 0; font: 600 var(--size-title)/1.2 var(--title); color: var(--text); }
+.start-blank p { margin: 0; color: var(--text-muted); font-size: var(--size-body); line-height: 1.5; }

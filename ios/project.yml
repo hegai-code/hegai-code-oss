@@ -1,0 +1,314 @@
+name: CCRemote
+options:
+  bundleIdPrefix: net.hegai
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.67"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_LANGUAGE: ru
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+packages:
+  MarkdownUI:
+    url: https://github.com/gonzalezreal/swift-markdown-ui
+    from: "2.4.0"
+  # The hub client, wire protocol and on-disk caches. Local path package — see
+  # CCRemoteKit/Package.swift for why its manifest is deliberately older than
+  # the toolchain. It carries no UI and stays platform-agnostic even though the
+  # native Mac target is gone; the package's own tests are the Linux gate.
+  CCRemoteKit:
+    path: CCRemoteKit
+
+targets:
+  CCRemote:
+    type: application
+    platform: iOS
+    sources:
+      - path: CCRemote
+      # Wire shapes shared with the widgets and the watch (docs/WATCH.md).
+      - path: Shared/Common
+      - path: Shared/Activity
+    dependencies:
+      - package: MarkdownUI
+      - package: CCRemoteKit
+      - target: ShareExtension
+      # Live Activity (iPhone lock screen, Dynamic Island, watch Smart Stack).
+      - target: CCRemoteWidgets
+      # Embedded into the app's Watch/ folder by XcodeGen.
+      - target: CCRemoteWatch
+    # Entitlements are two hand-written files, not generated from `properties`
+    # here: a generated `entitlements:` block sets CODE_SIGN_ENTITLEMENTS in the
+    # target's base settings and outranks any per-config override, and the two
+    # configurations genuinely need different values (see below).
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.hegai.ccremote
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZWU5VAA73
+        # Real Claude/OpenAI marks on the runtime icons. On for TestFlight and
+        # dev builds; a build meant for App Store review is made with
+        # `STORE_BUILD=1 ./build.sh release`, which blanks this — Apple's beta
+        # review cited guideline 4.1(a) on 0.7.54 while the marks were in.
+        # Info.plist echoes the value so an archive can be checked before it is
+        # attached to an App Store version.
+        # The logos live in their own catalog, ProviderMarks.xcassets, which a
+        # store build excludes.
+        HEGAI_PROVIDER_MARKS: PROVIDER_MARKS
+        HEGAI_PROVIDER_MARKS_EXCLUDE: ""
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) $(HEGAI_PROVIDER_MARKS)"
+        EXCLUDED_SOURCE_FILE_NAMES: "$(inherited) $(HEGAI_PROVIDER_MARKS_EXCLUDE)"
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: CCRemote/CCRemote.entitlements
+        # A distribution build must ask for the PRODUCTION APNs environment — a
+        # token minted against sandbox is rejected by the production gateway, so
+        # TestFlight would get no pushes at all.
+        Release:
+          CODE_SIGN_ENTITLEMENTS: CCRemote/CCRemote.Release.entitlements
+    info:
+      path: CCRemote/Info.plist
+      properties:
+        CFBundleDisplayName: Hegai Code
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # "PROVIDER_MARKS" = this build shows Claude/OpenAI logos (TestFlight);
+        # empty = store build. Check before attaching a build to App Store review.
+        HegaiProviderMarks: "$(HEGAI_PROVIDER_MARKS)"
+        # Standard TLS (wss:// to the hub, https:// to its REST API) plus, since
+        # 1.0.64, E2EE for private machines through Apple's own CryptoKit
+        # (AES.GCM, SHA256) — encryption within the OS, no bundled crypto
+        # library, so ASC's "algorithms" question is "none of the above" and the
+        # app stays exempt. Bundling a crypto library would change that answer.
+        # Declaring it here answers App Store Connect's export-compliance
+        # question at upload time instead of parking every build on "Missing
+        # Compliance" until someone clicks through the web UI.
+        ITSAppUsesNonExemptEncryption: false
+        # Custom URL scheme so the Share extension can hand off to the app.
+        CFBundleURLTypes:
+          - CFBundleURLName: net.hegai.ccremote
+            CFBundleURLSchemes:
+              - ccremote
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # The hub starts the fleet Live Activity by push; the app never does.
+        NSSupportsLiveActivities: true
+        # Portrait only. The rebuilt shell is one column with a drawer, laid out
+        # for a thumb; landscape had no design and only ever produced stretched
+        # screenshots nobody checked.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # Bundled fonts must ALSO be listed here — copying them into Resources
+        # is not enough, CoreText only registers what UIAppFonts names, and an
+        # unregistered face makes Font.custom fall back to SF in silence.
+        # Regenerate the files with scripts/fetch-fonts.sh.
+        UIAppFonts:
+          - Onest-Regular.ttf
+          - Onest-Medium.ttf
+          - Onest-SemiBold.ttf
+          - Onest-Bold.ttf
+          - IBMPlexMono-Regular.ttf
+          - IBMPlexMono-Medium.ttf
+          - IBMPlexMono-SemiBold.ttf
+          - SourceSerif4-Regular.otf
+          - SourceSerif4-It.otf
+        # Dev: allow ws:// to a hub on localhost / the LAN. Prod uses wss:// (TLS).
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: Connect to a cc-remote hub running on your local network.
+        NSCameraUsageDescription: Камера нужна, чтобы сфотографировать вложение к задаче и отсканировать QR-код пары с зашифрованной машиной.
+        NSMicrophoneUsageDescription: Dictate a task into the composer.
+        NSSpeechRecognitionUsageDescription: Convert your speech into message text. Recognition may be processed by Apple depending on your device and language.
+        # No forced UIUserInterfaceStyle — the app drives light/dark via a setting.
+        # remote-notification: a push can briefly launch the app in the background to
+        # answer an approval.
+        UIBackgroundModes:
+          - remote-notification
+
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension/ShareViewController.swift
+    # ShareViewController imports CCRemoteKit (ImageAttachment et al.) — without
+    # this the target only built when a sibling's DerivedData left the module
+    # around, and a clean build failed.
+    dependencies:
+      - package: CCRemoteKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.hegai.ccremote.share
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZWU5VAA73
+    # Let XcodeGen generate the Info.plist so the standard CFBundle* keys
+    # (identifier/executable/package-type) are injected; we add the extension bits.
+    # No entitlements: the extension hands off to the app via UIPasteboard +
+    # the ccremote:// URL scheme, so it needs no App Group (hence no provisioning).
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Hegai Code
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsImageWithMaxCount: 4
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+
+  # Live Activity (docs/WATCH.md §5). The hub drives it by push-to-start; the
+  # extension only renders HegaiFleetAttributes. No entitlements: ActivityKit
+  # needs none, and the Share extension's no-App-Group rule holds here too.
+  CCRemoteWidgets:
+    type: app-extension
+    platform: iOS
+    # 18: supplementalActivityFamilies (watch Smart Stack) can't be conditional.
+    deploymentTarget: "18.0"
+    sources:
+      - path: CCRemoteWidgets
+      - path: Shared/Common
+      - path: Shared/Activity
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.hegai.ccremote.widgets
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZWU5VAA73
+        SKIP_INSTALL: YES
+    info:
+      path: CCRemoteWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Hegai Code
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSSupportsLiveActivities: true
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  # Apple Watch app (docs/WATCH.md §7): self-contained, no CCRemoteKit. The
+  # keychain group is shared with its complication extension; the team prefix is
+  # expanded into Info.plist so the code can name the group at runtime.
+  CCRemoteWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: CCRemoteWatch
+      - path: Shared/Common
+      - path: Shared/Watch
+    dependencies:
+      - target: CCRemoteWatchWidgets
+    entitlements:
+      path: CCRemoteWatch/CCRemoteWatch.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)net.hegai.ccremote.watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.hegai.ccremote.watchkitapp
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZWU5VAA73
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: CCRemoteWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Hegai Code
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: net.hegai.ccremote
+        # Tapping the iPhone's Live Activity on the watch opens this app instead
+        # of «Открыть на iPhone». Empty = every ActivityAttributes type.
+        WKSupportsLiveActivityLaunchAttributeTypes: []
+        HegaiKeychainGroup: $(AppIdentifierPrefix)net.hegai.ccremote.watch
+
+  # Watch complications: «ждут N» / «работают M».
+  CCRemoteWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: CCRemoteWatchWidgets
+      - path: Shared/Common
+      - path: Shared/Watch
+    entitlements:
+      path: CCRemoteWatchWidgets/CCRemoteWatchWidgets.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)net.hegai.ccremote.watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.hegai.ccremote.watchkitapp.widgets
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: AZWU5VAA73
+        SKIP_INSTALL: YES
+    info:
+      path: CCRemoteWatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Hegai Code
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        HegaiKeychainGroup: $(AppIdentifierPrefix)net.hegai.ccremote.watch
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  # Жест шторки проверяется НАСТОЯЩИМ касанием, и для этого нужна отдельная
+  # цель: юнит-тест не умеет ни тащить палец, ни спросить у приложения, что оно
+  # при этом сделало. На этой машине синтетический ввод на уровне хоста
+  # недоступен (cliclick: «Accessibility privileges not enabled»), а XCUITest
+  # ходит каналом автоматизации и этой привилегии не требует.
+  #
+  # Цель ЛЁГКАЯ намеренно: она водит по DEBUG-стенду `CC_SCREEN=swipe-probe`,
+  # которому не нужен ни хаб, ни токен. UI-тесты дороги, и цена оправдана
+  # ровно одним правилом — тем, которое ломается молча и делает широкий код на
+  # телефоне нечитаемым.
+  CCRemoteUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: CCRemoteUITests
+    dependencies:
+      - target: CCRemote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.hegai.ccremote.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: CCRemote
+
+  CCRemoteTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: CCRemoteTests
+    dependencies:
+      - target: CCRemote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.hegai.ccremote.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  CCRemote:
+    build:
+      targets:
+        CCRemote: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - CCRemoteTests
+        - CCRemoteUITests

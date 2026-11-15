@@ -1,0 +1,184 @@
+/* 11-overlays — notification center, command palette, toast / modal, the model modal. */
+
+/* ============================ notification center ============================ */
+.notif-pop {
+  position: absolute; top: 50px; right: 12px; width: 360px; max-height: 70vh; overflow: auto; z-index: 40;
+  border-radius: var(--radius-panel); background: var(--surface-raised); border: 1px solid var(--divider); box-shadow: var(--shadow);
+}
+.notif-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--divider); color: var(--text); }
+.notif-head h3 { font-family: var(--title); margin: 0; font-size: var(--size-body); font-weight: 700; }
+.notif-head .clear { margin-left: auto; }
+.notif-list { padding: 6px; }
+.notif-item { display: flex; gap: 11px; padding: 10px 12px; border-radius: var(--radius-list); cursor: pointer; align-items: flex-start; }
+.notif-item:hover { background: var(--surface-hover); }
+.notif-item .ni-icon { margin-top: 1px; flex: 0 0 auto; }
+.notif-item.needs_attention .ni-icon { color: var(--link); }
+.notif-item.idle .ni-icon { color: var(--positive); }
+.notif-item.error .ni-icon { color: var(--red); }
+.notif-item .ni-title { font-size: var(--size-small); font-weight: 600; color: var(--text); }
+.notif-item .ni-sub { font-size: var(--size-micro); color: var(--text-faint); margin-top: 2px; }
+.notif-item .ni-time { margin-left: auto; font-size: var(--size-micro); color: var(--text-faint); flex: 0 0 auto; }
+.notif-empty { color: var(--text-faint); text-align: center; padding: 28px 16px; font-size: var(--size-small); }
+
+/* ============================ command palette (cmdk) ============================ */
+.cmdk-backdrop {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 14vh; background: rgba(1, 4, 9, 0.72); animation: fade 0.12s var(--ease);
+}
+@keyframes fade { from { opacity: 0; } }
+.cmdk {
+  width: 620px; max-width: 92vw; border-radius: var(--radius-panel); overflow: hidden;
+  background: var(--surface-raised); border: 1px solid var(--divider); box-shadow: var(--shadow-lg);
+  animation: pop 0.13s var(--ease-emphasized);
+}
+@keyframes pop { from { transform: scale(0.98) translateY(-6px); opacity: 0; } }
+.cmdk-input-row { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--divider); }
+.cmdk-input-row svg { color: var(--text-faint); flex: 0 0 auto; }
+.cmdk input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: var(--size-card); }
+.cmdk input::placeholder { color: var(--text-faint); }
+.cmdk [cmdk-list] { max-height: 52vh; overflow: auto; padding: 8px; scroll-padding: 8px; }
+.cmdk [cmdk-group-heading] { font-size: var(--size-micro); text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-faint); padding: 10px 10px 5px; font-weight: 700; }
+.cmdk [cmdk-item] { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: var(--radius-md); cursor: pointer; color: var(--text-muted); font-size: var(--size-small); }
+/* the selected command is a solid blue plate — same move as the selected chat */
+.cmdk [cmdk-item][data-selected="true"] { background: var(--select); color: var(--on-select); }
+.cmdk [cmdk-item] svg { color: var(--text-faint); flex: 0 0 auto; }
+.cmdk [cmdk-item][data-selected="true"] svg { color: var(--on-select); }
+.cmdk-item-main { flex: 1; min-width: 0; }
+.cmdk-item-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.cmdk [cmdk-item][data-selected="true"] .cmdk-item-title { color: var(--on-select); font-weight: 600; }
+.cmdk-item-sub { font-size: var(--size-micro); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmdk [cmdk-item][data-selected="true"] .cmdk-item-sub { color: color-mix(in srgb, var(--on-select) 75%, transparent); }
+.cmdk [cmdk-empty] { padding: 30px; text-align: center; color: var(--text-faint); font-size: var(--size-small); }
+
+/* ============================ toast / modal ============================ */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border-radius: var(--radius-panel); box-shadow: var(--shadow); z-index: 90; font-size: var(--size-small); background: var(--red); color: var(--text-on-color); font-weight: 600; }
+/* «Вышла новая версия» — единственная дверь наружу для окна без адресной
+   строки. Windows-приложение это WebView2: ни перезагрузки, ни F5, а крестик
+   прячет в трей, так что страница переживает несколько выкаток подряд и молча
+   исполняет старый код. Кнопка, а не уведомление: единственное, что с ней
+   делают, — нажимают. Сидит над композером (та же переменная высоты, что у
+   кнопки прокрутки вниз), поэтому не накрывает поле ввода ни на одной ширине. */
+.build-update { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--composer-h, 0px) + 14px); z-index: 88; display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border: 0; border-radius: var(--radius-md); background: var(--action); color: var(--on-action); font-family: inherit; font-size: var(--size-meta); font-weight: 600; box-shadow: var(--shadow), var(--rim); cursor: pointer; }
+.build-update:hover { filter: brightness(1.08); }
+.build-update:active { transform: translateX(-50%) translateY(1px); }
+/* «Нет связи с хабом» — то же место и та же геометрия, что у кнопки обновления
+   (они взаимно исключают друг друга, см. ModalHost), но это НЕ кнопка: нажимать
+   нечего, переподключение идёт само. Ember — роль «нужно внимание», и по
+   контрастному правилу на ember только чернила. */
+.hub-offline {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--composer-h, 0px) + 14px); z-index: 88;
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px;
+  border-radius: var(--radius-md); background: var(--attn); color: var(--on-attn);
+  font-size: var(--size-meta); font-weight: 600;
+  box-shadow: var(--shadow), var(--rim);
+  max-width: calc(100vw - 24px);
+}
+.modal-backdrop { position: fixed; inset: 0; background: rgba(1, 4, 9, 0.72); display: flex; align-items: center; justify-content: center; z-index: 85; animation: fade 0.12s var(--ease); }
+/* The height cap is not decoration. Without it a dialog simply grows past the
+   viewport — the backdrop centres it, so it overflows off BOTH ends with nothing
+   scrollable anywhere, and the buttons become unreachable. That is a dialog you
+   cannot answer or dismiss. `dvh` after `vh` so a mobile browser measures the
+   visible viewport rather than the one hidden behind its own chrome. */
+.modal { background: var(--surface-raised); border: 1px solid var(--divider); border-radius: var(--radius-panel); padding: 24px; width: 560px; max-width: 92vw; max-height: 88vh; max-height: 88dvh; overflow: auto; box-shadow: var(--shadow-lg); animation: pop 0.13s var(--ease-emphasized); }
+.modal h3 { font-family: var(--title); margin: 0 0 12px; display: flex; align-items: center; gap: 8px; font-size: var(--size-lead); color: var(--text); }
+.modal h3 svg { color: var(--orange); }
+.tool-name { font-family: var(--mono); color: var(--link); margin-bottom: 12px; font-size: var(--size-small); }
+.tool-input { background: var(--surface-hover); border: 1px solid var(--divider); border-radius: var(--radius-list); padding: 12px; max-height: 320px; overflow: auto; font-size: var(--size-meta); font-family: var(--mono); color: var(--text); }
+/* The runtime's own sentence about why it is asking — prose, so it is set as
+   prose rather than left inside the payload dump below it. */
+.tool-reason { margin: 0 0 8px; font-size: var(--size-meta); color: var(--text-muted); }
+/* `flex: 0 0 auto` so the actions keep their height when the questions above
+   them are the thing being squeezed — they are the row that must never move. */
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; flex: 0 0 auto; }
+
+/* Interactive plan-mode dialogs — real choice
+   UI, not a raw JSON dump. Selection is a neutral gray lift; green stays the one
+   action color (the Submit / Approve button is .btn.primary). */
+.question-modal { width: 620px; display: flex; flex-direction: column; overflow: hidden; }
+/* Only the questions scroll; Cancel/Submit stay put. `min-height: 0` is what
+   actually makes it scroll — a flex child's default `min-height: auto` refuses
+   to shrink below its content, so the overflow would push the actions off the
+   bottom instead of producing a scrollbar. */
+.q-scroll { overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+/* The scrollbar hugs the modal edge; put the padding back so option cards do
+   not sit flush against it, and keep the last block clear of the actions. */
+.q-scroll { padding-right: 4px; margin-right: -4px; }
+.q-scroll > .q-block:last-child { margin-bottom: 4px; }
+.q-block { margin-bottom: 16px; }
+.q-header { display: inline-block; font-family: var(--sans); font-size: var(--size-micro); text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); background: var(--surface-hover); border: 1px solid var(--divider); border-radius: var(--radius-sm); padding: 1px 7px; margin-bottom: 8px; }
+.q-text { font-size: var(--size-body); color: var(--text); margin-bottom: 10px; line-height: 1.45; }
+.q-options { display: flex; flex-direction: column; gap: 6px; }
+.q-option { text-align: left; background: var(--surface-hover); border: 1px solid var(--divider); border-radius: var(--radius-list); padding: 9px 12px; cursor: pointer; color: var(--text-muted); display: flex; flex-direction: column; gap: 2px; transition: background 0.1s var(--ease), border-color 0.1s var(--ease); }
+.q-option:hover { border-color: var(--border); color: var(--text); }
+.q-option.sel { background: var(--action-soft); border-color: var(--brand); color: var(--text); }
+.q-option-label { font-family: var(--sans); font-weight: 600; font-size: var(--size-small); }
+.q-option-desc { font-size: var(--size-meta); color: var(--text-faint); line-height: 1.35; }
+.q-other { margin-top: 6px; width: 100%; background: var(--surface-hover); border: 1px solid var(--divider); border-radius: var(--radius-list); padding: 8px 10px; color: var(--text); font-family: var(--sans); font-size: var(--size-small); }
+.q-other:focus { outline: none; border-color: var(--action); }
+.q-plan { max-height: 52vh; overflow: auto; background: var(--surface-hover); border: 1px solid var(--divider); border-radius: var(--radius-list); padding: 4px 16px; margin-top: 4px; }
+.q-plan-choices { margin-top: 12px; }
+.q-option-danger .q-option-label { color: var(--negative); }
+
+/* ---- the model modal (phone) ----------------------------------------------
+   The same choices as the popover beside it, in the shape a phone can actually
+   use. It is rendered through a portal to `body` (see RunPicker) precisely so
+   nothing in the composer's own layout — which folds, and moves — can reach it.
+   No `@media` gate here: the markup only exists when JS has decided this is a
+   phone, so a rule that also asked would be a second, disagreeing opinion.
+
+   CENTRED AND SMALL, not a full-bleed sheet off the bottom edge. Two reasons,
+   and the second is the one you feel:
+     - the content is a dozen fixed rows in two short sections. A bottom sheet
+       is the form for a long or open-ended list, and wearing it here announced
+       a far bigger decision than choosing an effort level;
+     - a sheet puts its rows against the bottom of the screen, directly under
+       the thumb that just tapped a control sitting next to the composer — so
+       the hand covers the thing it came to read. Lifted to the middle, the
+       rows are above the hand.
+   `top` and `max-height` here are the FIRST-PAINT values only. RunPicker
+   replaces both from `visualViewport` the moment the box mounts, because this
+   opens from the composer — so the keyboard is up, and neither `50%` nor `dvh`
+   knows where the visible strip is when a keyboard is overlaying it. See the
+   note on that effect; getting this from CSS alone is what put the box behind
+   the keys and clipped it against the top of the screen. */
+.rp-modal-scrim { position: fixed; inset: 0; z-index: 90; background: var(--scrim); }
+.rp-modal {
+  position: fixed; z-index: 91;
+  left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(330px, calc(100vw - 48px));
+  display: flex; flex-direction: column; max-height: min(70dvh, 520px);
+  padding: 6px;
+  background: var(--surface-raised);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl), var(--rim);
+  animation: rp-modal-in var(--dur) var(--ease);
+}
+/* Grows from 96%, not up from the bottom edge: the box no longer comes FROM
+   anywhere, so a slide would be motion describing a journey it did not make. */
+@keyframes rp-modal-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+}
+@media (prefers-reduced-motion: reduce) { .rp-modal { animation: none; } }
+.rp-modal-body { overflow-y: auto; min-height: 0; }
+/* Rows you aim a thumb at, not a pointer: 15px and 44px tall against the
+   popover's 13px and 30. Tighter than the sheet's 48 because the box is now
+   bounded — at 48 a dozen rows could not be seen at once, which is the one
+   advantage a list this size has. The section headers keep the mono caps they
+   have everywhere else: this is the same control, not a second design. */
+.rp-modal .rp-row { font-size: var(--size-body); padding: 11px 12px; border-radius: var(--radius-md); }
+.rp-modal .rp-section { padding: 10px 12px 5px; font-size: var(--size-micro); }
+.rp-modal .rp-note { font-size: var(--size-small); }
+.rp-modal .rp-empty { font-size: var(--size-body); padding: 8px 12px 12px; }
+
+/* In-page confirm / prompt / alert (src/dialogs.tsx) — WKWebView in the Mac
+   shell has no native panels. Above every other modal; narrow on purpose. */
+.dialog-backdrop { z-index: 200; padding: 12px; }
+.dialog-modal { width: 420px; padding: 20px; }
+/* A text prompt focuses its input at once, and on iOS the keyboard can cover
+   the layout viewport that centring and dvh are measured against (see the
+   RunPicker note above). Sit it high instead, clear of any keyboard. */
+.dialog-backdrop-text { align-items: flex-start; padding-top: max(12vh, calc(env(safe-area-inset-top) + 12px)); }
+.dialog-message { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); font-size: var(--size-body, inherit); line-height: 1.45; }
+.dialog-input { width: 100%; box-sizing: border-box; margin-top: 14px; padding: 9px 11px; background: var(--surface-sunken); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-list); font: inherit; }
+.dialog-input:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }

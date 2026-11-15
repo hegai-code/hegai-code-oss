@@ -1,0 +1,49 @@
+/* 33-file-previews — what an answer's file paths turn into under its text: a
+   thumbnail per picture, a chip per markdown file (FilePreviews.tsx). Tokens
+   only; rectangles; no gradients. DESIGN.md «Транскрипт». */
+
+/* Items carry their own margin: one that is hidden (a guessed relative path
+   that is not a file) is an empty 1px box and must not leave a gap. It stays
+   in the layout, not display:none, because the observer that loads the file
+   needs a box to watch. */
+.fp-strip { display: flex; flex-wrap: wrap; align-items: flex-start; min-width: 0; }
+.fp-item { min-width: 0; max-width: 100%; }
+.fp-item.img { flex-basis: 100%; } /* a picture takes its own row; chips share one */
+.fp-item:empty { width: 1px; height: 1px; }
+.fp-item:not(:empty) { margin: 8px 8px 0 0; }
+
+.fp-thumb {
+  display: block; padding: 0; border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--radius-md); overflow: hidden; cursor: zoom-in; line-height: 0;
+  max-width: 100%; width: fit-content;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.fp-thumb:hover { border-color: var(--link); }
+.fp-thumb:focus-visible, .fp-chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.fp-thumb img {
+  display: block; width: auto; height: auto; max-width: min(100%, 420px); max-height: 240px;
+  object-fit: contain;
+}
+.fp-pending {
+  display: block; width: 160px; height: 96px; border-radius: var(--radius-md);
+  background: var(--surface-hover); animation: ccpulse 2s ease-in-out infinite;
+}
+
+/* A markdown file: a rectangle with the name, a tap opens it in a sheet. */
+.fp-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px;
+  padding: 4px 12px; border: none; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--chip); color: var(--text); font-family: var(--sans); font-size: var(--size-small);
+}
+.fp-chip:hover { background: var(--surface-hover); }
+.fp-chip svg { flex: none; color: var(--text-muted); }
+.fp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Asked and not available: quiet, and a tap asks again. */
+.fp-chip.missing { background: var(--surface-sunken); color: var(--text-muted); }
+.fp-chip.pending { cursor: default; color: var(--text-muted); animation: ccpulse 2s ease-in-out infinite; }
+@media (pointer: coarse) { .fp-chip { min-height: 44px; } }
+
+.fp-sheet-path {
+  font-family: var(--mono); font-size: var(--size-meta); color: var(--text-muted);
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,477 @@
+/* 00-tokens — the :root token ladders (light) and the dark theme override — docs-check reads the px ladders from here. */
+
+/* ============================================================================
+   Hegai Remote — the a.test platform design system, applied to a dense control
+   plane. Canon lives at https://a.test/assets/ds/{colors,typography,spacing,
+   effects}.css; the dark ramp only exists in the kit's tokens/dark.css. The
+   porting precedent is community-frontend/src/styles/v3.css, shipped at
+   acme.test/v3.
+
+   The mental model is a JOURNAL, not a messenger: a session is an entry, status
+   is a square mark, a transcript is a document. Three voices — Onest for
+   structure, IBM Plex Mono for the data layer, Source Serif 4 for the human one.
+   Ivory canvas, Ink text, GREEN as the CTA (ivory on it, never black), EMBER as
+   the accent. Rectangles only; pills are for tags, badges and active chips.
+
+   The failure mode this system names for itself: "applying a.test" is not a
+   beige background plus green buttons. Form, role and voice are the work.
+
+   Theming: this :root block holds the LIGHT (default) tokens; the
+   :root[data-theme="dark"] override below redeclares only theme-aware ones.
+   See DESIGN.md.
+   ========================================================================== */
+
+:root {
+  /* LIGHT is the default theme. The dark theme lives in the
+     :root[data-theme="dark"] override below. Only theme-aware tokens differ
+     between the two; radii / spacing / motion / type are declared here once
+     and shared. */
+  color-scheme: light;
+
+  /* canvas / surfaces — Hegai warm ("тёплая палитра"): sand canvas, cream
+     panels, warm hairlines. The canvas is ivory and cards sit on it in a
+     lifted ivory — separated by the green-tinted float shadow, not a border. */
+  /* ---- raw brand, verbatim from a.test/assets/ds/colors.css ---- */
+  --ivory: #fcfaf1;
+  --ivory-100: #fefdf8;
+  --ivory-300: #f1ecd8;
+  --ink: #101f18;
+  --ink-700: #1b2e25;
+  --green: #06463d;
+  --green-600: #0a5a4e;
+  --green-800: #053a32;
+  --ember: #ff6a3d;
+  --ember-600: #f2552a;
+  --ember-100: #ffe4da;
+  --blue: #b7d4e4;
+  --blue-100: #dceaf1;
+
+  /* ---- paper: the canvas ramp -----------------------------------------------
+     REDESIGN 2026-09-17 — the surfaces come off the beige.
+
+     The brand tokens above are NOT touched: `--ivory` is what a.test publishes,
+     and it still drives the marketing surfaces and the ivory-on-green pairings.
+     What changes is where the SEMANTIC surfaces point, which is the seam this
+     file was already built on (`--bg: var(--ivory)` was one line).
+
+     Why: a.test's ivory is a page colour — it belongs under an article you read
+     for two minutes. This is a control plane people keep open all day, holding
+     four live transcripts side by side, and on ivory every white-ish thing in
+     them (code wells, diff rows, file chips) has to fight the canvas for the
+     right to look like paper. Neutral white gives the panes something to be
+     white AGAINST, and hands the warmth back to where it means something: the
+     green of an action, the ember of something that wants you.
+
+     Not pure grey: each step carries a trace of the green so the shell reads as
+     one material with the accents rather than as a screenshot pasted onto a
+     default. It is ~1% saturation — you cannot name it, you would notice its
+     absence. */
+  --paper: #ffffff;
+  --paper-50: #f6f7f6;   /* the canvas the panes sit on */
+  --paper-200: #f0f2f0;  /* the well: inputs, code, machinery */
+  --paper-300: #eceeec;  /* chips, tags */
+
+  --bg: var(--paper-50);           /* app canvas, transcript */
+  --surface: var(--paper);         /* rail, columns, panels, composer bar */
+  --surface-raised: var(--paper);  /* cards, popovers, modals */
+  /* hover is a TINT, not a fixed step — it has to read the same on the
+     canvas, on a raised card, and on a green plate. */
+  --surface-hover: rgba(16, 31, 24, 0.05);
+  --surface-sunken: var(--paper-200); /* the canon well: inputs, code, machinery rows */
+  --chip: var(--paper-300);
+  /* The side panel's ground and the «chosen» tone. Tried as a light blue
+     (27.09.2026, «как в ChatGPT») and taken back to grey the same day, by
+     request («голубой так себе, давай серый вернём пока, везде»). Kept as
+     tokens so the next try is two values, not a hunt. */
+  --tint: var(--paper-200);       /* #f0f2f0 — faint text 4.63:1 */
+  --tint-strong: var(--paper-300); /* #eceeec — faint text 4.53:1 */
+  /* Send, in burgundy (09.10.2026, by request: «тот же бургунди», as on iOS;
+     was the chat blue #2a74d8 since 27.09). Its own token, not `--action`:
+     every other CTA stays ink. White on it is 9.2:1; the dark theme lifts it
+     to #9e3d4e (below) so the circle still reads on graphite. */
+  --send: #7a2e3a;
+  --send-hover: #6a2732;
+  --on-send: #ffffff;
+  /* One notch lighter than the ivory pair. The old values were measured against
+     a beige canvas; on white the same alpha reads a step harder, and this app
+     draws a LOT of hairlines — four pane edges, a bar, a composer, every table
+     row. Same apparent weight, less ink. */
+  --divider: rgba(16, 31, 24, 0.10);  /* line-ink */
+  --border: rgba(16, 31, 24, 0.16);   /* line-ink-strong */
+  --border-2: var(--border);   /* legacy alias */
+
+  /* ink — warm near-black; every text tone holds ≥4.5:1 on its background,
+     INCLUDING timestamps, section labels and placeholders. */
+  --text: var(--ink);
+  --text-muted: rgba(16, 31, 24, 0.72);  /* secondary — 6.6:1 */
+  --text-faint: rgba(16, 31, 24, 0.62);  /* timestamps, counts, labels — 4.8:1 */
+  --text-on-color: var(--ivory);         /* ivory ink on solid DEEP fills */
+
+  /* ---- the four colour ROLES ------------------------------------------------
+     a.test canon: GREEN is the CTA (ivory text on it, never black); EMBER is an
+     accent — attention, indicators, the eyebrow dot, the focus halo.
+
+     These used to be one token. `--action` carried buttons, the selected-row
+     plate, unread badges AND focus all at once, so it could not follow the canon
+     without turning unread badges green — and green already means git/success/
+     live in this app. Splitting them is what makes the flip safe:
+
+       --action  buttons only        --select  the solid selected plate
+       --attn    unread / attention  --brand   indicators, focus, eyebrow dot   */
+
+  /* NO GREEN ON FILLS (19.09.2026, by request: «зелёный отовсюду убрать»).
+     `--action` and `--select` were both `--green` — which is why the CTA, the
+     send square, the selected project plate and the account initials in the
+     rail all read as the same saturated green at once. They are `--ink` now:
+     a near-black plate with ivory on it. Ink is the palette's own darkest tone,
+     so nothing else had to move, and the ivory pairing keeps the contrast the
+     green had (ink/ivory is 15.8:1 against green/ivory's 10.3:1).
+     The ROLE SPLIT below is unchanged and still load-bearing — action, select,
+     attention and brand stay four separate tokens. Only the fill changed. */
+  --action: var(--ink);        /* primary, send, resume — CTA fills */
+  --action-hover: #1c3128;
+  --action-press: #070f0c;
+  --on-action: var(--ivory);
+  --action-soft: rgba(16, 31, 24, 0.08);  /* canon IconButton chip fill */
+  --action-soft-2: rgba(16, 31, 24, 0.14);
+
+  /* Selection must not follow --action, which flips to ivory in dark — fifteen
+     ivory bars down a near-black column. It is its own plate in both themes.
+     Kept for REAL selection: the palette's keyboard cursor, a multi-selected
+     file, a chosen row in a small menu. */
+  --select: var(--ink);
+  --on-select: var(--ivory);
+
+  /* «Ты здесь» is not the same thing, and it was wearing the same plate.
+     A solid near-black bar down a list of sessions is the loudest object on
+     the screen, and it drags twelve child colours with it (title, time, badges,
+     marks) just to stay legible on top of itself. A tint says the same thing,
+     keeps every child at its own colour, and lets the row stay readable as a
+     row. Ink-based, so it lifts in dark instead of going ivory. */
+  --here: color-mix(in srgb, var(--text) 9%, transparent);
+
+  /* Attention keeps the ember it always had. Ink on ember, never ivory (2.7:1). */
+  --attn: var(--ember);
+  --attn-hover: var(--ember-600);
+  --on-attn: var(--ink);       /* 5.94:1 */
+  --attn-soft: var(--ember-100);
+
+  --brand: var(--ember);       /* indicators, thin borders, the eyebrow dot */
+  --agent-claude: var(--brand);
+  --agent-codex: var(--text);
+  --focus-ring: rgba(255, 106, 61, 0.55);  /* canon ember halo */
+  /* Was --green-600. Links carry their affordance by underline, not by hue —
+     which is why dark already used ember here rather than a green that would
+     have been 1.8:1 on ink. Light now says the same thing in ink. */
+  --link: var(--ink);
+  /* A link INSIDE prose (agent answer, human turn) is blue, by request
+     (10.10.2026: «надо, чтобы она синим подсвечивалась»): ink plus an
+     underline read as emphasis, not as something to click. Only prose —
+     `--link` stays the accent for navigation. 5.67:1 on the canvas,
+     5.22:1 on the human-turn chip. */
+  --link-prose: #1f5fbf;
+  /* File-type glyph tones. Their own tokens, NOT the avatar pairs: `--av3-fg`
+     is ivory, the colour of text ON a dark avatar, and using it alone painted
+     white icons on the ivory page. Contrast is a property of a PAIR, which is
+     why these are measured against the canvas in both themes. */
+  --ftype-code:  #0a5a4e;      /* 7.77:1 */
+  --ftype-media: #a8431c;      /* 5.76:1 */
+  --ftype-data:  #1f5673;      /* 7.62:1 */
+  --ftype-doc:   #101f18;      /* 16.31:1 */
+
+  /* Blue reclaims its real job: the AI / data / infrastructure layer. */
+  --ai: var(--blue-100);
+  --on-ai: var(--green);       /* 6.63:1 */
+
+  /* Identity fills for avatars — four flat tones, not seven gradients. Gradients
+     are forbidden by the system, and two of the old ones put white on gold and
+     white on lime (1.6:1 and 2.2:1). */
+  --av0-bg: rgba(6, 70, 61, 0.12);  --av0-fg: var(--green);
+  --av1-bg: var(--blue-100);        --av1-fg: var(--green);
+  --av2-bg: var(--ember-100);       --av2-fg: #8a3417;
+  --av3-bg: var(--ink);             --av3-fg: var(--ivory);
+
+  /* semantic / git. NOTE: --green is NOT redeclared here — it is the brand green
+     from the raw block above, and a second declaration in this same rule would
+     silently win and drag --action / --select down with it.
+     Any fill that carries text uses --red; --red-bright is graphics only
+     (dots, diff gutters, borders) because ivory on it is 4.09:1. */
+  --positive: var(--green-600); /* green text on ivory — 7.76:1 */
+  --orange: #f2a900;           /* gold — fill: changed (--diff-mod), graphics */
+  --orange-text: #8f6400;      /* accessible gold for small text/icons */
+  --red: #bd3223;              /* fill under text: error / danger — 5.48:1 */
+  --red-bright: #df3f2e;       /* GRAPHICS ONLY — never under text */
+  --danger-hover: #c53522;     /* danger button hover — 5.20:1 */
+  --negative: #bd3223;         /* accessible red for small text/icons */
+  /* Limit pace (UsageMeter, usagePace.ts) — GRAPHICS ONLY, 5px bars. */
+  --pace-ok: #3f9a52;
+  --pace-edge: #e3a400;
+  --pace-over: #df3f2e;
+  --pace-out: #7a1f2e;
+  /* «Идёт прогон». Was #6fbf3a, a.test's bright green, and it was the single
+     most repeated green in the product — one square per row, every row. What
+     says "running" here is the PULSE (`ccpulse`), not the hue, so the mark can
+     be the text tone and lose nothing. It must not be ember: ember is
+     `needs_attention`, and the two states sit in the same column. */
+  --live: var(--ink);
+  --on-live: var(--ivory);     /* --live is a FILL as well as a dot (.status-pill.working) and it inverts between themes — a fixed text colour on it is unreadable in one of the two. */
+  --diff-add-bg: #e3efdd;      /* diff added-line wash */
+  --diff-del-bg: #fbe3dc;      /* diff removed-line wash */
+  --purple: #8e3b57;           /* avatar plum — decorative only */
+  --purple-text: #8e3b57;      /* accessible plum text */
+  --group-alt: #44708a;        /* info blue (legacy group cycle) */
+  --indigo: #8e3b57;           /* legacy alias — avoid in new UI */
+  --yellow: #f2a900;           /* favorites star = gold */
+  --teal: #5c8aa6;             /* codex tag — a.test info blue */
+  --teal-dark: #44708a;        /* accessible info blue for text */
+
+  /* Session category accents (graphics/highlight only — a chip dot, never a
+     button fill under small white text). Four distinct hues from the ramp. */
+  --cat-rambling: #8a5a2e;     /* amber — spoken, not typed */
+  --cat-sync: #3f6b7d;         /* slate — pulling things level */
+  --cat-ship: #06463d;         /* the action green: shipping is THE action */
+  --cat-verify: #1f6f4a;       /* leaf — proof, distinct from the CTA green */
+  --cat-bugs: #bd3223;         /* red */
+  --cat-mobile: #7d4a86;       /* mauve */
+  --cat-feature: #b07400;      /* amber-brown */
+  --cat-codex: #2c6b76;        /* teal — matches the Codex source badge */
+  --cat-backlog: #44708a;      /* info blue */
+  --cat-research: #8e3b57;     /* plum */
+  --cat-webpage: #2f6f5e;      /* pine — publishing */
+  --cat-text: #7a5a2e;         /* umber — writing */
+  --cat-tz: #5b4b8a;           /* iris — filed for approval, not picked */
+
+  /* Flow (kanban) stage column accents — light. */
+  --stage-backlog: #8a8a86;    /* neutral */
+  --stage-planning: #44708a;   /* info blue */
+  --stage-in-progress: #b07400;/* amber (active) */
+  --stage-testing: #8e3b57;    /* plum */
+  --stage-done: #1a7f37;       /* green (the action color) */
+
+  /* radius ladder — 8 / 12 / 16 / 20 / 999 (canon spacing.css).
+     sm = inner chips + code chips, md = buttons + icon-buttons + inputs + rows,
+     lg = cards + plates + composer, xl = modals + palette.
+     PILL LICENSE: tags, badges and ACTIVE filter chips only. Icon-buttons are
+     12px SQUARES — nothing in the app is a circle. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  /* legacy aliases so existing selectors land on the new ladder untouched.
+     `--radius-bubble` is deliberately gone: nothing in the product is a bubble
+     any more, and a token named after a shape we removed is an invitation to
+     rebuild it. */
+  --radius-list: var(--radius-md);
+  --radius-panel: var(--radius-lg);
+
+  /* elevation — deep, diffuse, GREEN-TINTED ink (never grey). --shadow-lg is
+     the signature float. --rim is the dark-theme companion: in light it is
+     `none` and costs nothing, in dark it becomes the inner light rim that does
+     the job a drop shadow cannot do on near-black. Floating surfaces set
+     `box-shadow: var(--shadow-lg), var(--rim)`. */
+  --shadow-xs: 0 2px 8px rgba(16, 31, 24, 0.05);
+  --shadow-sm: 0 2px 8px rgba(16, 31, 24, 0.05);
+  --shadow: 0 8px 24px rgba(16, 31, 24, 0.07);
+  --shadow-lg: 0 16px 48px rgba(16, 31, 24, 0.08);
+  --shadow-xl: 0 28px 72px rgba(16, 31, 24, 0.12);
+  --rim: 0 0 #0000;
+  --scrim: rgba(16, 31, 24, 0.42);
+
+  /* the terminal stays dark in BOTH themes (a.test ink, ANSI-safe) */
+  --terminal-bg: #0b1511;
+  --terminal-text: #fcfaf1;
+
+  /* spacing — 4 / 8 grid (INVARIANT) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* motion — canon ease-out; --ease-soft settles floating things. */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-emphasized: var(--ease-soft);
+  --dur-fast: 140ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
+  /* ---- type: three voices (a.test/assets/ds/typography.css) ----
+     Onest carries structure (UI, titles, body). IBM Plex Mono is the TECH layer
+     — eyebrows, timestamps, counts, paths, code — and it is what makes a control
+     plane read as an instrument rather than a chat app. Source Serif 4 italic is
+     the human voice and appears in exactly three places: the agent's thinking
+     block, blockquotes inside agent prose, and the one greeting on the start
+     screen. Never in UI chrome, never one word inside an Onest heading. */
+  /* System faces, the way Codex, Claude and ChatGPT do it: Segoe UI on Windows,
+     SF on Apple, Roboto on Android. No web fonts (26.09.2026, DESIGN.md). */
+  --sans: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --title: var(--sans);
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Type scale for a DENSE TOOL, not the marketing ladder. The canon's 72px
+     display / 52px h1 exist for a hero screen; this product has no hero, and
+     importing them is how "apply a.test" turns into a landing page.
+
+     The ladder hangs off `--size-body`, and body is 16px because the transcript
+     is a READING SURFACE — people read a structured document here, not a row of
+     chat bubbles, and 14px was the size of the chrome around it rather than the
+     size of the thing being read. 16px is also the threshold below which iOS
+     Safari zooms a focused field and never zooms back, so the composer sitting
+     on `--size-body` makes that structural instead of a patch.
+
+     Every size in this file goes through these tokens. An exception says why in
+     a trailing comment opening with `off-ladder:` and nothing else does —
+     `web/test/type-scale.test.ts` fails on the rest. Before that rule existed
+     only 39 of 356 declarations used the ladder, so raising it moved the
+     transcript and left every list behind. */
+  --size-screen: 24px;  /* the one big NUMBER on a screen */
+  --size-page: 20px;    /* the heading of a screen — a step under that number */
+  --size-title: 18px;   /* section / panel titles */
+  --size-lead: 16px;    /* prose h2, modal titles */
+  --size-card: 15px;    /* card titles */
+  --size-body: 15px;    /* the transcript, and everything you type into (16 on touch, below) */
+  --size-small: 14px;   /* list rows, buttons, chips */
+  --size-nav: 14px;   /* session titles in the side panel — 14 like Claude's list (27.09.2026: 14.5 read large beside it) */
+  --size-meta: 12px;    /* mono meta, counts, times */
+  --size-micro: 11px;   /* mono caps eyebrows */
+  --size-nano: 10px;    /* ONLY a glyph inside a fixed square box */
+
+  --lh-title: 1.2;
+  --lh-body: 1.5;
+  --lh-read: 1.5;       /* agent prose — 15/1.5 on a desk, 16/1.5 on touch; 1.7 read as large print (DESIGN.md) */
+
+  --ls-hero: -0.03em;
+  --ls-title: -0.01em;
+  --ls-body: 0em;
+  --ls-human: 0.01em;   /* serif italic — canon typography.css, positive on purpose */
+  --ls-tech: 0.03em;    /* mono */
+  --ls-caps: 0.14em;    /* mono ALL-CAPS eyebrows */
+}
+
+/* DARK theme — canon tokens/dark.css. Redeclares only the theme-aware tokens.
+   Three things here are deliberate and load-bearing:
+   1. the CTA FLIPS to ivory-with-ink — deep green reads weakly on near-black;
+   2. SELECTION does not follow it. --select stays green, because fifteen ivory
+      plates down a near-black column is a wall of glare;
+   3. drop shadows do not read on ink, so volume comes from --rim, an inner
+      light rim, applied alongside the (much weaker) shadow. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --pace-ok: #5cb96a;
+  --pace-edge: #f2b92e;
+  --pace-over: #ff6b5a;
+  --pace-out: #c0475a;
+
+  /* Neutral graphite, not ink-green. These four carried a green cast (#18271f
+     is a green card, and at card size it reads as colour, not as neutral) —
+     with every plate and dot now green-free they were the last thing tinting
+     the whole dark theme. Same lightness steps as before, hue removed, so the
+     page/card/well hierarchy is unchanged. */
+  --bg: #0b0c0d;              /* canon surface-page — deeper than Ink itself */
+  --surface: #0b0c0d;
+  --surface-raised: #1c1f21;  /* canon surface-card */
+  --surface-hover: rgba(250, 247, 234, 0.06);
+  --surface-sunken: #121415;  /* canon surface-well */
+  --chip: #1c1f21;
+  --tint: #111314;
+  --tint-strong: #1c1f21;
+  --divider: rgba(250, 247, 234, 0.1);
+  --border: rgba(250, 247, 234, 0.22);
+
+  --text: var(--ivory);
+  --text-muted: rgba(250, 247, 234, 0.78);  /* 11:1 */
+  --text-faint: rgba(250, 247, 234, 0.5);   /* 4.9:1 */
+
+  --action: var(--ivory);
+  --action-hover: var(--ivory-300);
+  --action-press: #e7e1ca;
+  --on-action: var(--ink);
+  --action-soft: rgba(250, 247, 234, 0.1);
+  --action-soft-2: rgba(250, 247, 234, 0.16);
+
+  /* Was #1f5f52, a lifted green. Neutral graphite now, for the same reason the
+     light theme dropped its green — but it must still be a LIFTED plate, not a
+     flip to ivory: `--action` is ivory in dark, and selection borrowing that
+     would put fifteen ivory bars down a near-black column. 8.9:1 for ivory. */
+  --select: #2c3234;
+  --on-select: var(--ivory);
+  /* A shade stronger than light: at 9% over near-black this reads as nothing. */
+  --here: color-mix(in srgb, var(--text) 14%, transparent);
+
+  --attn: #ff7f57;
+  --attn-hover: #ff6a3d;
+  --on-attn: var(--ink);
+  --attn-soft: #402318;
+
+  --brand: #ff8a64;            /* ember on ink: indicators, focus, eyebrow dot */
+  --focus-ring: rgba(255, 138, 100, 0.55);
+  --link: #ff8a64;
+  --link-prose: #7fb2ff;       /* 8.1:1 on graphite, 6.8:1 on the chip */
+  --ftype-code:  #6fd0b4;      /* 10.51:1 */
+  --ftype-media: #ff8a64;      /* 8.39:1 */
+  --ftype-data:  #b7d4e4;      /* 12.54:1 */
+  --ftype-doc:   #fcfaf1;      /* 18.58:1 */
+
+  --ai: #233a45;
+  --on-ai: #9cc3d8;
+
+  /* ink reads as nothing on near-black, so the dark ramp uses light washes */
+  --av0-bg: rgba(111, 191, 58, 0.16); --av0-fg: #8ed468;
+  --av1-bg: #233a45;                  --av1-fg: #9cc3d8;
+  --av2-bg: #402318;                  --av2-fg: #ff8a64;
+  --av3-bg: rgba(250, 247, 234, 0.16);--av3-fg: var(--ivory);
+
+  /* `--live` MUST be restated here. Light sets it to `--ink`, and ink on a
+     near-black page is invisible — the running mark would simply vanish in
+     dark. Ivory is the dark theme's text tone, so the mark matches the row it
+     marks and the pulse still carries "running". */
+  --live: var(--ivory);
+  --on-live: var(--ink);
+  --positive: #6fbf3a;
+  --orange-text: #f5c34d;
+  --negative: #ff8577;
+  --red: #b4322a;
+  --diff-add-bg: #1c2f22;
+  --diff-del-bg: #3a221c;
+  --purple-text: #d493ab;
+  --teal-dark: #9cc3d8;
+  --group-alt: #9cc3d8;
+
+  /* Category accents lightened for ink backgrounds. */
+  --cat-rambling: #d9a76a;
+  --cat-sync: #86b3c6;
+  --cat-ship: #5fbfa4;
+  --cat-verify: #6cc48f;
+  --cat-bugs: #ef7264;
+  --cat-mobile: #c294cb;
+  --cat-feature: #e0a23e;
+  --cat-codex: #6fb6c2;
+  --cat-backlog: #7ba8c4;
+  --cat-research: #d78faa;
+  --cat-webpage: #6fb39c;
+  --cat-text: #c8a373;
+  --cat-tz: #a89ad4;
+
+  /* Flow (kanban) stage column accents — dark. */
+  --stage-backlog: #9a9a96;
+  --stage-planning: #7ba8c4;
+  --stage-in-progress: #e0a23e;
+  --stage-testing: #d78faa;
+  --stage-done: #3fb950;
+
+  --shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 14px 44px rgba(0, 0, 0, 0.5);
+  --rim: inset 0 1px 0 rgba(250, 247, 234, 0.2), inset 0 0 0 1px rgba(250, 247, 234, 0.1);
+  --scrim: rgba(0, 0, 0, 0.62);
+}
+
+/* Light-on-dark always reads heavier than dark-on-light — the canon opens the
+   tracking a hair to compensate (tokens/dark.css). */
+:root[data-theme="dark"] body { letter-spacing: 0.2px; }

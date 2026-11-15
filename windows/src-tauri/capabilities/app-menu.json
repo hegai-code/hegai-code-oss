@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "app-menu",
+  "description": "Три команды строки меню страницы (src/appmenu.rs): «Выход», строка обновления и её нажатие. Только Windows (на маке своё системное меню), только origin хаба и только окна приложения — не окно входа (`popup-*`) и не офлайн-окно.",
+  "platforms": ["windows"],
+  "windows": ["main", "window-*"],
+  "local": false,
+  "remote": {
+    "urls": ["https://code.acme.test/*"]
+  },
+  "permissions": [
+    "allow-shell-quit",
+    "allow-shell-update-row",
+    "allow-shell-update"
+  ]
+}

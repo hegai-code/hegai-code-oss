@@ -1,0 +1,875 @@
+/* 08-transcript — the chat column and the transcript as a document: messages, markdown, tool runs, attachments. */
+
+/* ============================ chat ============================ */
+/* The transcript's layout answers to the PANE it is in, not to the window. The
+   same CSS renders a full-screen session and a column of the Колонки lens, and
+   a column is narrow at any window width — which is exactly what a viewport
+   media query cannot see. So `.chat` is the container, and the reading rules
+   further down ask it rather than the screen. */
+.chat {
+  position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0;
+  container: chat / inline-size;
+}
+.git-head select {
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 9px; font-size: var(--size-meta);
+}
+/* A BANNER across the top of the transcript, and it now says so in its name.
+   It used to be the bare `.warn`, which is also the obvious word for a severity
+   LEVEL — so every meter that coloured itself `warn` silently put on this
+   banner's costume. `UsageMeter` hit it first and escaped by prefixing its
+   levels (`lvl-warn`); the composer's context meter did not, and at 85%+ it
+   grew this plate's background, its `padding: 12px 24px` and its bottom border
+   around «Контекст 91%» — a yellow slab in the composer footer that no rule
+   near `.ctx` could explain. The same leak reached `.barrow-fill` and
+   `.quota-fill`, which inherit the padding and border they never asked for.
+   A component and a severity must not answer to the same name; this is the
+   component, so it takes the compound one. */
+.warn-banner {
+  display: flex; gap: 8px; align-items: flex-start;
+  background: color-mix(in srgb, var(--orange) 14%, transparent); color: var(--orange-text); padding: 12px 24px; font-size: var(--size-meta);
+  border-bottom: 1px solid var(--divider);
+}
+
+/* live read-only mirror banner. Blue is the AI / data / infrastructure layer in
+   this system, and a "you are watching" notice is exactly that — the one place
+   blue belongs. --on-ai is 6.63:1; the old teal-on-blue was 4.33:1. */
+.mirror-banner {
+  display: flex; align-items: center; gap: 9px; padding: 10px 22px;
+  border-bottom: 1px solid var(--divider); background: var(--ai); color: var(--on-ai); font-size: var(--size-small); font-weight: 500;
+}
+.mirror-banner b { color: var(--on-ai); font-weight: 600; }
+.mirror-banner .btn { flex: 0 0 auto; padding: 6px 14px; }
+/* dashed "input is locked" capsule under the mirrored transcript */
+.mirror-locked {
+  display: flex; align-items: center; gap: 10px; margin: 10px auto 14px; flex: 0 0 auto;
+  width: calc(100% - 32px); max-width: 760px;
+  padding: 11px 16px; border-radius: 22px;
+  background: var(--surface-sunken); border: 1px dashed var(--border);
+  color: var(--text-faint); font-size: var(--size-body);
+}
+.mirror-locked > span { flex: 1; }
+.mirror-locked .btn {
+  background: transparent; border: 1px solid var(--brand); color: var(--link);
+  font-size: var(--size-meta); min-height: 32px; padding: 4px 14px;
+}
+.live-dot {
+  width: 8px; height: 8px; border-radius: 2px; background: var(--brand); flex: 0 0 auto;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 55%, transparent); animation: livepulse 1.6s infinite;
+}
+@keyframes livepulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 55%, transparent); }
+  70% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--brand) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent); }
+}
+
+/* Transcript as a messenger dialog: the user's turn is a right-aligned blue
+   bubble, agent prose is a left-aligned neutral bubble, and the hundreds of
+   tool calls collapse into folded machinery rows so they never drown the
+   prose — the scaffolding is available, not the subject. */
+.log { flex: 1; overflow-y: auto; padding: 18px 20px 24px; background: var(--bg); }
+/* Codex-style reading measure: the transcript holds a centered ~760px column
+   no matter how wide the window is. 820 was that column at 14px; the same
+   column at 16px ran ~92 characters to the line, past the point where the eye
+   finds the next line reliably. The three rules that must share this number —
+   the composer box, its footer and the mirror's locked bar — are marked. */
+.log-inner { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 760px; margin: 0 auto; }
+.hist-more { align-self: center; margin: 4px 0 8px; padding: 6px 14px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface); color: var(--text-muted);
+  font: 500 var(--size-micro)/1 var(--mono); letter-spacing: .04em; text-transform: uppercase;
+  cursor: pointer; transition: color 140ms, border-color 140ms; }
+.hist-more:hover { color: var(--text); border-color: var(--brand); }
+/* A first read that failed or came from the replica says so, in the transcript's
+   own measure, instead of leaving a blank pane. */
+.hist-fail, .hist-stale { align-self: center; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  margin: 12px 0; padding: 8px 14px; border-radius: var(--radius-md); font-size: var(--size-meta); color: var(--text-muted); text-align: center; }
+.hist-fail { background: var(--attn-soft); color: var(--text); }
+.hist-stale { background: var(--surface-sunken); font-family: var(--mono); font-size: var(--size-micro); }
+.hist-fail .hist-more { margin: 0; }
+/* `.divider` lived here: a mono-caps rule across the measure that announced a
+   calendar day ("13 SEP") or the history/live seam ("CONTINUED"). Both are
+   gone. A rule across the column is the heaviest mark this system has, and it
+   was spending that weight on metadata — then answering "when" for a whole
+   screenful of turns at once, so the turn you were actually reading still had
+   no time on it. Every turn now carries its own stamp (`.when`, `stamp()` in
+   lib.ts): the same question, answered where it is asked. */
+/* ---- the transcript is a DOCUMENT, not a chat ----------------------------
+   Bubbles encode symmetry between two people saying comparable things. That is
+   not what happens here: a person types one short instruction and the agent
+   returns a structured document — headings, code, diffs, tables, todo lists.
+   The old CSS documented the fight it was losing two rules further down
+   ("headings at BUBBLE scale — browser defaults explode inside a chat"), where
+   h1/h2/h3 were clamped to 17/15.5/14px to survive inside a capsule. Worse, each
+   prose block got its OWN tailed bubble, so a four-paragraph answer was four
+   floating capsules with four tails — that stack was most of the toy read.
+
+   So: a turn is a block with a gutter. The gutter carries a mono caps speaker
+   label — the eyebrow motif doing structural work — and the body gets the full
+   reading measure back, along with its real heading hierarchy. */
+/* No rule between turns. The gutter — mark, name, stamp — already says where a
+   turn starts, and a hairline every few lines turned a long transcript into a
+   ruled ledger: 200 rules reading louder than the 200 things that were said.
+   Whitespace is the separator now. */
+/* REDESIGN 2026-09-17 — the reference composition drops the speaker gutter.
+   In this lens a column IS one session with one agent, so side (right = you,
+   left = the agent) carries what the gutter label used to carry, and the 76px
+   track was spending a fifth of a 380px pane on a name that never changes.
+   The gutter rules below are kept, not deleted: `.who` is hidden, so restoring
+   the labelled variant is one declaration, not an archaeology exercise. */
+.msg {
+  max-width: 940px; width: 100%;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px;
+  padding: 7px 0;
+  /* Anchor for the stamp — see `.when`. */
+  position: relative;
+}
+.msg.assistant { padding: 7px 0; }
+.msg.assistant > .md, .msg.user > * { grid-column: 1; }
+.msg > .who { display: none; }
+
+/* The speaker lives in the gutter: the warm gradient mark that identifies every
+   session in this app, plus a name you can actually read.
+
+   It used to be 11px mono caps in `--text-faint` — the quietest tone in the
+   system — and only the human turn carried a label at all, the agent's being a
+   CSS `::before`. Two speakers set in the same whisper, one of them unlabelled,
+   is why a long transcript stopped saying who was talking. The mark does the
+   identifying (it is the motif the whole app already uses for identity), the
+   name confirms it, and both stay out of the reading measure. */
+.who {
+  display: flex; align-items: center; gap: 6px;
+  grid-column: 1; grid-row: 1; min-width: 0; user-select: none;
+  /* Pinned to the TOP of the row. A grid item stretches by default, and this
+     one is a flex box that centres its contents — so on a turn whose first
+     block ran long the speaker's name drifted to the middle of it, and the
+     stamp (pinned under where the name SHOULD be) ended up floating above it.
+     A label belongs at the start of the thing it labels. */
+  align-self: start;
+}
+/* Below the `xs` rung of the ladder on purpose: the ladder sizes marks that
+   carry a row, and this one only labels a gutter 76px wide, which mark + name
+   has to fit inside without pushing the body column. */
+.who .avatar { width: 20px; height: 20px; border-radius: 6px; font-size: 10px; flex: 0 0 auto; }  /* off-ladder: an initial sized by its 20px box */
+.who-name {
+  font-family: var(--sans); font-size: var(--size-meta); font-weight: 600; line-height: 1.6;
+  color: var(--text-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Your own turns carry the full text tone — when you skim for "what did I
+   actually ask", yours is the one you are looking for. */
+.msg.user .who-name { color: var(--text); }
+.msg.assistant > *:not(.who) { grid-column: 1; }
+
+/* The turn's stamp: date and time, on EVERY turn, in the gutter under the
+   speaker label. It carries what the day rules used to carry, at the place the
+   question is actually asked. Both selectors are needed to outrank
+   `.msg.assistant > *:not(.who)` and `.msg.user > *`, which would otherwise
+   pull it into the body column. Absent whenever the agent sent no timestamp —
+   the transcript then reads exactly as it did before. */
+/* REDESIGN 2026-09-17 — the stamp now sits UNDER the user's bubble, right
+   aligned with it, and the agent's turn carries none: in the reference only the
+   command you issued is stamped. This also kills a live bug the absolute
+   placement had — `top: 32px` against `.msg` printed the stamp straight over
+   the agent's first paragraph once the gutter collapsed in a narrow pane
+   (see .shots/before-columns-light-1440.png, over "порог тишины"). */
+/* 26.09.2026 — the agent's turn is stamped again, as a quiet row UNDER its
+   prose, left-aligned the way the user's clock is right-aligned. Without it the
+   only time on screen was the one on YOUR message, so a reply that landed at
+   21:08 and a stream that went silent at 21:08 looked the same at 21:11: there
+   was no way to tell «Claude answered three minutes ago» from «Claude is still
+   on that turn». Static, in flow, after every block (`order`), so it can never
+   print over the first paragraph the way the absolute gutter stamp once did.
+   `stampedOnce` still silences a repeat inside one minute. */
+.msg.assistant > .when {
+  position: static; width: auto; top: auto;
+  grid-column: 1; grid-row: auto; justify-self: start; order: 2;
+  font-family: var(--mono); font-size: var(--size-micro); font-weight: 500;
+  letter-spacing: 0.02em; color: var(--text-faint);
+  line-height: 1.4; user-select: none; font-variant-numeric: tabular-nums;
+}
+/* The clock of a plated turn, floated into the END of its own text (the stamp
+   is a child of `.usertext-body` — see UserText).
+
+   It used to be a sibling of the plate, and a sibling of a plate in a one-column
+   grid is a ROW: every human turn carried a blank band under it holding one
+   11px time, right-aligned to the MESSAGE rather than to the plate, so it hung
+   past the plate's corner and lined up with nothing. Floating it into the last
+   line costs no row, and the plate's own padding is what it aligns to.
+
+   `float` and not a flex/grid item precisely because the last line is not
+   always long enough: a float drops to a line of its own when it does not fit
+   and sits inline when it does, which is the behaviour every messenger has and
+   the one no amount of alignment on a separate row can imitate. */
+.usertext-body > .when {
+  float: right;
+  /* Leading, so the clock rides the text baseline rather than the line's top,
+     and a gap wide enough that the time never touches the last word. */
+  margin: 4px 0 0 12px;
+  font-family: var(--mono); font-size: var(--size-micro); font-weight: 500;
+  letter-spacing: 0.02em; color: var(--text-faint);
+  line-height: 1.2; user-select: none; font-variant-numeric: tabular-nums;
+}
+/* The turn with no prose to hang a clock on (an image on its own). Rare, and
+   the only case still using a row — so it at least lines up with the plate's
+   right inset (14px) instead of the message's edge. */
+.msg.user > .when {
+  position: static; width: auto; text-align: right;
+  order: 2;
+  padding: 0 14px 0 0;
+  font-family: var(--mono); font-size: var(--size-micro); font-weight: 500;
+  letter-spacing: 0.02em; color: var(--text-faint);
+  line-height: 1.4; user-select: none; font-variant-numeric: tabular-nums;
+}
+.msg-legacy.assistant > .when, .msg-legacy.user > .when {
+  /* Taken OUT of the grid on purpose. As a grid item in the gutter's second row
+     it started where the body's FIRST block ended — under a long paragraph the
+     stamp drifted half a screen below the name it belongs to and read as a
+     caption on someone else's text. Absolute against `.msg` pins it where it
+     always means the same thing: directly under the speaker. */
+  /* The grid placement stays even though the element is out of flow: an
+     absolutely-positioned grid item takes its containing block from its GRID
+     AREA, so without this it resolved `left: 0` against column 2 and printed
+     the stamp straight over the first line of the message. */
+  grid-column: 1; grid-row: 1;
+  position: absolute; left: 0; top: 32px; width: 76px;
+  /* Flush with the MARK, not indented under the name: '13.09 21:26' is eleven
+     mono characters — measured 75px against a 76px gutter — and the 26px indent
+     that suited a bare '21:26' would cost the date a second line. A stamp from
+     a previous year ('13.09.25 21:26') is the one case that does not fit, and
+     it is left to wrap at its own space rather than run into the body column. */
+  font-family: var(--mono); font-size: var(--size-micro); font-weight: 500;
+  letter-spacing: 0.02em;
+  /* Was --text-faint, the same whisper the speaker label used to be set in, and
+     just as easy to miss. A timestamp you have to hunt for answers nothing. */
+  color: var(--text-muted);
+  line-height: 1.5; user-select: none; font-variant-numeric: tabular-nums;
+}
+
+/* Your turn is the COMMAND THAT WAS ISSUED — and it is marked by VOICE, not by
+   a tinted card with a coloured edge.
+   The sunken plate with `border-left: 2px solid var(--action)` was the generic
+   assistant-chat quote block, and it also spent the BUTTON colour on a passage
+   of prose — the one thing the four-role split exists to prevent (`--action` is
+   buttons only; a thin indicator rule, if there were one, would be `--brand`).
+   What separates the two speakers here is the same thing that separates them in
+   a printed interview: the question is set darker and heavier than the answer,
+   on the identical measure, under a gutter label that already names it. Skimming
+   200 turns for "what did I actually ask", you look for the darkest line — and
+   nothing on the page is competing for that.
+   `.att-chip` is deliberately out of this rule now: it has its own tag pill, and
+   inheriting a full-width plate turned an image attachment into a grey slab. */
+/* REDESIGN 2026-09-17 — the reference puts the issued command back in a plate,
+   set to the right. The comment above argues the opposite case and it is kept
+   deliberately: it is the record of why this was once removed, and the argument
+   still stands for the FULL-WIDTH transcript, where a person's instruction and
+   a structured agent document are nothing like symmetric. Revisit together. */
+.msg.user { justify-items: end; }
+.msg.user > .usertext {
+  background: var(--chip); border: none; border-radius: var(--radius-lg);
+  padding: 9px 14px; margin: 0;
+  max-width: 86%; width: fit-content;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+/* The body inside the plate drops back to the reading weight: the plate is now
+   doing the marking that weight used to do alone, and 500 inside a tinted box
+   reads as shouting. */
+.msg.user > .usertext .usertext-body { font-weight: 450; }
+/* A grid item blockifies `inline-flex` and then stretches to the track, so the
+   chip needs telling to keep its own width — otherwise "image" becomes a pill
+   the full width of the measure. */
+/* Only an IMAGE-ONLY turn still gets a chip as a sibling of the plate — with
+   text present it now rides inside it (see MessageView). */
+.msg.user > .att-chip { margin: 2px 0; justify-self: start; }
+/* Inside the plate: its own line under the text, tight, and carrying none of
+   the sibling rule's alignment — inside a right-aligned plate `justify-self`
+   would fight the plate rather than the column. */
+.usertext-body > .att-chip { display: inline-flex; margin: 6px 6px 0 0; vertical-align: middle; }
+.usertext-body > .att-chip:first-child { margin-top: 0; }
+/* user turns are plain text, never markdown — what you typed is shown back
+   verbatim. See UserText in render/Blocks.tsx */
+.usertext + .usertext { margin-top: 8px; }
+/* A weight heavier and in full --text. That difference IS the marking; see the
+   note on .msg.user > .usertext.
+
+   The size used to differ too (15px/1.55 against the answer's 14px/1.6), and
+   size plus weight plus tone is enough of a change that the two speakers read
+   as two different TYPEFACES set on one page rather than as question and
+   answer. Same metrics now: one voice, two weights. */
+.usertext-body {
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: var(--size-body); line-height: var(--lh-read); font-weight: 500; color: var(--text);
+}
+/* long pasted prompts collapse to a faded preview (Claude-extension pattern) */
+.usertext.clamped .usertext-body {
+  /* ~4.5 lines. It was 189px — about eight — which is not a preview of a long
+     message so much as a slightly shorter long message: the fold arrived after
+     you had already started reading. Short enough to skim past, long enough to
+     tell WHICH message it is. */
+  max-height: calc(4.5 * var(--lh-read) * 1em); overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 58%, transparent);
+  mask-image: linear-gradient(180deg, #000 58%, transparent);
+}
+.usertext-more {
+  display: block; background: none; border: none; padding: 4px 0 0; cursor: pointer;
+  color: var(--teal-dark); font-size: var(--size-small); font-weight: 600; font-family: var(--sans);
+}
+.usertext-more:hover { text-decoration: underline; }
+/* attachment chip for <image …> pseudo-tags inside a prompt */
+.att-chip {
+  display: inline-flex; align-items: center; gap: 5px; vertical-align: middle;
+  padding: 2px 10px; border-radius: var(--radius-pill); margin: 1px 0;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  font-size: var(--size-meta); color: var(--text-muted); white-space: nowrap; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis;
+}
+/* The same chip when a picture did not arrive: a click asks again. */
+button.att-chip { border: none; font-family: var(--sans); cursor: pointer; }
+button.att-chip:hover { color: var(--text); }
+/* ---- a transcript attachment, once its bytes have arrived -----------------
+   Small on purpose: a screenshot in a transcript is a REFERENCE to something,
+   not the content of the turn, and a full-width picture would push the reading
+   column apart every time somebody pasted one. Big enough to recognise, one
+   click from big enough to read. Rectangles, like everything else here. */
+.att-shot { display: block; margin: 4px 0; max-width: 100%; }
+.att-open {
+  display: block; padding: 0; border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--radius-md); overflow: hidden; cursor: zoom-in; line-height: 0;
+  /* Both caps matter, and the phone is why. A button sized by its image
+     carries the image's intrinsic width straight through its own box, so a
+     320px screenshot became a 399px control on a 390px screen — caught by the
+     layout probe, not by looking at a desktop. */
+  max-width: 100%; width: fit-content;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.att-open:hover { border-color: var(--link); }
+.att-open img { display: block; max-width: min(320px, 100%); max-height: 220px; width: auto; height: auto; }
+/* Holds the row while the bytes are in flight, so a transcript that is being
+   read does not jump as each picture lands under the reader's eye. */
+.att-pending {
+  display: block; width: 160px; height: 96px; border-radius: var(--radius-md);
+  background: var(--surface-hover); animation: ccpulse 2s ease-in-out infinite;
+}
+/* The picture IS the dialog — no plate, no chrome, no caption. One thing to do,
+   two ways to stop: the backdrop and Esc. */
+.att-viewer { cursor: zoom-out; padding: 32px; }
+.att-viewer img {
+  max-width: 100%; max-height: 100%; width: auto; height: auto;
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg); cursor: default;
+}
+
+.line { font-size: var(--size-meta); padding: 1px 0; }
+.line.system, .line.status { color: var(--text-faint); font-family: var(--mono); font-size: var(--size-micro); }
+.line.tool_use { color: var(--text-faint); font-family: var(--mono); font-size: var(--size-meta); }
+.line.error { color: var(--negative); font-family: var(--mono); font-size: var(--size-meta); }
+.typing { display: inline-flex; align-items: center; gap: 8px; color: var(--text-faint); font-size: var(--size-meta); padding: 2px 0; }
+.typing::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--live); animation: pulse 1.1s ease-in-out infinite; }
+/* The clock of the turn in progress (the token cost left 08.10.2026). Mono and tabular: this is
+   the data layer, and a proportional digit makes a running counter jitter on
+   every tick — the one place in the product where that is guaranteed to be
+   noticed, because it updates once a second under your eyes. */
+.work-clock {
+  font-family: var(--mono); font-size: var(--size-micro); font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+/* «в фоне: …» — the job goes on after the turn ended. The description can be a
+   whole command, so it ellipsizes on one line; the full text is the title. */
+.bg-tasks { max-width: 100%; }
+.bg-tasks-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bg-tasks::before { animation-duration: 2.2s; }
+/* «Читаю файл · 1:42»: the label is short, the clock trails it. */
+.work-what { color: var(--text-muted); }
+.typing > .work-what + .work-clock::before { content: "·"; margin-right: 6px; color: var(--text-faint); }
+/* A status the person must notice — the CLI retrying an overloaded API, a
+   rate limit, a failed turn. Ember square, the same mark unread rows carry;
+   the text stays in the muted mono voice so it reads as machinery that wants
+   a glance, not as an alarm. */
+.line.status.attn { color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+.line.status.attn::before { content: ""; flex: 0 0 auto; width: 8px; height: 8px; background: var(--attn); }
+.line-hint { color: var(--text-faint); }
+/* The compaction seam: one rule with a mono-caps label, marking where the
+   context the model still carries begins. A section mark, not a field. */
+.compact-seam {
+  display: flex; align-items: center; gap: 12px; margin: 12px 0;
+  font-family: var(--mono); font-size: var(--size-micro); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-faint);
+}
+.compact-seam::before, .compact-seam::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--border); }
+.compact-seam-label { flex: 0 0 auto; }
+.compact-summary { margin: 4px 0 12px; }
+.compact-summary > .md { padding: 8px 12px; font-size: var(--size-small); color: var(--text-muted); }
+.seam { margin: 4px 0; }
+@keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
+
+/* markdown */
+/* `overflow-wrap: anywhere` for the same reason `.usertext-body` has it, and it
+   was the one voice missing it. A bare URL, a commit sha, a 120-character
+   filesystem path — anything the agent types without a space in it — is one
+   unbreakable word, and an unbreakable word wider than the pane makes the
+   TRANSCRIPT scroll sideways, not just that line. `.log` is `overflow-y: auto`,
+   which per spec promotes `overflow-x` from `visible` to `auto`, so there is a
+   scrollbar there ready to be used. That is the "иногда область текстовая
+   становится широкой с боковым скроллом": not a layout that is sometimes wide,
+   but a message that sometimes contains a long path. */
+.md { font-size: var(--size-body); line-height: var(--lh-read); color: var(--text); overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md p { margin: 12px 0; }
+.md pre { background: var(--surface-hover); border: 1px solid var(--divider); border-radius: var(--radius-list); padding: 12px; overflow: auto; font-size: var(--size-small); font-family: var(--mono); }
+.md code { background: var(--surface-hover); padding: 1.5px 6px; border-radius: var(--radius-sm); font-size: var(--size-small); font-family: var(--mono); border: 1px solid var(--divider); }
+.md pre code { background: none; padding: 0; border: none; }
+
+/* copy-to-clipboard button on code blocks (markdown + tool bodies) */
+.codeblock { position: relative; }
+.code-copy {
+  position: absolute; top: 6px; right: 6px; z-index: 1;
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  background: var(--chip); color: var(--text-faint); border: 1px solid var(--divider);
+  border-radius: var(--radius-sm); cursor: pointer; opacity: 0;
+  transition: opacity 0.12s var(--ease), color 0.12s var(--ease);
+}
+.codeblock:hover .code-copy, .code-copy:focus-visible { opacity: 1; }
+.code-copy:hover { color: var(--text); }
+.md a, .usertext-body a { color: var(--link-prose); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; overflow-wrap: anywhere; }
+.md a:hover, .usertext-body a:hover { text-decoration-color: currentColor; }
+/* Real hierarchy: nothing is squeezing these into a capsule any more. */
+.md h1, .md h2, .md h3, .md h4, .md h5, .md h6 {
+  margin: 24px 0 8px; line-height: var(--lh-title); letter-spacing: var(--ls-title); font-weight: 600;
+}
+.md h1 { font-size: var(--size-title); }
+.md h2 { font-size: var(--size-lead); }
+.md h3, .md h4, .md h5, .md h6 { font-size: var(--size-body); }
+.md ul, .md ol { padding-left: 24px; }
+/* A table is the one thing `overflow-wrap` cannot save: its width comes from
+   its columns, so a six-column table is wider than a phone no matter how the
+   text inside it breaks. It gets its OWN scroll box, so a wide table scrolls
+   as a table instead of dragging the whole transcript with it. Same rule the
+   design notes state for wide content generally. */
+.md-table-wrap { overflow-x: auto; max-width: 100%; margin: 8px 0; }
+.md-table-wrap > table { margin: 0; }
+.md table { border-collapse: collapse; margin: 8px 0; }
+.md td, .md th { border: 1px solid var(--divider); padding: 6px 10px; }
+.md blockquote {
+  border-left: 2px solid var(--divider); margin: 12px 0; padding: 2px 14px; color: var(--text-muted);
+  font-size: var(--size-body); line-height: var(--lh-read);
+}
+
+/* tool / thinking / diff / todos — collapsed to a centered SERVICE PILL
+   opening one expands it into a full-width card with a header strip. `margin: auto` centers the closed
+   fit-content pill in both flex and block parents. */
+details.tool, details.tool-result, details.thinking {
+  width: fit-content; max-width: 88%; margin: 1px auto;
+  border-radius: 999px; background: transparent; overflow: hidden;
+  border: 1px solid transparent;
+}
+details.tool[open], details.tool-result[open], details.thinking[open] {
+  width: 100%; max-width: 940px; margin: 6px auto;
+  border-radius: var(--radius-list); background: var(--surface-raised); border-color: var(--divider);
+}
+/* Which agent starts the session — a two-up segmented control in the composer,
+   quiet enough to ignore when the default is right. */
+.agent-pick { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--surface-sunken); }
+.agent-opt {
+  border: 0; cursor: pointer; padding: 3px 10px; border-radius: var(--radius-sm);
+  font: 500 var(--size-meta)/1.2 var(--sans); color: var(--text-muted); background: transparent;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.agent-opt:hover { color: var(--text); }
+/* A segmented control is «ты здесь», not a chosen menu row: the solid plate
+   made it the darkest object on the start screen, beside a composer whose whole
+   job is to be the subject. */
+.agent-opt.active { background: var(--here); color: var(--text); font-weight: 650; }
+
+/* A folded RUN of machinery: every tool call and command echo between two
+   pieces of prose reads as ONE service row (the iOS chat folds the same way).
+   Same capsule as a single tool, one shade quieter — the run is scaffolding. */
+details.toolrun {
+  width: fit-content; max-width: 88%; margin: 1px 0;
+  border-radius: 999px; background: transparent; overflow: hidden;
+  border: 1px solid transparent;
+}
+/* Closed: a GLYPH AND A NUMBER, at the size of a footnote marker. It used to be
+   a 16px filled square, a count and a `›` chevron on a padded plate — ~57px of
+   furniture riding a prose line, 20px tall, which forced the line box open and
+   left the ragged wide rows the transcript was criticised for. Nothing in that
+   assembly said anything the number does not: the plate, the chevron and the
+   fill were three affordances for one click. What is left is the mark, in the
+   faintest text tone, that lifts to `--text-muted` under the cursor.
+   Open, it becomes the full panel below. */
+details.toolrun:not([open]) {
+  /* The capsule's `overflow: hidden` exists to clip the open panel's corners.
+     Closed, the box is now only as wide as the glyph and the number, and the
+     number is a shrinkable flex item — so hidden overflow sliced the digit down
+     to a sliver that read as a colon. Nothing needs clipping at this size. */
+  overflow: visible;
+}
+details.toolrun:not([open]) > summary {
+  padding: 0; gap: 2px; background: transparent; border-radius: var(--radius-sm);
+}
+details.toolrun:not([open]) > summary:hover { background: transparent; }
+details.toolrun:not([open]) > summary::after { content: none; }
+details.toolrun:not([open]) .tool-sq.run {
+  width: auto; height: auto; border-radius: 0;
+  background: transparent; color: var(--text-faint);
+}
+/* A GLYPH AND A NUMBER, at every width.
+   The 2026-09-17 redesign made the folded run say what it did, in a sentence
+   clipped to the pane. Asked for on 2026-09-18 to go back to the icon «как было
+   в прошлом дизайне», that revert was applied only to a narrow pane, via the
+   container query further down — so the sentence survived on a laptop, in the
+   Windows app and in a wide PWA window, and it read as the change having been
+   undone. It is the default now, and there is no width where the row spells
+   itself out.
+   Nothing is lost: `title` on the `<details>` carries the full label on hover,
+   and opening the capsule shows every call in it. This is machinery, and the
+   brief for machinery is that you skim past it. */
+details.toolrun:not([open]) .tool-line { display: none; }
+details.toolrun:not([open]) .toolrun-count { display: inline; }
+details.toolrun:not([open]) .tool-sq.run { display: inline-flex; }
+details.toolrun:not([open]) > summary { gap: 4px; }
+/* No chevron: the gear IS the marker, and two markers for one row is the thing
+   DESIGN.md settles outright («шеврон уже маркер»). The `›` arrived with the
+   sentence redesign, when the gear had been taken away and the row needed
+   something to start with; the gear is back, so it goes. */
+details.toolrun:not([open]) > summary:hover .tool-line { color: var(--text-muted); }
+details.toolrun[open] .toolrun-count { display: none; }
+/* On the ladder's bottom rung (11px), not below it: at 10.5 in --text-faint the
+   count stopped being a number and became a speck, and a count you cannot read
+   is furniture. Small is the brief; illegible is not. */
+.toolrun-count {
+  flex: 0 0 auto;
+  font-family: var(--mono); font-size: var(--size-micro); font-weight: 600; line-height: 1;
+  color: var(--text-faint); font-variant-numeric: tabular-nums;
+}
+details.toolrun:not([open]) > summary:hover .toolrun-count,
+details.toolrun:not([open]) > summary:hover .tool-sq.run { color: var(--text-muted); }
+details.toolrun[open] {
+  width: 100%; max-width: 940px; margin: 6px auto;
+  border-radius: var(--radius-list); background: var(--surface-raised); border-color: var(--divider);
+}
+.toolrun-body { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; }
+.tool-sq.run { background: var(--text-faint); }
+details summary {
+  cursor: pointer; padding: 4px 14px; color: var(--text-muted); font-size: var(--size-meta); user-select: none;
+  list-style: none; display: flex; gap: 8px; align-items: center; border-radius: 999px;
+  background: var(--surface-sunken); transition: background 0.12s var(--ease);
+}
+details summary:hover { background: var(--surface-hover); color: var(--text); }
+details[open] > summary { border-bottom: 1px solid var(--divider); border-radius: var(--radius-list) var(--radius-list) 0 0; background: var(--surface-sunken); }
+details summary::-webkit-details-marker { display: none; }
+details summary::after { content: "›"; color: var(--text-faint); font-size: var(--size-small); line-height: 1; flex: 0 0 auto; margin-left: auto; }
+details[open] > summary::after { content: "⌄"; }
+/* That chevron belongs to disclosure ROWS — a tool call, a thinking block,
+   «как подключить» — where it is the only thing saying the row opens.
+   `<details>` is also how this app builds its icon MENUS (the ⋯ in a session
+   header, a file row, a project card; «Отправить в сессию»), and there the
+   global rule hung a caret off a 16px glyph: «⋯ ›», shipped and visible on
+   every phone. Every one of those menus carefully suppressed the NATIVE marker
+   and none of them noticed the app was drawing its own.
+   A child combinator and two classes, so nesting a menu inside a tool row
+   cannot resurrect it. */
+.fl-more > summary::after,
+.sts > summary::after,
+.pcp-more > summary::after { content: none; }
+
+/* REDESIGN 2026-09-17 — machinery rows, closed, are LEFT-ALIGNED TEXT LINES.
+   The reference row reads "› Найдено 3 совпадения в 2 файлах": a chevron, then
+   a sentence, flush with the prose it interrupts. What was here was a centered
+   fit-content capsule on a tinted plate — and a capsule floating mid-column is
+   the one shape the canon licenses only to tags and badges (DESIGN.md §3), so
+   this removes a violation rather than adding one. Open state is untouched:
+   expanding still gives the full-width card with its header strip. */
+details.tool:not([open]), details.tool-result:not([open]), details.thinking:not([open]) {
+  width: 100%; max-width: 100%; margin: 1px 0; border-radius: 0;
+}
+details.tool:not([open]) > summary,
+details.tool-result:not([open]) > summary,
+details.thinking:not([open]) > summary {
+  background: transparent; border-radius: 0;
+  padding: 2px 0; gap: 7px;
+  color: var(--text-faint); font-size: var(--size-small);
+}
+details.tool:not([open]) > summary:hover,
+details.tool-result:not([open]) > summary:hover,
+details.thinking:not([open]) > summary:hover {
+  background: transparent; color: var(--text-muted);
+}
+/* The chevron leads the line instead of trailing it — it is the bullet of this
+   row, and a marker at the far right of a variable-width sentence points at
+   nothing. `::after` is what the open state still uses, so it only goes away
+   while closed. */
+details.tool:not([open]) > summary::after,
+details.tool-result:not([open]) > summary::after,
+details.thinking:not([open]) > summary::after { content: none; }
+details.tool:not([open]) > summary::before,
+details.tool-result:not([open]) > summary::before,
+details.thinking:not([open]) > summary::before {
+  content: "›"; flex: 0 0 auto; order: -1;
+  font-size: var(--size-small); line-height: 1; color: var(--text-faint);
+}
+/* 18px colored icon square — the tool's identity inside a service pill.
+   Hues come from the avatar palette; families are mapped in Blocks.tsx. */
+.tool-sq {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: var(--radius-sm);
+  display: inline-grid; place-items: center;
+  color: #fff; font-size: var(--size-nano); font-weight: 600; font-family: var(--sans); line-height: 1;
+  background: var(--text-faint);
+}
+/* three kinds, and each one means something: inspection is safe, action has
+   consequences, error failed. See toolFamily() in render/Blocks.tsx. */
+/* Fixed deep tones in BOTH themes, not --link/--brand: in dark --link IS ember,
+   which would make "inspected" and "changed something" the same colour and throw
+   away the only thing this square is for. Each carries ivory at ≥5:1. */
+.tool-sq.read { background: #0a5a4e; }   /* Read / Grep / Glob / WebFetch — 7.8:1 */
+.tool-sq.act  { background: #b8471f; }   /* Edit / Write / Bash / Task — 5.1:1 */
+.tool-sq.err  { background: var(--red); }
+.tool-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; color: var(--text-muted); font-family: var(--mono); font-size: var(--size-meta); }
+details .code { margin: 0; padding: 10px 12px; background: var(--surface-sunken); overflow: auto; font-size: var(--size-meta); max-height: 360px; font-family: var(--mono); color: var(--text); }
+.tool-result.err summary { color: var(--negative); }
+.tool-result.err summary::before { color: var(--negative); }
+.tool-result.err .tool-tag, .tool-result.err summary > :not(.tool-tag) { color: var(--negative); }
+.thinking summary { color: var(--text-faint); }
+/* Size, family and leading come from the serif rule further down — this one
+   only says where the block sits. Two `font-size` declarations for one class is
+   how it read 12px in the source and 15px on screen. */
+.thinking-body { padding: 10px 12px; color: var(--text-muted); white-space: pre-wrap; }
+.diff { font-family: var(--mono); font-size: var(--size-meta); padding: 10px 12px; background: var(--surface-sunken); overflow: auto; max-height: 360px; }
+.diff .del { color: var(--negative); background: var(--diff-del-bg); }
+.diff .add { color: var(--positive); background: var(--diff-add-bg); }
+.todos { list-style: none; margin: 0; padding: 12px; }
+.todo { display: flex; gap: 10px; padding: 3px 0; font-size: var(--size-small); }
+.todo .mark { width: 1.2em; color: var(--text-faint); }
+.todo.completed { color: var(--text-faint); text-decoration: line-through; } .todo.completed .mark { color: var(--positive); }
+.todo.in_progress { color: var(--orange-text); } .todo.in_progress .mark { color: var(--orange); }
+
+/* composer — a sunken field, canon forms/Input.jsx: no hard border, a hairline
+   inset ring, and on focus a GREEN inset with the EMBER halo around it. It used
+   to be a 22px capsule that lit an ember outline, which put the accent colour
+   on the single most-used control in the product. */
+/* The bottom inset is the composer's own. It belonged to the bottom tab bar
+   once, with the composer sitting on top — but that bar hid itself the moment
+   anyone started typing, which is exactly when the composer becomes the
+   bottom-most element on the screen, and on a notched iPhone the send row then
+   sat under the home indicator. The bar is gone entirely now and the inset is
+   unconditionally ours. `max()` and not a bare `+` so nothing changes on a
+   device with no inset.
+   The inset MINUS 10: it is 34pt on a notched iPhone and the indicator itself
+   is a ~5pt pill sitting ~8pt off the edge, so the full figure buys about ten
+   points of clearance and twenty of empty canvas. That surplus only became
+   visible the day the app took the bottom strip over (black-translucent) and
+   the inset stopped reporting 0 — it reads as the composer having come
+   unstuck from the bottom of the screen. */
+.composer {
+  padding: 12px 16px max(14px, calc(var(--sab) - 10px));
+  /* The same surface as the transcript above it. It was `--surface` (#ffffff)
+     under a `--bg` (#f6f7f6) log, which read as a white slab pasted onto the
+     bottom of the conversation — two backgrounds for one continuous screen.
+     The hairline still says where the reading ends and the writing begins, and
+     the sunken capsule inside is what marks the field. Dark is unaffected:
+     `--bg` and `--surface` are the same ink there. */
+  border-top: 1px solid var(--divider); background: var(--bg);
+}
+/* the capsule follows the transcript's 760px reading column */
+.chat .composer-box { width: 100%; max-width: 760px; margin: 0 auto; }
+/* The plan-limit strip on top of the capsule (RateLimitBanner) — VS Code's
+   «You've used 76% of your weekly limit · resets in 2d ×». The attention tint,
+   not a card: it is a notice about the field under it, in its column. A spent
+   window takes the full ember plate (ink on it — ivory is 2.7:1). */
+.rl-banner {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; max-width: 760px; margin: 0 auto 8px;
+  padding: 6px 6px 6px 12px; border-radius: var(--radius-md);
+  background: var(--attn-soft); color: var(--text);
+  font-size: var(--size-small); line-height: 1.5;
+}
+.rl-banner.spent { background: var(--attn); color: var(--on-attn); }
+.rl-banner-text { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+.rl-banner-x {
+  flex: none; display: grid; place-items: center; width: 28px; height: 28px;
+  border: none; border-radius: var(--radius-sm); background: none; color: inherit;
+  opacity: 0.72; cursor: pointer;
+}
+.rl-banner-x:hover { opacity: 1; background: var(--surface-hover); }
+.rl-banner-x:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.composer-box {
+  display: flex; flex-direction: column; background: var(--surface-sunken);
+  border: none; border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--divider);
+  transition: box-shadow var(--dur-fast) var(--ease);
+}
+/* The green hairline alone. The 3px ember halo that used to sit outside it is
+   gone: on every other control the focus ring is a small thing catching the
+   eye, but the composer is the widest object on a phone and the halo drew an
+   orange frame around half the screen for as long as the field was focused —
+   which, on a phone, is most of a session. The inner ring still says
+   "focused", in the action colour, and it is the only focus indicator this
+   control ever needed. */
+.composer-box:focus-within {
+  box-shadow: inset 0 0 0 1.5px var(--action);
+}
+.composer textarea {
+  /* `flex: 0 0 auto`, NOT `flex: 1`. `.composer-box` is a column flex
+     container, where `flex-basis: 0%` (what the `1` shorthand means) replaces
+     the height property outright — so the height useAutoGrowTextarea computes
+     was being ignored and the field stayed one line tall no matter how much you
+     typed. That, plus the scroll reset the hook now guards, is the whole
+     "текст съезжает и исчезает".
+     40vh must match the ratio passed to the hook in Chat.tsx: this rule is what
+     actually clips, so a taller JS height would still be invisible.
+
+     The scrollbar is hidden, not the overflow: `overflow-y: auto` still has to
+     scroll once a long draft hits the 40vh clip, but the bar it draws sat at
+     the field's right edge — a stray vertical rule between the placeholder and
+     the microphone, visible on an EMPTY composer because the auto-grow hook
+     rounds `scrollHeight` a hair above the height it sets. It read as a
+     deliberate divider, which is what it was reported as. Nothing is lost by
+     hiding it: the hook keeps the caret in view (`composer.tsx` scroll guard),
+     and the field is four lines tall before it can scroll at all. */
+  flex: 0 0 auto; resize: none; min-height: 44px; max-height: 40vh; overflow-y: auto;
+  scrollbar-width: none;
+  background: transparent; color: var(--text);
+  border: none; padding: 11px 13px 4px; font-size: var(--size-body); line-height: 1.5;
+}
+/* `scrollbar-width` is the standard property; WebKit still needs its own. */
+.composer textarea::-webkit-scrollbar { width: 0; height: 0; }
+.composer textarea::placeholder { color: var(--text-faint); }
+.composer textarea:focus { outline: none; }
+.composer textarea:disabled { opacity: 0.55; }
+.composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px 8px 13px; }
+.composer-hint { font-size: var(--size-micro); color: var(--text-faint); }
+/* REDESIGN 2026-09-17 — the line under the box: what the session is spending
+   (left) and how to send (right). Both used to live INSIDE the button row,
+   where they competed with five controls for the narrowest strip in a pane;
+   the hint additionally only appeared while the run was detached, so the
+   keybinding was invisible exactly when you were typing into a live run.
+   Follows the same 760px measure as the box so the two edges line up. */
+.composer-foot {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; max-width: 760px; margin: 0 auto;
+  padding: 6px 4px 0; min-height: 1.4em;
+}
+/* The hint takes the far edge; everything before it clusters at the left. */
+.composer-foot .composer-hint { margin-left: auto; flex: 0 0 auto; }
+/* A session command: quiet, but READABLE. These were `.ctool.ghost` in the
+   button row — faint enough to miss, crowded enough to hit by accident. Here
+   they are plain text at the muted tier (≥4.5:1), and the underline on hover is
+   what says "this does something" without spending a plate on it. */
+/* «Сжать контекст» is a BUTTON now, modestly. It was ghost text that hovered
+   into an underline, which is a link, and a link is the one thing it is not —
+   it performs an irreversible rewrite of the session's history. Named in full
+   for the same reason: «Сжать» alone does not say what gets compressed.
+   Deliberately small: it sits under the composer next to the context meter,
+   which is the number that sends you looking for it, and it must not compete
+   with the send button for the eye. */
+.foot-btn {
+  flex: 0 0 auto; cursor: pointer; border: none;
+  padding: 4px 9px; border-radius: var(--radius-sm);
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--divider);
+  font-family: var(--sans); font-size: var(--size-micro); font-weight: 500;
+  color: var(--text-muted); white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.foot-btn:hover { background: var(--surface-hover); color: var(--text); }
+.foot-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* run controls folded into the composer (model / mode / effort / close) */
+/* NO `overflow: hidden` here, and that is not tidying — it is the bug.
+   This row used to hold three `<select>`s, which clip themselves, so hiding the
+   overflow was free. It holds a popover TRIGGER now, and `.run-pick-pop` opens
+   UPWARD out of this 30px-tall box: the clip removed it entirely. The control
+   opened onto nothing and could not even be tapped — «выбор модели не
+   работает», reported from a phone, and true on every screen.
+   The row still cannot push the composer wider: `min-width: 0` here plus
+   `text-overflow: ellipsis` on `.rp-model` is what shortens a long model name,
+   and that is where the truncation belongs — on the text, not on a box that
+   also contains a menu. */
+.composer-tools { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+/* The run controls. 12.5px and not 11.5: the model is the one setting people
+   actually read before sending, and at 11.5 it was the smallest type in the
+   composer — below the send hint under it. `max-width` is per-control now (see
+   below) rather than one cap for all three. */
+.ctool {
+  background: var(--chip); color: var(--text-muted); border: 1px solid transparent;
+  border-radius: 999px; padding: 4px 10px; font-size: var(--size-small); max-width: 17ch;
+}
+/* Model + effort as one control. A BUTTON, which is the whole point: a focused
+   `<select>` under 16px makes iOS zoom the page and never zoom back, so the two
+   selects this replaces had to be set larger than the message text above them.
+   Nothing focuses a button for text entry, so this can be the footnote size the
+   pair deserves. */
+.run-pick-wrap { position: relative; display: flex; min-width: 0; }
+/* A CONTROL, with edges — not a styled label.
+   This was `background: none; border: none`, so the only thing saying "you can
+   press me" was that the model name happened to be bold. The reference puts a
+   filled, outlined chip in this slot, and the difference is the whole point:
+   a bounded shape reads as pressable from across the room, bold text reads as
+   emphasis. Reported as exactly that — «ты просто жирным сделал название
+   модели, а не сам пикер».
+   A rounded RECTANGLE and not the reference's pill: DESIGN.md keeps 999 for
+   tags, badges and active filter chips, and this is none of those. */
+.run-pick {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%;
+  /* NO fill. The edges are the affordance; a `--surface` fill made a WHITE card
+     sitting on the composer's sunken well, which is the one place in the
+     product where white is not the background — so the chip read as a
+     foreign object rather than a control in the row. The outline alone says
+     "pressable" and costs nothing. */
+  background: none; border: none; padding: 5px 9px;
+  border-radius: var(--radius-md); box-shadow: inset 0 0 0 1px var(--divider);
+  font-size: var(--size-meta); line-height: 1.2; color: var(--text-muted); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.run-pick:hover { background: var(--surface-hover); color: var(--text); }
+/* Open is a STATE, and it gets the brand hairline rather than a fill: the
+   popover it belongs to is already a large lit surface, and two filled shapes
+   stacked read as two controls. */
+.run-pick.on {
+  background: var(--surface-hover); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+/* The model is the half worth reading; the effort qualifies it. Same size, one
+   tone apart — the reference sets them the same way. */
+.rp-model { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-effort { flex: 0 0 auto; color: var(--text-muted); }
+/* The effort goes only when the pane has no room for it (10.10.2026, by
+   request): judged by the chat's own width, not by how many columns there
+   are — a wide column keeps «Opus 5.5 Высокое», a ~350px one, where the effort
+   ate the room and the model got truncated, shows the model alone. The level
+   is one click away, in the picker's own head. */
+/* 14.10.2026: a narrow pane no longer loses the level — it shows the short
+   form («Opus 5.5 высокое»). Four ~390px columns had half the row empty while
+   the effort was hidden («эффорт в таком варианте можно вернуть»). Only a
+   pane too narrow for even that (<320px) shows the model alone. */
+.rp-effort-short { flex: 0 0 auto; color: var(--text-muted); display: none; }
+@container chat (max-width: 460px) { .rp-effort { display: none; } .rp-effort-short { display: inline; } }
+@container chat (max-width: 320px) { .rp-effort-short { display: none; } }
+/* The start screen's picker sits in the `start` container, not `chat`. */
+@container start (max-width: 460px) { .rp-effort { display: none; } .rp-effort-short { display: inline; } }
+@container start (max-width: 320px) { .rp-effort-short { display: none; } }
+.run-pick > svg { flex: 0 0 auto; color: var(--text-faint); }
+
+/* `bottom` and `max-height` here are the OPENING PREFERENCE, not the placement:
+   RunPicker's layout effect overwrites both from the room the trigger actually
+   has, and flips the panel below the trigger when above cannot hold it.
+   Why it must: this opens upward out of a composer, and on the start screen
+   that composer is a hero near the top of its own scroller — the panel landed
+   85px above the scroller's edge, which clipped the model row and the effort
+   ladder out of existence and out of reach of a pointer. `60vh` was no defence:
+   a viewport fraction says nothing about the gap above one control. */
+.run-pick-pop {
+  position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 60;
+  min-width: 232px; max-width: min(300px, 82vw); max-height: 60vh; overflow-y: auto;
+  padding: 6px; border-radius: var(--radius-lg);
+  background: var(--surface-raised); box-shadow: var(--shadow-lg), var(--rim);
+}
+.rp-section {
+  padding: 7px 8px 4px; font-family: var(--mono); font-size: var(--size-micro); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+}
+.rp-row {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left;
+  padding: 7px 8px; border: none; background: none; border-radius: var(--radius-sm);
+  font-size: var(--size-small); color: var(--text); cursor: pointer;
+}
+.rp-row:hover { background: var(--surface-hover); }
+/* The solid plate for what is selected — `--select`, never `--action`. */
+.rp-row.on { background: var(--select); color: var(--on-select); }
+.rp-row.on .rp-note { color: var(--on-select); opacity: 0.72; }
+.rp-note { margin-left: auto; font-size: var(--size-micro); color: var(--text-faint); white-space: nowrap; }

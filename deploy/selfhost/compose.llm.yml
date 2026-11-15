@@ -1,0 +1,53 @@
+# Optional LLM gateway next to the hub. Turned on and managed by ./llm.sh,
+# which writes everything this file expects (secrets in .env, configs under
+# ./llm) and adds it to COMPOSE_FILE in .env - do not start it by hand.
+#
+#   Bifrost       one OpenAI-compatible endpoint for every model, a key per
+#                 person (hegai:<email>), limits and the «Расходы» numbers.
+#                 Members reach it at https://<HEGAI_DOMAIN>/llm/v1 (Caddy).
+#   CLIProxyAPI   one container per subscription account (./llm.sh
+#                 add-account), each a separate Bifrost pool «pool-<name>».
+#                 Listed in llm/compose.accounts.yml, which llm.sh generates.
+#
+# Bifrost's admin API (keys, providers, logs) is password-protected
+# (auth_config) and reachable only from the compose network: the hub uses it
+# through LLM_GATEWAY_URL, Caddy publishes nothing but /llm/v1/*.
+services:
+  bifrost:
+    image: maximhq/bifrost:v2.2.3@sha256:975487b95c6399de26e3a108164f21ae52687b316580a13ff0c239b865649ed2
+    restart: unless-stopped
+    environment:
+      APP_PORT: "8080"
+      APP_HOST: 0.0.0.0
+      # Read by llm/bifrost/config.json (auth_config: env.*) on first start.
+      BIFROST_ADMIN_USER: ${LLM_ADMIN_USER:?run ./llm.sh enable}
+      BIFROST_ADMIN_PASSWORD: ${LLM_ADMIN_PASSWORD:?run ./llm.sh enable}
+    volumes:
+      # config.db (providers, keys, people's keys), logs.db (metrics only:
+      # content logging is off). Owned by uid 1000, the image's user.
+      - ./llm/bifrost:/app/data
+    # Not on `edge`: the hub trusts X-Real-IP from that whole subnet, and only
+    # Caddy belongs there. llm-admin: the hub (admin API). llm-public: Caddy
+    # (/llm/v1). llm: the CLIProxyAPI containers, which nothing else reaches.
+    # Caddy and the hub share no network but `edge`, so the hub keeps seeing
+    # Caddy's address from the trusted range.
+    networks: [llm-admin, llm-public, llm]
+    expose: ["8080"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: ${HEGAI_LLM_MEM:-2g}
+    pids_limit: 512
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  hub:
+    networks: [edge, llm-admin]
+
+  caddy:
+    networks: [edge, llm-public]
+
+networks:
+  llm: {}
+  llm-admin: {}
+  llm-public: {}

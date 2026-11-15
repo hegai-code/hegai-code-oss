@@ -1,0 +1,53 @@
+node_modules/
+dist/
+target/
+*.tsbuildinfo
+.env
+.env.local
+*.log
+.DS_Store
+# Local session state (todos, shell snapshots, settings.local.json, worktrees)
+# stays out. The three deliberate things do not: a skill, its hooks and the
+# settings that register them are part of how this repo is worked on, and a copy
+# that lives on one machine is a copy nobody else gets.
+.claude/*
+!.claude/skills/
+!.claude/hooks/
+!.claude/settings.json
+!.claude/agents/
+!.claude/rules/
+
+# local agent run logs (buildbox-pc runs the agent from the repo)
+agent-local.log
+agent-local.err.log
+# `npm run shot --workspace web` — screenshots of screens, for looking at
+web/.shots/
+server-rs/cc-remote-server-musl
+# Docker musl cross-build output dir (deploy binary is built here, not committed)
+server-rs/target-musl/
+.gstack/
+
+# Канал передачи кадров владельцу: /tmp файловый канал хаба не пускает,
+# поэтому копии кладутся сюда. Картинки, не исходники — в историю не идут.
+.shots-xfer/
+
+# Ключ подписи обновлений Tauri. Публичная половина вкомпилирована в каждый
+# установленный клиент; приватная — единственное, что решает, ЧТО эти клиенты
+# примут за обновление. Копия в репозитории = компрометация всего парка, и
+# `git rm` её не отменяет: история остаётся, и GitHub хранит историю.
+# Настоящий дом ключа — ~/.tauri на двух сборочных машинах (deploy/FLEET.md).
+# Эти строки лишь делают случайность громкой, а не тихой.
+.tauri/
+*updater*.key
+*.minisig
+
+# Python bytecode from deploy/*.py tests and importlib shims — never a source.
+__pycache__/
+*.pyc
+
+# External edition: built and signed at release time (deploy/release-signer/), never tracked.
+deploy/agent-external.mjs
+deploy/agent-external.mjs.release
+deploy/agent-external.mjs.sig
+# Self-host LLM gateway state: subscription OAuth tokens, Bifrost database (./llm.sh).
+deploy/selfhost/llm/

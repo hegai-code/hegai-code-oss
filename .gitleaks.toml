@@ -1,0 +1,28 @@
+# gitleaks config of this repository (CI: `gitleaks dir . --config .gitleaks.toml`). The masker fixtures
+# under agent/test/ are not skipped as whole files: only their exact fake values pass, so anything else
+# written into those files is still found.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "smoke-harness placeholders and the masker fixtures' exact fake values"
+regexes = [
+  '''(smoke-sso|smoke-signin|signin|smoke-tg-login)-secret-0123456789-[0-9]+''',
+  '''smoke-fleet-token-0123456789-[0-9]+''',
+  '''smoke-fleet-key-(holder|sandbox|other)-0123456789-[0-9]+''',
+  '''smoke-llm-key-0123456789-[0-9]+''',
+  '''^dev-token$''',
+  '''^AKIA[A]BCDEFGHIJKLMNOP$''',
+  '''^ghp[_]abcdefghijklmnopqrstuvwxyz0123$''',
+  '''^sk[-]ant-api03-AAAAAAAAAAAAAAAAAAAA$''',
+  '''^sk[-]learn-something-longer-than-twenty$''',
+  '''^a1b2c3d4e5f6$''',
+  '''^k3y-9f8e7d6c5b4a$''',
+  '''^7f3a9c2e1b4d$''',
+  '''^Abc123Def456$''',
+  '''^abc\.DEF123\.ghi$''',
+  '''^-----BEGIN[ ]OPENSSH PRIVATE KEY-----\\nb3BlbnNzaC1rZXktdjEAAAAA\\n-----END[ ]OPENSSH( PRIVATE KEY-----| )?$''',
+  '''^sk[_]live_51HxYzAbCdEf1234567890$''',
+  '''^-----BEGIN[ ]OPENSSH PRIVATE KEY-----‹masked›-----END[ ]OPENSSH PRIVATE KEY-----$''',
+]
+paths = ['''node_modules/''']

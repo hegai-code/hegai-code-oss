@@ -1,0 +1,35 @@
+{
+  "name": "@cc-remote/agent",
+  "version": "0.3.7",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "cc-remote-agent": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --import ./test/setup-state-dir.ts --test test/*.test.ts",
+    "gen:skills": "node scripts/gen-skills-bundle.mjs",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "scan": "tsx src/cli/scan.ts",
+    "orphans": "tsx src/cli/orphans.ts",
+    "profile": "tsx src/cli/profile.ts",
+    "journal": "tsx src/cli/journal.ts",
+    "resume-test": "tsx src/cli/resume-test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.220",
+    "@cc-remote/shared": "*",
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "chokidar": "^4.0.1",
+    "ws": "^8.18.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "@types/ws": "^8.5.12",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

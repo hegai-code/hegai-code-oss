@@ -1,0 +1,20 @@
+[Unit]
+Description=cc-remote agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/cc-remote-agent
+# Defaults first; agent.env (written by deploy-server.sh) overrides them —
+# systemd applies assignments in order, so EnvironmentFile must come last.
+Environment=CENTRAL_URL=wss://code.acme.test
+Environment=CC_REMOTE_TOKEN=dev-token
+EnvironmentFile=-/home/cc-remote-agent/agent.env
+# login shell so an nvm-installed node is found on PATH
+ExecStart=/bin/bash -lc 'exec node /home/cc-remote-agent/agent.mjs'
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

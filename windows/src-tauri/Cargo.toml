@@ -1,0 +1,103 @@
+[package]
+name = "hegai-code"
+version = "0.1.28"
+description = "Hegai Code — пульт для сессий Claude Code и Codex, десктопный клиент (Windows, macOS)"
+authors = ["Hegai"]
+edition = "2021"
+rust-version = "1.77"
+
+# The binary is `hegai-code.exe`; the user-facing name lives in tauri.conf.json
+# (`productName`), which is what the Start menu and the taskbar show.
+[[bin]]
+name = "hegai-code"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+# Second launch must raise the running window rather than open a rival one: two
+# shells would mean two tray icons and, later, two agent supervisors.
+tauri-plugin-single-instance = "2"
+# Window geometry across restarts. A control plane is a window you park on a
+# second monitor and leave there.
+tauri-plugin-window-state = "2"
+# Opens a URL in the SYSTEM browser — the escape hatch for links that must not
+# hijack the app window (see `is_app_url` in main.rs).
+tauri-plugin-opener = "2"
+# Native toasts. The wire's push platform enum knows `ios` only
+# (shared/src/web-protocol.ts:277-281), so Windows notifies LOCALLY from the
+# running app instead — no protocol change, and the tray socket is already open.
+# Kept as the FALLBACK path now that toasts are clickable (see below): if the
+# WinRT call is refused for any reason, a notification with no click still beats
+# no notification.
+tauri-plugin-notification = "2"
+# In-app updates. The shell is the ONLY part of this product that does not ship
+# itself: the window renders code.acme.test, so the interface arrives with every
+# web deploy, and until now a fix in this crate reached nobody until a person
+# re-ran the install one-liner by hand.
+#
+# `default-features = false` drops two of the three defaults:
+#   * `rustls-tls` -> `native-tls`. reqwest is ALREADY in the lock (tauri pulls
+#     it) and native-tls is ALREADY in the lock (tokio-tungstenite, just above),
+#     so this feature costs nothing and unifies onto one TLS stack. rustls would
+#     add `ring` — C and assembly — to a cargo-xwin cross-build driven by a
+#     hand-symlinked clang-cl, which is exactly where a new C dependency fails
+#     late and unhelpfully.
+#   * `zip` is for Tauri v1-style ZIPPED updater bundles. With
+#     `createUpdaterArtifacts: true` the Windows payload is the raw NSIS .exe.
+#     Dropping it does NOT break macOS: `tar` and `flate2` are UNCONDITIONAL
+#     target dependencies of the plugin, not part of this feature.
+# `system-proxy` goes too: nothing else here honours a proxy (the hub socket and
+# offline.rs both open raw sockets), so the fleet demonstrably is not behind one.
+tauri-plugin-updater = { version = "2.12", default-features = false, features = ["native-tls"] }
+# The app's own HTTP: minting the enrollment code and fetching the installer
+# (enroll.rs). Same TLS choice as the updater, for the same cross-build reason.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+# The tray's own connection to the hub. `native-tls` means schannel here, so no
+# vendored OpenSSL and no bundled root store to go stale.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+
+# A toast you can CLICK. `tauri-plugin-notification` builds on this crate but
+# exposes only title/body/icon — there is no way to attach an activation
+# handler through it, and a notification that opens nothing is the complaint
+# this whole path had. Same crate the plugin already pulls in, so it is a
+# direct dependency on something that was in the tree either way, not a new one.
+#
+# `sysinfo` is here for the same reason: it is process inspection for the agent
+# supervisor, and the supervisor is Windows-only (see `mod agent` in main.rs).
+# Needed for the COMMAND LINE, not just the name — half a dozen unrelated
+# node.exe run on a dev box, and the only thing that says which one is the agent
+# is the script path it was given.
+[target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.7"
+# Only to clear this app's toasts from the Action Center once the window is in
+# front of the person (`clear_toasts`, src/hub/mod.rs) — the crate above sets no
+# tag, so there is no per-toast handle to withdraw. Same version and the same
+# feature the crate above already compiles in, so nothing new is built.
+# `Win32_UI_WindowsAndMessaging`: `MessageBoxW`, the shell-drawn confirmation
+# behind the page menu's «Выход» and «Установить обновление» (appmenu.rs).
+windows = { version = "0.61", features = ["UI_Notifications", "Win32_UI_WindowsAndMessaging"] }
+sysinfo = { version = "0.32", default-features = false, features = ["system"] }
+
+[features]
+# Tauri's own; kept so `cargo build --features custom-protocol` matches the docs.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+# The installer travels as a chat link, so size is a feature. These four settings
+# take the binary down by roughly half at the cost of build time.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[dev-dependencies]
+tempfile = "3"

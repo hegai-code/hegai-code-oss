@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Which of the hub's two shells this document is. The deploy script and
+         the smoke read it to prove that the Host picked the right bundle
+         (server-rs `StaticSites`); nothing in the page depends on it. -->
+    <meta name="hegai-shell" content="lite" />
+    <!-- `interactive-widget=resizes-content`: the software keyboard shrinks the
+         layout viewport, so the composer stays above it (see web/index.html). -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#f6f7f6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181a1b" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>Hegai Code</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Hegai" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- The theme, before first paint — the same rule and the same key as the
+         full client (web/index.html), so a choice made there on this origin's
+         own storage is honoured. The shell has no theme control of its own;
+         `system` is the default here, since nobody was asked. -->
+    <script>
+      (function () {
+        var p = localStorage.getItem('cc-theme') || 'system';
+        var t = p === 'system'
+          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : (p === 'dark' || p === 'vscode' ? p : 'light');
+        document.documentElement.dataset.theme = t;
+        var bg = t === 'dark' ? '#181a1b' : t === 'vscode' ? '#fdf6e3' : '#f6f7f6';
+        var old = document.querySelectorAll('meta[name="theme-color"]');
+        for (var i = 0; i < old.length; i++) old[i].remove();
+        var m = document.createElement('meta');
+        m.name = 'theme-color';
+        m.content = bg;
+        document.head.appendChild(m);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

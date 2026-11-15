@@ -1,0 +1,278 @@
+/* 10-columns — buttons, the board stub, the multi-session columns grid, attachments on a live turn. */
+
+/* ---------- buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+  background: var(--chip); color: var(--text); border: 1px solid transparent; border-radius: var(--radius-md);
+  min-height: 36px; padding: 8px 16px; font-size: var(--size-small); font-weight: 500;
+  /* An <a class="btn"> is a button, and a button is never underlined. Without
+     this every such link had to patch itself — .auth-login does — and the ones
+     that forgot rendered as underlined text inside a filled plate. */
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--border); }
+.btn:disabled { opacity: 0.38; cursor: default; }
+.btn.primary { background: var(--action); border-color: var(--action); color: var(--on-action); }
+.btn.primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
+.btn.danger { background: var(--red); border-color: var(--red); color: var(--text-on-color); }
+.btn.danger:hover:not(:disabled) { background: var(--danger-hover); border-color: var(--danger-hover); }
+/* Quiet danger: the action is available, but it is not the thing to press. Text in --red, no fill. */
+.btn.danger.quiet { background: transparent; border-color: transparent; color: var(--red); }
+.btn.danger.quiet:hover:not(:disabled) { background: var(--surface-hover); border-color: transparent; color: var(--red); }
+.link { background: none; border: none; color: var(--link); font-size: var(--size-meta); font-weight: 600; }
+
+/* Shared disclosure chevron used by project/session group rows. */
+.tw { display: inline-block; width: 14px; color: var(--text-faint); }
+
+/* ============================ board ============================ */
+.board { flex: 1; min-width: 0; overflow: auto; padding: 24px; }
+.board-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; color: var(--text); }
+.board-head h2 { font-family: var(--title); margin: 0; font-size: var(--size-title); font-weight: 700; letter-spacing: -0.3px; }
+.board-head .sub { color: var(--text-faint); font-size: var(--size-small); }
+
+/* Отчёты (04.10.2026): a list of published pages and one page full-size in a
+   sandboxed iframe. The list reuses the board's head; rows are cards. */
+.rep-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); max-width: var(--chat-measure); }
+.rep-row { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm), var(--rim); color: var(--text); text-decoration: none; }
+.rep-row:hover { background: var(--surface-hover); }
+.rep-title { font-size: var(--size-card); font-weight: 600; line-height: 1.2; }
+.rep-desc { font-size: var(--size-small); color: var(--text-muted); line-height: 1.5; }
+.rep-meta { font-size: var(--size-meta); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.rep-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-3); max-width: var(--chat-measure); }
+.rep-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--text-muted); font: inherit; font-size: var(--size-small); cursor: pointer; }
+.rep-chip:hover { background: var(--surface-hover); color: var(--text); }
+.rep-chip.on { background: var(--action); border-color: var(--action); color: var(--bg); }
+.rep-chip-n { font-size: var(--size-meta); font-variant-numeric: tabular-nums; opacity: .7; }
+.rep-chip:focus-visible, .rep-menu-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.rep-group { margin-bottom: var(--space-4); }
+.rep-group-title { margin: 0 0 var(--space-2); font-size: var(--size-meta); font-weight: 600; color: var(--text-faint); text-transform: none; }
+.rep-folder { position: relative; display: inline-flex; }
+.rep-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 40; min-width: 200px; max-width: min(280px, calc(100vw - 2 * var(--space-2))); max-height: 60vh; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-lg), var(--rim); }
+.rep-menu-item { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 36px; padding: 0 10px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit; font-size: var(--size-small); text-align: left; cursor: pointer; }
+.rep-menu-item:hover { background: var(--surface-hover); }
+.rep-menu-item.new { justify-content: flex-start; color: var(--text-muted); border-top: 1px solid var(--divider); border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+.rep-menu-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 860px) { .rep-menu-item { min-height: 44px; } .rep-chip { min-height: 36px; } }
+.rep-view { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.rep-head { margin: 0; padding: 8px var(--pane-inset); border-bottom: 1px solid var(--divider); }
+.rep-head .rep-view-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--size-card); }
+.rep-head .sub { white-space: nowrap; }
+.rep-spacer { flex: 1; }
+.rep-toast { padding: 4px var(--pane-inset); font-size: var(--size-meta); color: var(--text-muted); }
+/* Light in any theme (20.10.2026, by request): reports are read as documents,
+   and their `prefers-color-scheme` follows the frame's colour scheme. */
+.rep-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--bg); color-scheme: light; }
+.rep-view > .pj-error { margin: var(--space-3) var(--pane-inset); }
+@media (max-width: 860px) { .rep-head .sub { display: none; } .rep-head { gap: 4px; } .rep-head .icon-btn { min-width: 44px; min-height: 44px; } }
+/* One bar on an open report (20.10.2026, by request): on a phone the floating
+   top bar (☰ + limits), `.main`'s 56px clearance under it and the report's own
+   head stacked ~170px of chrome over the page. The report does what the session
+   view does: it hides the shell bar and its own 44px head takes the notch. ←
+   goes to the list, which keeps the ☰. Not in the desktop shell, where that bar
+   is also the window's title bar (`.topbar.titlebar`). */
+@media (max-width: 860px) {
+  .app:has(.rep-view):not(:has(> .topbar.titlebar)) > .topbar { display: none; }
+  .app:has(.rep-view):not(:has(> .topbar.titlebar)) .main .rep-view { padding-top: 0; }
+  .app:has(.rep-view):not(:has(> .topbar.titlebar)) .rep-head { padding: var(--sat) var(--space-2) 0; background: var(--bg); }
+}
+/* `.board-cols`, `.board-col*`, `.board-card*` and the whole Flow kanban went
+   with the screens that drew them — Доска, Таблица and Flow were three readings
+   of the list the side panel now shows on every screen. `.board`, `.board-head`
+   and `.board-filter` stay: Профиль, Память, Железо and «Как начать» all name
+   themselves with the head, and it is a page heading, not a board.
+   The stage tokens (`--stage-*`) stay too. The FIELD is still written — closing
+   a session sets `stage: done` and the iPhone's Flow lens still draws the whole
+   ladder from it. */
+
+/* ============================ columns (multi-session grid) ============================ */
+.columns-view { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.btn.sm { padding: 5px 10px; font-size: var(--size-meta); }
+/* `.cv-*` — the «Наборы» popover and the add-session picker — are gone with
+   the mechanisms they drew. A pane joins the split from the session list's own
+   right-click menu (`.ctxmenu`), so there is no second list of sessions here to
+   style, and no saved-layout state to show. */
+
+/* 14px, matching `.workspace`'s own margin — see the alignment note on
+   `.sc-col-head`. */
+.session-columns { flex: 1; min-width: 0; display: flex; gap: 12px; padding: 14px; overflow-x: auto; overflow-y: hidden; align-items: stretch; }
+.session-col {
+  /* No max-width: a capped pane left most of the screen as empty canvas — worst
+     with the single pane "Открыть рядом" lands you on. Long lines are not a
+     risk here; the transcript keeps its own centred reading measure inside. */
+  /* REDESIGN 2026-09-17 — four panes is the case this lens is FOR (the router
+     caps at COL_MAX = 4), and the old 340px floor did not admit four at 1440.
+     The arithmetic: 1440 − 68 rail = 1372 for the strip, − 24 its padding, − 36
+     for three 12px gaps = 1312 to divide, which is 328 a pane. Against a 340
+     floor the row overflowed instead, and `.session-columns` scrolls — so on the
+     most common laptop width the fourth pane sat off the edge of the one screen
+     that exists to show four. 300 is the floor that admits them; measured. */
+  /* Zero basis, so a pane's width IS its share: `flex-grow` is set inline by
+     SessionColumns when the handle between two panes is dragged (1 = equal). */
+  flex: 1 1 0; min-width: 300px; display: flex; flex-direction: column; min-height: 0;
+  border: 1px solid var(--divider); border-radius: var(--radius-list); background: var(--bg); overflow: hidden; box-shadow: var(--shadow-xs);
+}
+.session-col > .chat { flex: 1; min-height: 0; }
+/* The handle in the 12px gap between two panes. It is itself a 12px flex item
+   with −12px margins, so it adds nothing to the row: the gap either side of it
+   collapses onto it, and it covers exactly the space between the panes. The
+   line inside shows on hover and while dragging. */
+.col-resize {
+  position: relative; flex: 0 0 12px; margin: 0 -12px; align-self: stretch;
+  cursor: col-resize; touch-action: none; z-index: 2;
+}
+.col-resize::after {
+  content: ''; position: absolute; top: 12px; bottom: 12px; left: 5px; width: 2px; border-radius: 1px;
+  background: var(--focus-ring); opacity: 0; transition: opacity var(--dur-fast) var(--ease);
+}
+.col-resize:hover::after, .session-columns.resizing .col-resize::after { opacity: 0.8; }
+/* While dragging: no text selection under the pointer, and the resize cursor
+   everywhere — the pointer leaves the thin handle long before the drag ends. */
+.session-columns.resizing { cursor: col-resize; user-select: none; }
+.session-columns.resizing * { cursor: col-resize !important; }
+.session-columns.resizing iframe { pointer-events: none; }
+/* A narrow window: the split as TABS over one pane (SessionColumns `stacked`).
+   The tabs are a scrolling row of chips — title, ✕ — and the pane in front
+   takes the rest edge to edge, like a session opened on its own. */
+.session-columns.stacked { flex-direction: column; gap: 0; padding: 0; overflow: hidden; }
+.session-columns.stacked > .session-col {
+  flex: 1 1 auto; min-width: 0; min-height: 0; border: none; border-radius: 0; box-shadow: none;
+}
+.cols-tabs {
+  flex: 0 0 auto; display: flex; gap: 6px; padding: 8px 12px; overflow-x: auto;
+  scrollbar-width: none; border-bottom: 1px solid var(--divider); background: var(--surface);
+}
+.cols-tabs::-webkit-scrollbar { display: none; }
+.cols-tab {
+  flex: 0 0 auto; display: flex; align-items: center; max-width: 220px;
+  border: 1px solid var(--divider); border-radius: var(--radius-sm); background: var(--bg);
+}
+.cols-tab.on { background: var(--here); border-color: transparent; }
+.cols-tab-main {
+  display: flex; align-items: center; gap: 5px; min-width: 0; padding: 6px 4px 6px 10px;
+  border: none; background: none; color: var(--text-muted); font: inherit; font-size: var(--size-small); cursor: pointer;
+}
+.cols-tab.on .cols-tab-main { color: var(--text); font-weight: 600; }
+.cols-tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cols-tab-x {
+  display: grid; place-items: center; width: 26px; height: 28px; padding: 0;
+  border: none; background: none; color: var(--text-faint); cursor: pointer; border-radius: var(--radius-sm);
+}
+.cols-tab-x:hover { color: var(--text); }
+.cols-tab-main:focus-visible, .cols-tab-x:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+/* The head is the pane's HANDLE: panes are reordered by dragging it. The pane
+   itself is never draggable — that would swallow every text selection in the
+   transcript. `grab` is the affordance; nothing else in the app grabs. */
+/* The padding is 10px, not 8, and `.sc-col-title` below is 4px, not 2 — they
+   are copied from `.ws-head` and `.ws-title` on purpose.
+   The same session drawn as a pane used to sit SIX PIXELS higher than drawn as
+   the full workspace: 12 + 8 + 2 against 14 + 10 + 4. Nothing about a split is
+   supposed to move the conversation, and the two are one keystroke apart, so
+   the jump was visible every time. Three numbers, one sum: 84 from the top of
+   the main column in both. Change one and change all three. */
+.sc-col-head { display: flex; align-items: center; gap: 9px; padding: 10px 8px 10px 12px; border-bottom: 1px solid var(--divider); background: var(--surface); cursor: grab; }
+.sc-col-head:active { cursor: grabbing; }
+/* The pane being carried goes quiet; the one under the cursor wears a rim in
+   the focus colour to say "this is the place you are taking" — the carried pane
+   lands at that index and the rest shift along. */
+.session-col.dragging { opacity: 0.55; }
+/* The focused pane — where a session, a destination or «Новый чат» chosen
+   outside the split opens. «You are here», so `--here` on its head (DESIGN.md:
+   the navigational tint whose children keep their own colour); no new hue. */
+.session-col.focused > .sc-col-head { background: var(--here); }
+/* A pane that shows a screen rather than a session: that screen scrolls itself
+   under `.main`'s flex contract, so the body IS a `.main` (class on the node),
+   sized to what the head leaves. */
+.session-col > .pane-body { flex: 1; min-height: 0; overflow: hidden; container-type: inline-size; }
+.session-col.drop { box-shadow: inset 0 0 0 2px var(--focus-ring); }
+.sc-col-titles { flex: 1; min-width: 0; }
+/* REDESIGN 2026-09-17 — the pane's title is a heading you read across four
+   columns, not a label: card size, and one weight step down from 700 because
+   Onest at that weight on a 15px line shouts (DESIGN.md, «каждый вес на шаг
+   вниз»). */
+/* A <button> now — it opens the session — so the browser's chrome is undone
+   and only a hover tint marks it, the same bargain `.ws-title` strikes: it
+   must read as the pane's heading, not as a control parked in the header. */
+.sc-col-title {
+  display: block; width: 100%; max-width: 100%;
+  background: none; border: none; padding: 4px 6px; margin-left: -6px;
+  border-radius: var(--radius-sm); text-align: left; cursor: pointer;
+  font-family: inherit;
+  font-size: var(--size-card); font-weight: 600; letter-spacing: var(--ls-title); color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease);
+}
+.sc-col-title:hover { background: var(--surface-hover); }
+.sc-col-title:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+/* Clicking the heading renames the session in place. The field keeps the
+   heading's box and type so nothing in the row moves — only the rim and the
+   ground say "you are typing now". Plain text when the viewer may not rename. */
+.sc-col-title.static { cursor: default; }
+.sc-col-title.static:hover { background: none; }
+.sc-col-title-input {
+  cursor: text; background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+  outline: none; text-overflow: clip;
+}
+.sc-col-title-input:hover { background: var(--bg); }
+.sc-col-sub {
+  display: flex; align-items: center; gap: 7px; min-width: 0; margin-top: 2px;
+  font-size: var(--size-meta); color: var(--text-faint);
+  overflow: hidden; white-space: nowrap;
+}
+.sc-col-src { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The state, SAID next to its mark. `--text-muted` rather than `--text-faint`:
+   scanning four panes for "which one wants me", this is the thing being
+   scanned for, and it was previously a coloured speck with a tooltip. */
+.sc-col-state { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; color: var(--text-muted); font-weight: 500; }
+/* The author is a second metadata line: no warning plate, and no title space
+   spent on a non-shrinking name in a 300px pane. Same geometry in both heads. */
+.sc-col-heading { flex: 1; min-width: 0; }
+.sc-col-who {
+  display: flex; align-items: baseline; gap: 4px; min-width: 0; white-space: nowrap;
+  font: 500 var(--size-micro)/1.4 var(--sans); color: var(--text-muted);
+}
+.sc-col-who > :first-child { flex: 0 0 auto; }
+.sc-col-who-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sc-col-heading:has(.sc-col-who) .sc-col-title { padding-top: 2px; padding-bottom: 2px; }
+.sc-col-state.needs_attention { color: var(--text); font-weight: 600; }
+.sc-col-close { flex: 0 0 auto; }
+.sc-dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; background: var(--text-faint); }
+.sc-dot.on { background: var(--live); }
+/* `.col-add` — the dashed "+" tile at the end of the strip — went with the
+   picker it opened. */
+
+.columns-empty { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--text-faint); padding: 24px; text-align: center; }
+.columns-empty .ce-title { font-family: var(--title); font-size: var(--size-title); font-weight: 700; color: var(--text); margin-top: 6px; }
+.columns-empty .ce-sub { font-size: var(--size-small); max-width: 380px; line-height: 1.5; }
+.columns-empty .ce-actions { display: flex; gap: 10px; margin-top: 10px; }
+
+/* A whole phone layout for the split used to live here: full-width panes with
+   scroll-snap, page dots, and a squeezed single row of chrome — because at
+   340px a side-by-side strip shows one and a half sessions. It was a careful
+   answer to the wrong question. All that reached was "one session on screen",
+   bought with a /ui socket and a copy of the fleet inventory per pane, when
+   opening the session does the same thing for a quarter of the cost. Below
+   861px a `columns` route lands on its first session (App.tsx), so none of it
+   has anything left to style. */
+
+/* ---- attachments on your own live turn ---- */
+.msg-attached { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ma-shot {
+  display: block; flex: 0 0 auto; line-height: 0;
+  padding: 0; border: 0; background: transparent; cursor: zoom-in;
+  max-width: 100%;
+  border-radius: var(--radius-sm); overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--divider);
+  transition: box-shadow var(--dur-fast) var(--ease);
+}
+.ma-shot:hover { box-shadow: inset 0 0 0 1px var(--brand); }
+.ma-shot img {
+  display: block; width: auto; height: auto; max-width: min(320px, 100%); max-height: 220px;
+  object-fit: contain;
+}
+.ma-file {
+  flex: 0 0 auto; align-self: center; padding: 3px 9px; border-radius: var(--radius-sm);
+  background: var(--surface-sunken); box-shadow: inset 0 0 0 1px var(--divider);
+  font-family: var(--mono); font-size: var(--size-micro); color: var(--text-muted);
+}

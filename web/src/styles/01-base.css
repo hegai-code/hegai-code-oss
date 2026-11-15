@@ -1,0 +1,146 @@
+/* 01-base — reset, html/body/#root, safe-area and drawer vars, focus ring, scrollbars, theme cross-fade, status pills. */
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+/* `dvh` over the `100%` above, which stays as the fallback for anything that
+   does not know the unit: on a phone the two disagree while a URL bar is
+   collapsing. On a desk they are the same number. */
+html, body, #root { height: 100dvh; }
+/* A fixed box resolves against the initial containing block, which
+   `viewport-fit=cover` has already made the full screen — so the shell cannot
+   be talked out of the viewport by an ancestor's percentage. `#root` and not
+   `.app`, so `.app { height: 100% }` and everything under it keep measuring
+   against one box; it also becomes the containing block for fixed descendants
+   (drawer, sheets, toasts), which is harmless because that box IS the viewport
+   rect.
+   This was shipped as a FIX for an empty band under the composer and it is not
+   one — see the measurements below. It is kept because it is correct on its own
+   terms and changes nothing anywhere, not because it closed anything. */
+#root { position: fixed; inset: 0; }
+/**
+ * …and NOTHING further is owed to the bottom of the screen. This is the end of
+ * a day in which five rewrites of the height chain each tried to close a gap
+ * that was never in the layout. Two measurements from the device (`?layout=1`)
+ * settle it, and the second is the control that the first four attempts
+ * lacked:
+ *
+ *   standalone PWA, black-translucent   inner 430×873  sat 59  GAP under box 24
+ *   Safari, same build, same phone      inner 430×775  sat  0  GAP under box 14
+ *
+ * In BOTH, every container — html, body, #root, .app, .main, .chat, .composer
+ * — runs 0→innerHeight exactly. The chain is correct and was correct before
+ * any of this started.
+ *
+ * What differs is only what the SYSTEM does with the part of the 932pt screen
+ * the web view does not cover. Safari spends 157 of it on its own chrome (the
+ * status bar and the bottom toolbar) and so nothing reads as empty. A
+ * standalone window has no chrome, so its leftover 59 is whatever iOS paints
+ * there — and `apple-mobile-web-app-status-bar-style` decides WHERE:
+ * `black-translucent` leaves it at the BOTTOM, below everything a page can
+ * address (content placed past 873 is not painted at all — proven by pushing
+ * the composer into it and watching it vanish), and `default` puts it at the
+ * TOP, where a strip in the page's own background is just a status bar.
+ *
+ * That is also why «нижняя плашка появилась, когда мы убрали верхнюю»: one
+ * strip, handed to the top or left at the bottom. It cannot be reclaimed from
+ * CSS. Match its colour (see index.html's theme-color and `.ws-head`) and stop
+ * reaching for it — a shell that hides the send button is worse than one with
+ * a margin under it.
+ */
+/* The strip under the clock, behind ONE name.
+   `env()` cannot be overridden, which made every bug up there unreproducible
+   off a phone: on a desktop the inset is 0, so the layout that breaks simply
+   does not exist to be photographed. Through a variable it can be forced —
+   `screens.html?sat=54` does exactly that, and the `drawerInset` shot view is
+   the phone's top bar without the phone. Nothing else about it changes. */
+:root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); }
+/* On touch screens the body steps back up to 16px: below that iOS Safari zooms
+   a focused field and never zooms back, and 16 is the phone reading size anyway.
+   The desk keeps 15, the size Codex and Claude read at. */
+@media (pointer: coarse) { :root { --size-body: 16px; } }
+/* One width for the phone's drawer and for how far it pushes the app aside —
+   the two have to agree or the card lands under it. */
+:root { --drawer-w: min(82vw, 320px); }
+/* OFF the radius ladder (8/12/16/20), deliberately and in exactly one place.
+   This is not a component corner, it is the screen's own: when the drawer
+   pushes the app aside, the thing sliding away is the phone's display, and an
+   iPhone's corner is ~55px. At --radius-xl the card read as a rectangle with
+   the edges filed down — the reference's most recognisable feature, missing.
+   Nothing else may use this. */
+:root { --radius-device: 30px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: var(--size-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+button, input, textarea, select { font-family: inherit; }
+button { cursor: pointer; }
+/* The two touch behaviours that read as "this is a web page in a browser" the
+   moment a finger lands on a control: Safari's grey flash on tap, and the
+   press-and-hold callout that offers to copy a BUTTON. Scoped to controls on
+   purpose — the transcript is a document and its text must stay selectable,
+   which is the whole reason this is not `* { user-select: none }`. */
+button, .icon-btn, .round-btn, .send-round, .rail-btn, [role='tab'] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--radius-list); border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* brief color cross-fade on theme change — useTheme() adds .theme-transition
+   to <html> for ~260ms so only the toggle animates (not every hover). */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition: background-color 0.22s var(--ease), color 0.22s var(--ease),
+    border-color 0.22s var(--ease), fill 0.22s var(--ease) !important;
+}
+
+/* Sizing this to a measured `--app-h` was REVERTED — it shipped and broke the
+   phone outright: with the keyboard up the shell collapsed to roughly the height
+   of its own composer, `.log` (flex: 1) was squeezed to nothing, and the rest of
+   the screen was bare body background. `interactive-widget=resizes-content` in
+   the viewport meta already shrinks the LAYOUT viewport on the browsers that
+   honour it, so `100%` is measured against the right box there and a second,
+   hand-measured height only fought it. Older iOS Safari still needs something,
+   but not this. */
+/* `100%` of #root, which is now the dynamic viewport — see the note at
+   `html, body, #root` for why that distinction cost a day. */
+.app { display: flex; flex-direction: column; height: 100%; }
+
+kbd {
+  font-family: var(--sans); font-size: 0.8em; font-weight: 600; padding: 1px 6px; border-radius: var(--radius-sm);
+  background: var(--surface-hover); border: 1px solid var(--border); color: var(--text-muted);
+}
+
+/* attention color helpers (palette dots, etc.) — messenger semantics:
+   working = online green, needs-attention = unread blue, idle = done gray. */
+.attn-working { color: var(--positive); }
+.attn-needs_attention { color: var(--link); }
+.attn-idle { color: var(--text-faint); }
+.attn-error { color: var(--negative); }
+
+/* solid status LABEL pill — fully round, white ink on a deep status fill */
+.status-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 3px 12px; border-radius: 999px; flex: 0 0 auto;
+  font-size: var(--size-small); font-weight: 600; line-height: 1.4;
+  color: var(--text-on-color); white-space: nowrap;
+}
+.status-pill.working { background: var(--live); color: var(--on-live); }
+/* Ink on ember (5.94:1). Ivory on ember is 2.72:1 — the canon's rule that on
+   ember you use ink is a contrast rule, not a taste one. */
+.status-pill.needs_attention { background: var(--attn); color: var(--on-attn); }
+.status-pill.idle { background: var(--chip); color: var(--text-muted); }
+.status-pill.error { background: var(--red); }
+.status-pill.sm { padding: 2px 9px; font-size: var(--size-meta); }

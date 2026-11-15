@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hegai Code — нет связи</title>
+    <style>
+      /* Tokens copied from web/src/styles.css rather than imported: this page
+         must render with the hub unreachable, so it cannot pull a stylesheet
+         from it. Only the handful actually used here — a copy of the whole
+         system would rot silently. */
+      :root {
+        --bg: #fcfaf1;
+        --surface: #fffdf7;
+        --text: #101f18;
+        --text-faint: #5c6b63;
+        --attn: #ff6a3d;
+        --shadow-xs: 0 2px 8px rgba(16, 31, 24, 0.05);
+        --rim: 0 0 #0000;
+        --radius-panel: 16px;
+        --sans: "Onest", "Segoe UI", system-ui, sans-serif;
+        --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+      }
+      :root[data-theme="dark"] {
+        --bg: #0a0e0c;
+        --surface: #101f18;
+        --text: #f2efe4;
+        --text-faint: #9aa89f;
+        --shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.3);
+        --rim: inset 0 1px 0 rgba(250, 247, 234, 0.2), inset 0 0 0 1px rgba(250, 247, 234, 0.1);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; min-height: 100vh;
+        display: grid; place-items: center; padding: 32px;
+        background: var(--bg); color: var(--text);
+        font-family: var(--sans); font-size: 14px; line-height: 1.5;
+      }
+      /* No border: DESIGN.md is explicit that cards are separated by the
+         green-tinted float shadow, not by a rule. The rim keeps the edge
+         readable in dark, where a shadow alone disappears. */
+      .card {
+        width: 100%; max-width: 420px; padding: 28px;
+        background: var(--surface); border-radius: var(--radius-panel);
+        box-shadow: var(--shadow-xs), var(--rim);
+      }
+      .eyebrow {
+        display: flex; align-items: center; gap: 8px;
+        font-family: var(--mono); font-size: 11px; font-weight: 500;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        color: var(--text-faint); margin-bottom: 14px;
+      }
+      /* An 8×8 square, never a circle — DESIGN.md is explicit about that. */
+      .eyebrow::before {
+        content: ""; width: 8px; height: 8px; background: var(--attn);
+        animation: blink 1.6s ease-in-out infinite;
+      }
+      @keyframes blink { 50% { opacity: 0.3; } }
+      @media (prefers-reduced-motion: reduce) {
+        .eyebrow::before { animation: none; }
+      }
+      h1 { margin: 0 0 10px; font-size: 19px; font-weight: 700; }
+      p { margin: 0 0 12px; color: var(--text-faint); }
+      p:last-child { margin-bottom: 0; }
+      code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="eyebrow">нет связи</div>
+      <h1>Хаб недоступен</h1>
+      <p>
+        Не удаётся связаться с <code id="host">code.acme.test</code>.
+      </p>
+      <p>
+        Сессии продолжают идти на своих машинах — недоступен только пульт.
+        Приложение проверяет связь каждые несколько секунд и вернётся само,
+        как только хаб ответит.
+      </p>
+    </main>
+    <script>
+      // Deliberately inert. This page opens no socket, sends nothing and does
+      // not navigate itself: the Rust side owns the switch back, and a page
+      // that also tried would fight it. See the module comment in offline.rs
+      // for why a cached shell in front of a live control plane is a trap.
+      (function () {
+        function theme() {
+          try {
+            var dark = matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+          } catch (e) { /* an old webview keeps the light default */ }
+        }
+        theme();
+        try {
+          matchMedia('(prefers-color-scheme: dark)').addEventListener('change', theme);
+        } catch (e) { /* not fatal */ }
+
+        // The hub's name, so the page can say WHICH host is unreachable. Set by
+        // the shell; this page is on its own origin and cannot read anything
+        // the SPA stored.
+        try {
+          var hub = window.__HEGAI_HUB__;
+          if (hub) document.getElementById('host').textContent = new URL(hub).host;
+        } catch (e) { /* the default text stands */ }
+      })();
+    </script>
+  </body>
+</html>

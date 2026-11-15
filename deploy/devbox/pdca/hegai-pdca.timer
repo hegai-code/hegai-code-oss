@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly PDCA review, Mondays 06:00 CET (08:00 MSK)
+
+[Timer]
+OnCalendar=Mon *-*-* 06:00:00 Europe/Berlin
+Persistent=true
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

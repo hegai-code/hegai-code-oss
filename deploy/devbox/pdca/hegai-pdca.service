@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly PDCA review of Claude session failures (proposals only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hegai-pdca
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2100
+# the review reads transcripts and writes only under /root/.claude/pdca, /tmp and the log

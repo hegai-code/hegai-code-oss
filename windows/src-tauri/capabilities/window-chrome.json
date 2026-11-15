@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "window-chrome",
+  "description": "Пять разрешений, которыми страница двигает и закрывает СВОЁ окно. Нужны только на Windows: там нет безрамного режима, который оставил бы системные кнопки, поэтому либо рамка с чужой плашкой «Hegai Code», либо кнопки рисует приложение. Выдано ТОЛЬКО origin'у хаба и ТОЛЬКО окнам приложения — не окну входа (`popup-*`, туда приезжает страница провайдера) и не офлайн-окну.",
+  "platforms": ["windows"],
+  "windows": ["main", "window-*"],
+  "remote": {
+    "urls": ["https://code.acme.test/*"]
+  },
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized"
+  ]
+}

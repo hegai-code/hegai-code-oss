@@ -1,0 +1,275 @@
+/* 28-vscode — the VS Code theme, editor tabs, the pinned question, the «/» menu. */
+
+/* ---- The VS Code theme (28.09.2026, by request) ----
+   A third pick beside light and dark: Solarized Light as VS Code draws it,
+   with VS Code's type and nearly square corners. It deliberately leaves the
+   canon (DESIGN.md «Тема VS Code»): the editor's mono stack, a smaller type
+   ladder and radius ladder, orange send, gold selection. Every text/background
+   pair below was measured — base00 #657b83, Solarized's own body tone, is
+   4.1:1 on base3 and is not used for text at all. Last in the file on
+   purpose: the Graphite block and `.main { --bg }` above would win otherwise. */
+:root[data-theme="vscode"] {
+  --pace-ok: #859900;
+  --pace-edge: #b58900;
+  --pace-over: #dc322f;
+  --pace-out: #8b2346;
+  color-scheme: light;
+  /* Solarized ramp: base3 the sheet, base2 the frame and the wells. */
+  --paper: #fdf6e3;
+  --paper-50: #fdf6e3;
+  --paper-200: #eee8d5;
+  --paper-300: #e6dfca;
+  --bg: #fdf6e3;
+  --surface: #fdf6e3;
+  --surface-raised: #fdf6e3;
+  --surface-hover: rgba(88, 110, 117, 0.1);
+  --surface-sunken: #eee8d5;
+  --chip: #e6dfca;
+  --tint: #eee8d5;
+  --tint-strong: #e4ddc8;
+  --divider: rgba(88, 110, 117, 0.2);
+  --border: rgba(88, 110, 117, 0.34);
+  --text: #073642;                  /* base02 — 12.1:1 on base3, 9.8 on a chip */
+  --text-muted: #3d525a;            /* 7.6:1 / 6.2 on a chip */
+  --text-faint: #4a5f66;            /* 6.2:1 / 5.1 on a chip */
+  --text-on-color: #fdf6e3;
+  /* Buttons are VS Code blue; the selected plate is Solarized's gold list
+     selection with ink on it. */
+  --action: #1a64a0;                /* base3 on it 5.8:1 */
+  --action-hover: #16588d;
+  --action-press: #124b78;
+  --on-action: #fdf6e3;
+  --action-soft: rgba(88, 110, 117, 0.12);
+  --action-soft-2: rgba(88, 110, 117, 0.2);
+  --select: #dfca88;
+  --on-select: #073642;             /* 8.0:1 */
+  --send: #cb4b16;                  /* Solarized orange — the icon on it is graphics, 4.3:1 */
+  --send-hover: #b8430f;
+  --on-send: #fdf6e3;
+  --attn: #b8430f;
+  --attn-hover: #a8380c;
+  --on-attn: #fdf6e3;               /* 5.1:1 */
+  --attn-soft: #f6dccb;
+  --brand: #cb4b16;
+  --agent-claude: #cb4b16;
+  --agent-codex: var(--text);
+  --focus-ring: rgba(203, 75, 22, 0.55);
+  --link: #1a64a0;                  /* 5.8:1 */
+  --link-prose: var(--link);        /* already blue here */
+  --positive: #566300;              /* Solarized green, darkened — 6.1:1 */
+  --orange-text: #865d00;           /* 5.4:1 */
+  --red: #c0282a;                   /* base3 on it 5.4:1 */
+  --negative: #c0282a;
+  --danger-hover: #a82224;
+  --live: #073642;
+  --on-live: #fdf6e3;
+  --diff-add-bg: #e7ebc6;
+  --diff-del-bg: #f6d9cf;
+  --terminal-bg: #002b36;           /* base03 */
+  --terminal-text: #eee8d5;         /* 12.3:1 */
+  --shadow-xs: 0 1px 3px rgba(88, 110, 117, 0.12);
+  --shadow-sm: 0 1px 4px rgba(88, 110, 117, 0.14);
+  --shadow: 0 4px 14px rgba(88, 110, 117, 0.16);
+  --shadow-lg: 0 8px 28px rgba(88, 110, 117, 0.18);
+  --shadow-xl: 0 16px 48px rgba(88, 110, 117, 0.22);
+  --rim: inset 0 0 0 1px rgba(88, 110, 117, 0.22);
+  --scrim: rgba(0, 43, 54, 0.36);
+  /* VS Code's own faces: the workbench font per platform, the editor font for code. */
+  --sans: "Segoe WPC", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, Ubuntu, "Droid Sans", sans-serif;
+  --title: var(--sans);
+  --mono: Consolas, "Courier New", Menlo, Monaco, "Droid Sans Mono", monospace;
+  /* The workbench is 13px; everything steps down with it. */
+  --size-screen: 20px;
+  --size-page: 16px;
+  --size-title: 14px;
+  --size-lead: 14px;
+  --size-card: 13px;
+  --size-body: 13px;
+  --size-small: 12px;
+  --size-nav: 13px;
+  --size-meta: 11px;
+  --size-micro: 11px;
+  --size-nano: 10px;
+  --lh-body: 1.45;
+  --lh-read: 1.5;
+  --ls-title: 0em;
+  --ls-hero: -0.01em;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  /* Editor tabs: a base2 strip, the active tab the sheet with an orange edge. */
+  --tabstrip-bg: #eee8d5;
+  --tab-bg: #e4ddc8;
+  --tab-active-bg: #fdf6e3;
+  --tab-active-edge: #cb4b16;
+  --tab-text: #3d525a;
+  --tab-text-active: #073642;
+}
+@media (pointer: coarse) {
+  :root[data-theme="vscode"] { --size-body: 14px; }
+}
+@media (min-width: 861px) {
+  /* The frame (side panel, top bar) is base2, the sheet base3 — and square:
+     VS Code's editor does not round into its frame. */
+  :root[data-theme="vscode"] .main { --bg: #fdf6e3; border-top-left-radius: 0; }
+}
+/* Inline code as the extension draws it: a red word in a base2 well (5.4:1). */
+:root[data-theme="vscode"] .md code { color: #b02a1e; background: var(--surface-sunken); border-color: var(--divider); font-size: 0.92em; }
+:root[data-theme="vscode"] .md pre code { color: inherit; }
+/* The field in focus gets the orange frame the extension gives it. */
+:root[data-theme="vscode"] .composer-box:focus-within { box-shadow: inset 0 0 0 1px var(--send); }
+
+/* ---- Editor tabs (28.09.2026, by request — VS Code's editor groups) ----
+   The VS Code theme only: every column of the split is a group of tabs, the
+   active tab is the pane below (tabs.ts, TabStrip.tsx), and the strip is
+   always there — the tab row is the frame of every editor. The Hegai themes
+   never show a strip or a drop zone (and tabs.ts keeps nothing behind their
+   panes). The phone draws the split as its own chips. */
+:root {
+  --tabstrip-bg: var(--tint);
+  --tab-bg: transparent;
+  --tab-active-bg: var(--bg);
+  --tab-active-edge: transparent;
+  --tab-text: var(--text-muted);
+  --tab-text-active: var(--text);
+}
+.tab-frame { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.tab-frame-body { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+.session-col { position: relative; }
+.tabstrip {
+  flex: 0 0 auto; display: flex; align-items: stretch; height: 35px;
+  background: var(--tabstrip-bg); border-bottom: 1px solid var(--divider);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  position: relative; z-index: 3;
+  /* Its tabs must never widen the pane: they scroll inside it instead. */
+  contain: inline-size; min-width: 0;
+}
+:root:not([data-theme="vscode"]) .tabstrip,
+:root:not([data-theme="vscode"]) .group-drop { display: none; }
+.tabstrip::-webkit-scrollbar { display: none; }
+.tab-item {
+  position: relative; flex: 0 1 auto; min-width: 90px; max-width: 220px;
+  display: flex; align-items: center; gap: 2px; padding: 0 4px 0 10px;
+  background: var(--tab-bg); color: var(--tab-text);
+  border-right: 1px solid var(--divider); user-select: none;
+}
+.tab-item.on {
+  background: var(--tab-active-bg); color: var(--tab-text-active);
+  box-shadow: inset 0 1px 0 var(--tab-active-edge);
+  margin-bottom: -1px; /* over the strip's hairline: the tab opens into its pane */
+}
+.tabstrip:not(.focused) .tab-item.on { color: var(--tab-text); }
+.tab-item:not(.on):hover { background: var(--surface-hover); }
+.tab-main {
+  flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 6px;
+  padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  font-size: var(--size-small); cursor: pointer; text-align: left;
+}
+.tab-main:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.tab-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab-mark { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; background: var(--attn); }
+.tab-x {
+  flex: 0 0 auto; width: 20px; height: 20px; display: grid; place-items: center;
+  padding: 0; border: 0; background: none; color: inherit; border-radius: var(--radius-sm);
+  cursor: pointer; opacity: 0;
+}
+.tab-item.on .tab-x, .tab-item:hover .tab-x, .tab-x:focus-visible { opacity: 1; }
+.tab-x:hover { background: var(--surface-hover); }
+.tab-x:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+/* «+» after the last tab: a new chat in the active tab's project. */
+.tab-new {
+  flex: 0 0 auto; align-self: center; width: 26px; height: 26px; margin: 0 4px; display: grid; place-items: center;
+  padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--tab-text); cursor: pointer;
+}
+.tab-new:hover { background: var(--surface-hover); color: var(--tab-text-active); }
+.tab-new:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.tab-item.drop-before::before, .tab-item.drop-after::after {
+  content: ""; position: absolute; top: 5px; bottom: 5px; width: 2px; background: var(--brand);
+}
+.tab-item.drop-before::before { left: -1px; }
+.tab-item.drop-after::after { right: -1px; }
+/* The drop targets over a pane — only while a tab or a session row is dragged. */
+.group-drop { position: absolute; inset: 0; z-index: 2; }
+.group-drop-hint {
+  position: absolute; top: 0; bottom: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+.group-drop-hint.left { left: 0; width: 50%; }
+.group-drop-hint.right { right: 0; width: 50%; }
+.group-drop-hint.center { left: 0; right: 0; }
+@media (max-width: 860px) {
+  .tabstrip, .group-drop { display: none !important; }
+  /* The frame is there on a phone too (so crossing 860px does not remount
+     the screen) but draws nothing: its body's child is the screen, and it
+     takes the top bar's clearance the way a direct child of `.main` does. */
+  .tab-frame, .tab-frame-body { display: contents; }
+  .main > .tab-frame > .tab-frame-body > * { padding-top: calc(56px + var(--sat)); }
+  .app:has(.workspace) .main > .tab-frame > .tab-frame-body > * { padding-top: 0; }
+}
+
+/* ---- The question stays on top (28.09.2026, by request — Claude's VS Code
+   extension) ----
+   While an answer scrolls by, its question rides a plate at the top of the
+   transcript (StickyAsk.tsx). A zero-height sticky wrapper, so the plate
+   appearing never pushes the transcript down under the reader. */
+.sticky-ask-wrap { position: sticky; top: 0; height: 0; z-index: 3; }
+.sticky-ask {
+  display: block; width: 100%; max-width: var(--chat-measure, 760px); margin: 0 auto;
+  padding: 6px 12px; border: 0; border-radius: var(--radius-md); text-align: left; cursor: pointer;
+  background: var(--chip); color: var(--text); font: inherit; font-size: var(--size-small);
+  line-height: var(--lh-body); box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--divider);
+}
+.sticky-ask:hover { box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border); }
+.sticky-ask:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.sticky-ask-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---- The «/» menu (28.09.2026, by request — Claude's VS Code extension) ----
+   Commands and skills over the composer (SlashMenu.tsx): a popover on the
+   box's top edge, the name in mono (it is something you type), the argument
+   hint faint, the description muted and cut to one line. */
+.composer-box { position: relative; }
+.slash-menu {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 20;
+  max-height: min(300px, 40vh); overflow-y: auto; padding: 4px;
+  background: var(--surface-raised); border-radius: var(--radius-md);
+  box-shadow: var(--shadow), var(--rim), inset 0 0 0 1px var(--divider);
+}
+.slash-item {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0;
+  padding: 6px 10px; border: 0; border-radius: var(--radius-sm); background: none;
+  color: var(--text); font: inherit; font-size: var(--size-small); text-align: left; cursor: pointer;
+}
+.slash-item.on { background: var(--here); }
+.slash-name { flex: 0 0 auto; font-family: var(--mono); }
+.slash-hint { flex: 0 0 auto; font-family: var(--mono); font-size: var(--size-meta); color: var(--text-faint); }
+.slash-desc { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.slash-empty { padding: 8px 10px; font-size: var(--size-small); color: var(--text-faint); }
+.slash-btn { color: var(--text); }
+/* The glyph in a small square, as the extension draws it — a bare «/» read as
+   a stray character in the row. */
+.slash-glyph {
+  display: grid; place-items: center; width: 16px; height: 16px; box-sizing: border-box;
+  border: 1.5px solid currentColor; border-radius: 3px;
+  font-family: var(--mono); font-size: var(--size-micro); line-height: 1;
+}
+/* The folded composer is one row — +, field, mic, send — with no room for a
+   fifth control; typing «/» still opens the menu. The SAME condition as the
+   fold (styles.css «FOLDED»): a tablet held landscape folds too, and there the
+   button, having no `order`, sat first — before «+» (29.09.2026). */
+@media (pointer: coarse) and (max-width: 860px), (pointer: coarse) and (orientation: landscape) {
+  .composer-box.cg.idle .slash-btn { display: none; }
+  /* The VS Code theme is a 13px workbench with square corners; the fold's
+     44px thumb circles (sized for the Hegai phone) read as buttons from
+     another app beside it — worst in a tablet's split column. Its own sizes,
+     with the send circle's hit area still reaching 44px (`::after`). */
+  :root[data-theme="vscode"] .composer .round-btn.mic,
+  :root[data-theme="vscode"] .composer .round-btn.attach,
+  :root[data-theme="vscode"] .composer .round-btn.slash-btn,
+  :root[data-theme="vscode"] .composer .send-round { width: 34px; height: 34px; }
+  :root[data-theme="vscode"] .composer .send-round.stop { width: 28px; height: 28px; }
+  :root[data-theme="vscode"] .composer .round-btn.mic svg { width: 18px; height: 18px; }
+  :root[data-theme="vscode"] .composer .send-round svg { width: 15px; height: 15px; }
+  :root[data-theme="vscode"] .composer-box.cg.idle > textarea { min-height: 36px; padding-top: 8px; padding-bottom: 8px; }
+}

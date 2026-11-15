@@ -1,0 +1,26 @@
+{
+  "name": "cc-remote",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Central web service to view, control, and resume Claude Code sessions across machines",
+  "workspaces": [
+    "shared",
+    "agent",
+    "server",
+    "web",
+    "tgbot"
+  ],
+  "engines": {
+    "node": ">=20.19 <25"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "agent:dev": "npm run dev --workspace agent",
+    "lint": "biome lint"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14"
+  }
+}

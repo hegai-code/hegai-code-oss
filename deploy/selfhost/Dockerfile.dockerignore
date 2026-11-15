@@ -1,0 +1,27 @@
+# Build context = the repository root; this file is picked up next to the
+# Dockerfile (BuildKit). Keep the context to what the three stages read.
+.git
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/target
+**/target-musl
+**/.shots
+**/*.log
+.env
+.env.*
+deploy/selfhost/.env
+deploy/selfhost/.env.*
+# LLM gateway state (subscription tokens, Bifrost DB) never enters an image.
+deploy/selfhost/llm
+# Not part of the hub image.
+ios
+android
+windows
+docs
+.claude
+.agents
+.github
+deploy/ci-runner
+deploy/browser
+deploy/phone

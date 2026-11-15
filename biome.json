@@ -1,0 +1,37 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "files": {
+    "includes": [
+      "shared/src/**",
+      "agent/src/**",
+      "web/src/**",
+      "server/src/**",
+      "tgbot/src/**",
+      "!**/dist/**",
+      "!**/skills-bundle.ts",
+      "!.claude/**"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "noUnreachable": "error",
+        "noConstantCondition": "error"
+      },
+      "suspicious": {
+        "noDoubleEquals": "error",
+        "noDebugger": "error",
+        "noAsyncPromiseExecutor": "error",
+        "noDuplicateObjectKeys": "error",
+        "noFallthroughSwitchClause": "error"
+      }
+    }
+  }
+}

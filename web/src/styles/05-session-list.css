@@ -1,0 +1,328 @@
+/* 05-session-list — machines / projects / sessions in the side panel. */
+
+/* ---------- machines / projects / sessions ---------- */
+.machine { padding: 2px 0 8px; }
+.machine-head {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px 7px 12px; position: sticky; top: 0;
+  background: var(--surface); z-index: 2; border-left: 3px solid transparent;
+}
+/* machine = workspace header: neutral. monday draws the color accent on the
+   collapsible GROUP, not the workspace — so the cycle lives on .project-group. */
+.dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.dot.on { background: var(--live); }
+.dot.off { background: var(--text-faint); }
+.machine-name { font-weight: 700; font-size: var(--size-body); }
+.os-chip {
+  font-size: var(--size-micro); color: var(--text-faint); text-transform: lowercase; letter-spacing: 0.3px;
+  border: 1px solid var(--divider); padding: 1px 6px; border-radius: var(--radius-sm);
+}
+.count {
+  margin-left: auto; font-size: var(--size-micro); color: var(--text-muted); background: var(--surface-hover);
+  padding: 1px 8px; border-radius: 999px; border: 1px solid var(--divider);
+}
+.rescan { background: none; border: none; color: var(--text-faint); padding: 3px; border-radius: var(--radius-sm); line-height: 0; }
+.rescan:hover { color: var(--link); background: var(--surface-hover); }
+.machine-attn {
+  display: inline-grid; place-items: center; min-width: 1.6em; min-height: 1.6em; padding: 0 5px; border-radius: 999px;
+  background: var(--attn); color: var(--on-attn); font-size: var(--size-nano); font-weight: 700;
+}
+
+.project-group { margin: 2px 0; }
+/* Project heads are quiet mono-caps section labels — the colour identity
+   lives on the avatars, not on the dividers. */
+.project-head {
+  display: flex; align-items: center; gap: 7px; padding: 8px 14px 4px 14px; cursor: pointer;
+  color: var(--text-faint); font-size: var(--size-micro); font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.project-head:hover { color: var(--text-muted); }
+.project-head .tw { color: var(--text-faint); width: 10px; font-size: var(--size-nano); }
+.project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-count { margin-left: auto; color: var(--text-faint); font-weight: 600; }
+
+/* project as a chat row: avatar + name/time + latest-session preview line
+   with the agent tag (Claude/Codex) and an unread counter */
+.projects-tree { padding: 0 8px; }
+.projects-tree .sessions { padding: 0; margin-bottom: 2px; }
+.project-row {
+  display: flex; align-items: center; gap: 12px;
+  margin: 1px 0; padding: 8px 10px; border-radius: var(--radius-list); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.project-row:hover { background: var(--surface-hover); }
+.project-row .tw { flex: 0 0 auto; width: auto; color: var(--text-faint); font-size: var(--size-nano); }
+/* Size, weight, tracking and caps come from the shared mono-eyebrow rule far
+   below; this one only places it and colours it. */
+.src-tag { flex: 0 0 auto; color: var(--link); }
+.src-tag.codex { color: var(--teal-dark); }
+
+/* --- project BLOCKS: a heading (name · live · needs-attention · count), the
+   machine it lives on, and the newest three sessions as rows.
+   Two things left this card and both were noise: the tinted letter avatar,
+   which spent a third of a 130px column repeating the first character of the
+   word next to it, and the single latest-session line, which cost the same
+   height as three real rows and told you less than any of them. The card is
+   SHORTER than the one it replaces and answers the actual question — what is
+   going on in this project.
+   `minmax(260px …)` is one column in the context strip and two only when the
+   column is dragged wide; the old 122px floor made three columns that could not
+   hold a session title. --- */
+.proj-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px; padding: 2px 2px 10px;
+}
+/* Plate, radius and shadow come from the raised-plates group further down —
+   this rule is layout only. */
+.proj-card {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 1px;
+  padding: 7px 10px 6px;
+}
+/* The block no longer lifts on hover: it is a container of links now, not one
+   big button, so a lift would promise a click the card itself does not take. */
+.proj-card:hover { background: var(--surface-hover); }
+/* The project open in the main column (/w/p/:project) — «you are here». */
+.proj-card.here, .proj-card.here:hover { background: var(--here); }
+.pc-head {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  text-decoration: none; color: var(--text);
+}
+/* The heading is the only way into the project now, so it has to answer the
+   cursor — the block around it deliberately does not. */
+.pc-head:hover .pc-name { color: var(--link); }
+.pc-head:hover .pc-count { color: var(--text-muted); }
+.pc-head:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--radius-sm); }
+/* The heading and «+» share a row; the heading keeps every pixel «+» does not. */
+.pc-headrow { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.pc-headrow > .pc-head { flex: 1; }
+/* «Новый чат в этом проекте». A 22px square so it sits inside the heading's
+   line without growing the card; faint until pointed at, because a column of
+   cards each shouting «+» is wallpaper. */
+.pc-new {
+  flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; margin-right: -4px;
+  border-radius: var(--radius-sm); color: var(--text-faint); text-decoration: none;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.pc-new:hover { background: var(--surface-hover); color: var(--text); }
+.proj-card:hover .pc-new { color: var(--text-muted); }
+.proj-card:hover .pc-new:hover { color: var(--text); background: var(--here); }
+.pc-new:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.pc-name {
+  flex: 1; min-width: 0; font-weight: 600; font-size: var(--size-small); line-height: 1.3; letter-spacing: -0.1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* Square, 8×8 — a live run is a square dot everywhere in this UI. */
+/* `.pc-live` removed with its markup: a card heading's live square. The
+   «нужно внимание» count beside it is the mark that earns its place there. */
+.pc-count { flex: 0 0 auto; font: 500 var(--size-micro)/1 var(--mono); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* The machine, inside the heading: same size and face, regular weight,
+   faint — it qualifies the name rather than competing with it. */
+.pc-mach { font-weight: 400; color: var(--text-faint); letter-spacing: normal; }
+.pc-sessions { list-style: none; margin: 3px 0 0; padding: 0; display: flex; flex-direction: column; }
+.pc-sess {
+  display: flex; align-items: baseline; gap: 6px; min-width: 0;
+  padding: 2px 4px; margin: 0 -4px; border-radius: var(--radius-sm);
+  text-decoration: none; color: var(--text-muted);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+/* Hover is the faint wash, selection the stronger `--here` below: `--chip`
+   here equalled the selected tone in both themes, so pointing at a row and
+   having chosen it looked the same (fixed 27.09.2026). */
+.pc-sess:hover { background: var(--surface-hover); color: var(--text); }
+/* «+» = open this session as one more column. Over the row's right edge, after
+   the time; the row gives it room so the time never slides under it. Faint
+   until the row is pointed at — twenty rows of «+» at full strength would be
+   wallpaper — and always there on touch, where there is no hover. */
+.pc-sessions > li.has-col { position: relative; }
+.pc-sessions > li.has-col > .pc-sess { padding-right: 24px; }
+.pc-col {
+  position: absolute; right: -2px; top: 50%; transform: translateY(-50%);
+  display: grid; place-items: center; width: 20px; height: 20px; padding: 0;
+  border: none; background: none; border-radius: var(--radius-sm);
+  color: var(--text-faint); opacity: 0.55; cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.pc-sessions > li:hover > .pc-col { opacity: 1; }
+.pc-col:hover { color: var(--text); background: var(--here); opacity: 1; }
+.pc-col:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; opacity: 1; }
+.pc-col:disabled { cursor: default; opacity: 0.3; }
+@media (hover: none) { .pc-col { opacity: 1; } }
+.pc-sess.sel { background: var(--here); color: var(--text); }
+/* On the `--here` plate faint text drops under 4.5:1 (3.9:1 in dark), so the
+   selected row's small print steps up to muted. */
+.pc-sess.sel .pcs-time, .pc-sess.sel .pcs-src { color: var(--text-muted); }
+/* `.pcs-live` removed with its markup: the 6px live square on a card's session
+   row. `.pcs-src` on the same row already names where it is running. */
+/* A session title is CONTENT — the one thing this row is read for. It used to
+   sit on --size-meta, the rung its own timestamp and counter sit on, so the
+   list read as a table of metadata and a ladder move barely touched it.
+   --size-small is the sidebar-item size the reference uses under a 16px body. */
+.pcs-title { flex: 1; min-width: 0; font-size: var(--size-nav); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* WHERE a live session is being driven from — vscode / cli / web / app. The
+   data layer, so mono; it only appears on live rows, where the question
+   "is that me or the editor" is the one being asked. */
+.pcs-src { flex: 0 0 auto; font: var(--size-micro)/1 var(--mono); color: var(--text-faint); }
+.pcs-time { flex: 0 0 auto; font: var(--size-micro)/1 var(--mono); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* Live rows past the card's ceiling. It names the count because the whole
+   point of this card is that live work is not hidden. */
+.pc-more {
+  display: block; padding: 2px 4px; margin: 0 -4px; border-radius: var(--radius-sm);
+  font: var(--size-micro)/1.6 var(--mono); color: var(--text-faint); text-decoration: none;
+}
+.pc-more:hover { background: var(--chip); color: var(--text); }
+/* The «Команда» group reuses .pin-head above it; this only re-insets the grid
+   so the cards line up with the ones outside the section. */
+.pin-section > .proj-grid { padding-top: 4px; }
+/* «Раньше» / «Скрытые» (30.09.2026): one line per project — name and machine
+   as a card heading would say them, the last change on the right. No plate:
+   these are an index, not work in progress, and forty white cards is exactly
+   the canvas this replaced. Inset to the cards' text edge. */
+.pc-older-list { margin: 2px 0 8px; padding: 0 12px; }
+.pc-older .pcs-title { font-weight: 500; color: var(--text); }
+.pc-older .pc-mach { font-weight: 400; }
+/* A row that is not yours, under «Все» or a search: the author's first name,
+   faint, before the time. The full name is in the row's tooltip. */
+.pcs-who { flex: 0 1 auto; min-width: 0; max-width: min(9ch, 28%); font-size: var(--size-micro); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-sess.sel .pcs-who { color: var(--text-muted); }
+/* «Команда»: a card per PERSON. The heading carries their photo or initial at
+   20px — off the avatar ladder on purpose: it rides a 14px heading line, where
+   the ladder's smallest (28px) would make the card's head twice its rows. */
+.person-card .pp-av { width: 20px; height: 20px; font-size: 11px; }  /* off-ladder: an initial sized by its 20px box */
+.person-card .pc-count { margin-left: auto; font-family: var(--sans); line-height: 1.5; white-space: nowrap; color: var(--text-muted); }
+.person-card .pc-count.working { color: var(--text); }
+.person-card .pc-headrow { padding: 0 8px; margin-bottom: 4px; }
+.person-card .pc-sess { align-items: center; min-height: 32px; box-sizing: border-box; padding: 4px 8px; margin: 0; }
+.person-card :is(.pcs-time, .pc-more) { font-family: var(--sans); }
+.pp-head { min-height: 28px; gap: 8px; }
+.pp-identity { flex: 1; min-width: 0; }
+.pp-name { margin: 0; font: 600 var(--size-small)/1.4 var(--sans); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-note { display: block; font: var(--size-micro)/1.5 var(--sans); color: var(--text-muted); }
+/* Each of the person's projects: a quiet sub-heading over that project's rows. */
+.pp-proj { display: flex; flex-direction: column; margin-top: 8px; }
+.pp-proj-head {
+  display: block; min-width: 0; padding: 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--size-meta); font-weight: 600; color: var(--text-muted); text-decoration: none;
+}
+.pp-proj-head:hover { color: var(--link); }
+.pp-proj-head:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: var(--radius-sm); }
+.pp-proj > .pc-sessions { margin-top: 0; }
+.person-card > .pc-more { margin-top: 4px; }
+.pp-more { border: 0; background: none; cursor: pointer; text-align: left; font-family: var(--sans); }
+.session-meta .preview {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--size-small); color: var(--text-muted);
+}
+.pcount { flex: 0 0 auto; font-size: var(--size-meta); font-weight: 600; color: var(--text-faint); }
+/* Expanded sessions hang on a THREAD RAIL tinted by the project's avatar
+   color — clearly subordinate to the 40px-avatar project row above. Rows are
+   compact: a status dot, a two-line title, badges only when they say
+   something (no machine name — the project row carries the context). */
+.projects-tree .sessions {
+  position: relative; margin: 0 4px 6px 29px; padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--divider);
+}
+.projects-tree .sessions .session { align-items: flex-start; gap: 10px; margin: 1px 0; padding: 6px 8px; }
+/* Drilled-in sessions are TELEGRAM CHAT ROWS: 36px gradient avatar keyed to
+   the session title (online dot = live), title + time on the first line, a
+   status/preview line below; needs-attention adds an ember pip. No thread rail — the project header carries the context. */
+.projects-tree .sessions.drill { margin: 0 0 6px; padding: 0; border-left: none; }
+.sessions.drill .session { padding: 7px 10px; gap: 12px; align-items: center; }
+.projects-tree .sessions.drill .session-title { font-size: var(--size-small); font-weight: 500; }
+.sprev {
+  flex: 1; min-width: 0; font-size: var(--size-small); color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sprev.live { color: var(--positive); }
+.sprev.attn { color: var(--text); font-weight: 600; }
+.sprev.err { color: var(--negative); }
+.attn-pip { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; background: var(--attn); }
+/* session status dot: green = live/working, clay = needs attention,
+   red = error, hollow ring = dormant */
+/* HIDDEN by default (19.09.2026, by request: «квадраты остались в списках
+   сессий»). The base state was not "no mark" — it was a hollow ring, drawn on
+   EVERY row including idle ones, so a list of forty sessions carried forty
+   squares that distinguished nothing. `live` is not drawn either: it now means
+   "the agent is mid-turn", which the row's own «сейчас» time and the pulse in
+   the session view already say, and one square per running row was the thing
+   being objected to.
+   What survives is only what needs your eyes — `attn` and `err` below. Those
+   rows gain the 8px mark and its gap, so they sit slightly indented from the
+   quiet ones: in a list where two rows out of forty want an answer, that offset
+   is a feature, not ragged alignment. */
+/* «Идёт кодинг прямо сейчас» — the one state a list could not show once the
+   live square went. An icon, not a square: the square is taken by «нужен
+   ответ», and two 8px squares in one slot differing only by colour is what the
+   colour-blind reader cannot read at all. The bolt pulses, so it also reads as
+   motion rather than as a third status colour. */
+.srun {
+  flex: 0 0 auto; color: var(--text);
+  animation: ccpulse 2s ease-in-out infinite;
+}
+.agent-bolt.claude { color: var(--agent-claude); }
+.agent-bolt.codex { color: var(--agent-codex); }
+.agent-bolt.opencode { color: var(--agent-codex); }
+
+.sdot { display: none; }
+.sdot.attn, .sdot.err {
+  display: block;
+  flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px;
+}
+/* Only the top-level tree wraps its titles to two lines and aligns to the top;
+   there the mark drops to the first line's height instead of floating. */
+.projects-tree .sessions:not(.drill) .session > .sdot { margin-top: 5px; }
+/* `.sdot.live` is gone with the mark it painted. The base rule hides it, and a
+   rule that styles a hidden element is how a removed mark quietly returns. */
+.sdot.attn { background: var(--attn); box-shadow: none; }
+.sdot.err { background: var(--red); box-shadow: none; }
+/* two-line wrapping title instead of a one-line ellipsis */
+.projects-tree .sessions .session-title {
+  font-size: var(--size-small); font-weight: 500; line-height: 1.35;
+  white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+
+/* A session row is a JOURNAL ENTRY: flat avatar, title + time on the first
+   line, preview + badges on the second. The SELECTED row is a solid GREEN
+   plate with ivory ink — and it stays green in dark, where --action flips to
+   ivory and would otherwise stripe the column with fifteen glaring bars. */
+.sessions { list-style: none; margin: 0; padding: 0 8px; }
+.session {
+  position: relative; display: flex; align-items: center; gap: 12px;
+  margin: 1px 0; padding: 8px 10px; border-radius: var(--radius-list); cursor: pointer;
+  transition: background 0.16s var(--ease);
+}
+.session:hover { background: var(--surface-hover); }
+.session.sel, .session.sel:hover { background: var(--here); }
+.session-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.session-title {
+  flex: 1; min-width: 0; font-size: var(--size-small); font-weight: 500; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.session.sel .session-title { font-weight: 500; }  /* selection is the plate, not the weight — as in Codex and Claude */
+.session-meta { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.session-meta .time { font-size: var(--size-micro); color: var(--text-faint); }
+
+.badge {
+  font-size: var(--size-micro); color: var(--orange-text); background: color-mix(in srgb, var(--orange) 18%, transparent); border-radius: 999px;
+  padding: 1px 7px; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 700; flex: 0 0 auto;
+}
+/* Codex sessions use a teal source tag, distinct from the amber "live" badge
+   and never the blue action color. */
+.badge.codex { color: var(--teal-dark); background: color-mix(in srgb, var(--teal-dark) 16%, transparent); }
+
+/* Session category badge. */
+.badge.cat { display: inline-flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0;
+  color: var(--text-muted); background: var(--surface-hover); }
+/* Owner badge on someone else's session — a gradient initial + first name. */
+.badge.owner { display: inline-flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0;
+  color: var(--text-muted); background: var(--surface-hover); padding: 1px 6px 1px 2px; }
+.badge.owner .avatar.xs { width: 18px; height: 18px; font-size: var(--size-nano); }
+
+/* The board's filter row. */
+.board-filter { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start; margin: 0 0 12px; }
+.pin-owner { margin-left: auto; font-size: var(--size-micro); font-weight: 600; color: var(--text-faint); flex: 0 0 auto; }
+.role-chip.control { color: var(--positive); background: color-mix(in srgb, var(--green) 16%, transparent); }
+.attn-dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.attn-dot.working { background: var(--live); }
+.attn-dot.needs_attention { background: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 28%, transparent); }
+.attn-dot.idle { background: var(--text-faint); }
+.attn-dot.error { background: var(--red); }
+.session-meta .spacer-s { flex: 1; }
