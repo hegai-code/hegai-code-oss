@@ -152,7 +152,7 @@ button.sp-link { width: calc(100% + 8px); border: 0; background: transparent; fo
    and, content-sized, wrapped three-plus-one — which reads as a mistake. The
    settings page has the width for one row. */
 .sp-theme[role="radiogroup"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.appearance .sp-theme[role="radiogroup"] { grid-template-columns: repeat(4, auto); justify-content: start; }
+.appearance .sp-theme[role="radiogroup"] { grid-template-columns: repeat(4, auto); justify-content: start; width: fit-content; max-width: 100%; }
 .settings-pop .token {
   width: 100%; background: var(--surface-hover); color: var(--text); border: 1px solid var(--border);
   border-radius: var(--radius-sm); padding: 8px 10px; font-family: var(--mono); font-size: var(--size-meta);

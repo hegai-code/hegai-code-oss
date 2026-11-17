@@ -91,7 +91,7 @@
 
 /* ============================ profile ============================ */
 .profile { flex: 1; min-width: 0; overflow: auto; padding: 24px; }
-.appearance { flex: 1; min-width: 0; overflow: auto; padding: 24px; max-width: 640px; }
+.appearance { flex: 1; min-width: 0; overflow: auto; padding-block: 24px; }
 .appearance-pick { margin-bottom: var(--space-6); }
 .appearance-notes { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-4); margin: 0; font-size: var(--size-small); }
 .appearance-notes dt { color: var(--text); font-weight: 500; }
