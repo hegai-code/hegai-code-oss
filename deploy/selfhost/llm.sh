@@ -33,6 +33,12 @@ cd "$(dirname "$0")"
 
 CPA_IMAGE='eceasy/cli-proxy-api:v7.2.92@sha256:af18f6fb364bfb7b482a1ca6c6c85fd7df2c0d6a3a497ebb82c337ac2216dc41'
 LLM_FILES='compose.yml:compose.llm.yml:llm/compose.accounts.yml'
+# A host that runs its own reverse proxy instead of Caddy keeps that in
+# compose.override.yml (and the gateway's part in compose.llm.override.yml).
+# COMPOSE_FILE replaces compose's automatic override lookup, so name them here.
+for f in compose.override.yml compose.llm.override.yml; do
+  if [ -f "$f" ]; then LLM_FILES="$LLM_FILES:$f"; fi
+done
 AGENT_USER=hegai
 DROPIN_DIR=/etc/systemd/user/cc-remote-agent.service.d
 DROPIN="$DROPIN_DIR/hegai-gateway.conf"
@@ -189,7 +195,7 @@ JSON
   # Caddyfile is a bind-mounted file: after an update (git pull replaces the
   # file) the running Caddy still serves the old one, without the /llm/v1
   # routes. A restart re-reads it; agents reconnect on their own.
-  dc restart caddy >/dev/null
+  if [ -n "$(dc ps -q caddy)" ]; then dc restart caddy >/dev/null; fi
   admin wait
   agent_env
   cat <<MSG

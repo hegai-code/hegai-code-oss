@@ -156,6 +156,13 @@ Completions. Встроенные провайдеры (Anthropic, Gemini, Bedro
   людей и провайдеров) и **токены входа в учётки подписок**. Не коммитьте и не
   отдавайте эту папку; в резервную копию — вместе с `.env`.
 - `sudo ./llm.sh disable` выключает шлюз, папка `llm/` остаётся.
+- Сервер со своим nginx вместо Caddy: Caddy в `compose.override.yml` уведён в
+  профиль, hub опубликован на `127.0.0.1:4319`, а `compose.llm.override.yml`
+  публикует Bifrost на loopback (`bifrost: ports: ["127.0.0.1:8098:8080"]`).
+  `llm.sh` сам добавляет оба файла в `COMPOSE_FILE`, если они есть. В nginx
+  повторите маршруты из `Caddyfile`: наружу только `/llm/v1/{models,responses,
+  chat/completions,completions,embeddings}` (без префикса `/llm`), остальное
+  под `/llm/` — 404, `/hegai/limits` → hub `/api/gateway/key-limits`.
 
 **Условия подписок — на вас.** Учётка подписки обычно рассчитана на одного
 человека: несколько людей на одной учётке нарушают правила провайдера и ведут

@@ -380,26 +380,26 @@ var require_permessage_deflate = __commonJS({
             value = value[0];
             if (key === "client_max_window_bits") {
               if (value !== true) {
-                const num = +value;
-                if (!Number.isInteger(num) || num < 8 || num > 15) {
+                const num2 = +value;
+                if (!Number.isInteger(num2) || num2 < 8 || num2 > 15) {
                   throw new TypeError(
                     `Invalid value for parameter "${key}": ${value}`
                   );
                 }
-                value = num;
+                value = num2;
               } else if (!this._isServer) {
                 throw new TypeError(
                   `Invalid value for parameter "${key}": ${value}`
                 );
               }
             } else if (key === "server_max_window_bits") {
-              const num = +value;
-              if (!Number.isInteger(num) || num < 8 || num > 15) {
+              const num2 = +value;
+              if (!Number.isInteger(num2) || num2 < 8 || num2 > 15) {
                 throw new TypeError(
                   `Invalid value for parameter "${key}": ${value}`
                 );
               }
-              value = num;
+              value = num2;
             } else if (key === "client_no_context_takeover" || key === "server_no_context_takeover") {
               if (value !== true) {
                 throw new TypeError(
@@ -1113,8 +1113,8 @@ var require_receiver = __commonJS({
           return;
         }
         const buf = this.consume(8);
-        const num = buf.readUInt32BE(0);
-        if (num > Math.pow(2, 53 - 32) - 1) {
+        const num2 = buf.readUInt32BE(0);
+        if (num2 > Math.pow(2, 53 - 32) - 1) {
           const error62 = this.createError(
             RangeError,
             "Unsupported WebSocket frame: payload length > 2^53 - 1",
@@ -1125,7 +1125,7 @@ var require_receiver = __commonJS({
           cb(error62);
           return;
         }
-        this._payloadLength = num * Math.pow(2, 32) + buf.readUInt32BE(4);
+        this._payloadLength = num2 * Math.pow(2, 32) + buf.readUInt32BE(4);
         this.haveLength(cb);
       }
       /**
@@ -27242,7 +27242,7 @@ function persistDeviceToken(cfg, deviceToken) {
   writeFileSync2(CONFIG_FILE, JSON.stringify({ machineId: cfg.machineId, name: cfg.name, deviceToken }, null, 2), { mode: 384 });
   tighten();
 }
-var AGENT_VERSION = true ? "0.3.6" : process.env["CC_REMOTE_AGENT_VERSION"] ?? process.env["npm_package_version"] ?? "dev";
+var AGENT_VERSION = true ? "0.3.7" : process.env["CC_REMOTE_AGENT_VERSION"] ?? process.env["npm_package_version"] ?? "dev";
 
 // agent/src/policy.ts
 import { existsSync as existsSync4, readFileSync as readFileSync4, writeFileSync as writeFileSync5 } from "node:fs";
@@ -40662,6 +40662,54 @@ function codexProviderFromToml(text) {
   }
   return { provider: "own" };
 }
+function tomlStr(raw) {
+  const v = raw.trim();
+  if (v.startsWith('"')) {
+    const m2 = /^"((?:[^"\\]|\\.)*)"/.exec(v);
+    if (!m2) return void 0;
+    try {
+      return JSON.parse(`"${m2[1]}"`);
+    } catch {
+      return m2[1];
+    }
+  }
+  const m = /^'([^']*)'/.exec(v);
+  return m ? m[1] : void 0;
+}
+function codexGatewayConnection(text, env = {}) {
+  const { provider, providerName } = codexProviderFromToml(text);
+  if (provider !== "gateway" || !providerName) return {};
+  let inTable = false;
+  let baseUrl;
+  let token;
+  let envKey;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("[")) {
+      const h = /^\[\s*model_providers\s*\.\s*(?:"([^"]*)"|'([^']*)'|([A-Za-z0-9_-]+))\s*\]/.exec(line);
+      inTable = Boolean(h && (h[1] ?? h[2] ?? h[3]) === providerName);
+      continue;
+    }
+    if (!inTable) continue;
+    const kv = /^([A-Za-z0-9_]+)\s*=\s*(.*)$/.exec(line);
+    if (!kv) continue;
+    const val = tomlStr(kv[2]);
+    if (val === void 0) continue;
+    if (kv[1] === "base_url") baseUrl = val;
+    else if (kv[1] === "experimental_bearer_token") token = val;
+    else if (kv[1] === "env_key") envKey = val;
+  }
+  const bearer = token || (envKey ? env[envKey] : void 0) || void 0;
+  return { ...baseUrl ? { baseUrl } : {}, ...bearer ? { bearer } : {} };
+}
+async function readCodexGatewayConnection() {
+  try {
+    return codexGatewayConnection(await readFile10(path29.join(codexHome(), "config.toml"), "utf8"), process.env);
+  } catch {
+    return {};
+  }
+}
 function decodeJwtPayload(token) {
   const parts = token.split(".");
   if (parts.length < 2) return void 0;
@@ -40833,6 +40881,71 @@ function describeClaude(s) {
   const who = s.auth === "oauth" ? `oauth ${s.account ?? "?"}${s.plan ? ` (${s.plan})` : ""}` : s.auth;
   const exp = s.expiresAt ? ` \xB7 \u0434\u043E ${new Date(s.expiresAt).toISOString().slice(0, 10)}` : "";
   return `claude: sdk ${s.version ?? "?"} \xB7 ${who}${exp}${s.error ? ` \xB7 ${s.error}` : ""}`;
+}
+
+// agent/src/gateway-limits.ts
+function gatewayLimitsUrl(baseUrl, trusted = gatewayUrl()) {
+  if (!baseUrl || !trusted) return null;
+  let u;
+  let t;
+  try {
+    u = new URL(baseUrl);
+    t = new URL(trusted);
+  } catch {
+    return null;
+  }
+  if (u.username || u.password || u.origin !== t.origin) return null;
+  return new URL("/hegai/limits", t.origin);
+}
+var num = (v) => typeof v === "number" && Number.isFinite(v) ? v : void 0;
+function quotaLimit(key, pct, win, reset) {
+  const w = num(win);
+  if (!w || w <= 0) return null;
+  const weekly = w >= 10080;
+  const span = w % 1440 === 0 ? `${w / 1440} \u0434\u043D` : w % 60 === 0 ? `${w / 60} \u0447` : `${w} \u043C\u0438\u043D`;
+  const r = num(reset);
+  return {
+    key,
+    label: w === 10080 ? "\u041D\u0435\u0434\u0435\u043B\u044F (7 \u0434\u043D\u0435\u0439)" : `${weekly ? "\u041E\u043A\u043D\u043E" : "\u0421\u0435\u0441\u0441\u0438\u044F"} (${span})`,
+    group: weekly ? "weekly" : "session",
+    percent: num(pct) ?? 0,
+    ...r ? { resetsAt: r * 1e3 } : {}
+    // quota resets are epoch seconds
+  };
+}
+function mapGatewayLimits(reply, now = Date.now()) {
+  const limits = [];
+  const q = reply.quota && typeof reply.quota === "object" && reply.quota["ok"] === true ? reply.quota : null;
+  if (q) {
+    const a = quotaLimit("gw-primary", q["primary_used_percent"], q["primary_window_minutes"], q["primary_reset_at"]);
+    const b = quotaLimit("gw-secondary", q["secondary_used_percent"], q["secondary_window_minutes"], q["secondary_reset_at"]);
+    if (a) limits.push(a);
+    if (b) limits.push(b);
+  }
+  if (!limits.length) return null;
+  const plan = q && typeof q["plan"] === "string" ? q["plan"] : void 0;
+  return {
+    limits,
+    account: reply.pool ? `\u0448\u043B\u044E\u0437 \xB7 ${reply.pool}` : "\u0448\u043B\u044E\u0437",
+    ...plan ? { subscription: plan } : {},
+    updatedAt: now
+  };
+}
+async function fetchGatewayLimits(baseUrl, bearer) {
+  const url2 = gatewayLimitsUrl(baseUrl);
+  if (!url2 || !bearer) return null;
+  try {
+    const res = await fetch(url2, {
+      headers: { authorization: `Bearer ${bearer}`, accept: "application/json" },
+      redirect: "error",
+      // the key goes to the allow-listed host only, never after a redirect
+      signal: AbortSignal.timeout(1e4)
+    });
+    if (res.status !== 200) return null;
+    return mapGatewayLimits(await res.json());
+  } catch {
+    return null;
+  }
 }
 
 // agent/src/profile.ts
@@ -44110,7 +44223,12 @@ var AgentClient = class _AgentClient {
         }
       };
     } else if (codex.present) {
-      this.send({ type: "codex_usage", usage: { updatedAt: Date.now() } });
+      let gw = null;
+      if (codex.provider === "gateway" && isExternal()) {
+        const conn = await readCodexGatewayConnection();
+        gw = await fetchGatewayLimits(conn.baseUrl, conn.bearer);
+      }
+      this.send({ type: "codex_usage", usage: gw ?? { updatedAt: Date.now() } });
     }
     if (_AgentClient.runtimesKey(next) !== _AgentClient.runtimesKey(this.runtimes)) {
       this.runtimes = next;
