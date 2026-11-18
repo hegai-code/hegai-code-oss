@@ -70,6 +70,7 @@ struct RootView: View {
             router.path = []
             router.closeDrawer()
         }
+        .modifier(HubConnectPrompt())
         .sheet(isPresented: $client.aiConsentRequested) { AIDataConsentView() }
         // «Ввести код пары» для зашифрованной машины: из карточки машины и из
         // закрытой сессии (docs/E2EE.md).

@@ -26,6 +26,8 @@ struct TeamPeopleView: View {
     @State private var inviteEmail = ""
     @State private var inviteRole = "member"
     @State private var inviteLink: String?
+    /// The link is the hub's account-setup link (`setupUrl`), not `/?invite=`.
+    @State private var inviteIsSetup = false
     @State private var expandedUserId: String?
 
     private var workspaceId: String? { client.viewer?.workspace.workspaceId }
@@ -53,7 +55,7 @@ struct TeamPeopleView: View {
             SectionLabel(text: "Пригласить")
             // Стопкой, не строкой: поле + выбор роли + кнопка — это около 510pt
             // фиксированной ширины, которой у телефона нет.
-            TeamField(placeholder: "email@a.test", text: $inviteEmail, kind: .email)
+            TeamField(placeholder: "email@example.com", text: $inviteEmail, kind: .email)
             HStack(spacing: Theme.s2) {
                 ForEach(["member", "manager"], id: \.self) { role in
                     FolderChip(title: role, active: inviteRole == role) { inviteRole = role }
@@ -71,6 +73,19 @@ struct TeamPeopleView: View {
                         .lineLimit(1).truncationMode(.middle)
                         .textSelection(.enabled)
                     Spacer(minLength: 0)
+                    // The hub sends no email: the link travels in whatever
+                    // messenger the team uses.
+                    if let url = URL(string: inviteLink) {
+                        ShareLink(item: url) {
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 14))  // бокс глифа
+                                .foregroundStyle(Theme.textMuted)
+                                .frame(width: Theme.tapTarget, height: Theme.tapTarget)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Поделиться ссылкой")
+                    }
                     Button {
                         copyToPasteboard(inviteLink)
                         Haptics.success()
@@ -87,7 +102,9 @@ struct TeamPeopleView: View {
                 .padding(.leading, Theme.s3)
                 .background(Theme.surfaceSunken,
                             in: RoundedRectangle(cornerRadius: Theme.radiusMd, style: .continuous))
-                Text("Ссылка одноразовая; человек входит через Google с той же почтой и попадает в пространство.")
+                Text(inviteIsSetup
+                     ? "Ссылка одноразовая: по ней человек задаст пароль и код аутентификатора и сразу попадёт в команду. Письмо сервер не отправляет — перешлите ссылку сами."
+                     : "Ссылка одноразовая: человек входит с той же почтой и попадает в команду. Письмо сервер не отправляет — перешлите ссылку сами.")
                     .font(.ui(Theme.sizeMicro)).foregroundStyle(Theme.textFaint)
             }
         }
@@ -227,7 +244,8 @@ struct TeamPeopleView: View {
                                                     email: inviteEmail.trimmingCharacters(in: .whitespaces),
                                                     role: inviteRole)
             let origin = HegaiAuth.apiBase(hubURL: settings.hubURL)?.absoluteString ?? ""
-            inviteLink = "\(origin)/?invite=\(info.token)"
+            inviteLink = info.setupUrl ?? "\(origin)/?invite=\(info.token)"
+            inviteIsSetup = info.setupUrl != nil
             inviteEmail = ""
         } catch {
             note = "Приглашение не создано: \(error.localizedDescription)"

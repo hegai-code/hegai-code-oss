@@ -257,6 +257,9 @@ export const AccessRow = z.object({
     company: z.string().optional(),
   }).optional(),
   githubGrant: GithubGrant.optional(),
+  /** The account signs in with a local password + authenticator (external
+   *  edition): the admin may «Сбросить вход». Absent = no. */
+  localLogin: z.boolean().optional(),
 });
 export type AccessRow = z.infer<typeof AccessRow>;
 

@@ -9,7 +9,8 @@ import type {
   SeatStatus,
   ViewerContext,
 } from '@cc-remote/shared';
-import { ApiError, teamApi, type AccessCounts, type AccessState, type GithubRevocation } from './teamApi.js';
+import { ApiError, teamApi, type AccessCounts, type AccessState, type GithubRevocation, type LocalSetupLink } from './teamApi.js';
+import { CopyButton } from './components/CopyButton.js';
 import { Panel } from './TeamViews.js';
 import { AgentRelease } from './AgentRelease.js';
 import { accountAge, displayName, toMillis } from './lib.js';
@@ -163,11 +164,45 @@ export function TeamAccess({ viewer }: { viewer?: ViewerContext | null }) {
       </Panel>
     );
   }
-  return <AccessAdmin />;
+  return <AccessAdmin selfId={viewer.userId} />;
 }
 
-function AccessAdmin() {
-  const external = isExternal(usePublicConfig());
+/** The one-time setup link, shown right after it is minted. The hub sends no
+ *  email, so the admin has to pass it on — hence copy and (on phones) share. */
+function SetupLinkBox({ link, onClose }: { link: LocalSetupLink; onClose: () => void }) {
+  const canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const hours = Math.max(1, Math.round((link.expiresAt - Date.now()) / 3_600_000));
+  return (
+    <section className="team-card">
+      <h3>Ссылка для {link.email}</h3>
+      <div className="access-local-body">
+      <p className="team-help">
+        Ссылка одноразовая и действует {hours} ч. Сервер не отправляет писем — передайте её человеку сами. По ней он
+        задаст пароль и подключит приложение-аутентификатор.
+      </p>
+      <input readOnly value={link.setupUrl} aria-label="Ссылка для входа" onFocus={(e) => e.currentTarget.select()} />
+      <div className="access-actions">
+        <CopyButton className="btn primary" text={link.setupUrl} />
+        {canShare && (
+          <button className="btn" onClick={() => void navigator.share({ url: link.setupUrl }).catch(() => undefined)}>Поделиться</button>
+        )}
+        <button className="btn" onClick={onClose}>Закрыть</button>
+      </div>
+      </div>
+    </section>
+  );
+}
+
+function AccessAdmin({ selfId }: { selfId: string }) {
+  const publicConfig = usePublicConfig();
+  const external = isExternal(publicConfig);
+  const hasLocal = publicConfig?.auth.local === true;
+  // Until the config answers, keep the pre-approval form (the old behaviour).
+  const auth = publicConfig?.auth;
+  const othersSignIn = !auth || !!(auth.google || auth.github || auth.telegram || auth.apple || auth.hegaiSso || auth.oidc);
+  const [link, setLink] = useState<LocalSetupLink | null>(null);
+  const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
   const [list, setList] = useState<AccessState>('waitlist');
   const [rows, setRows] = useState<AccessRow[]>([]);
   const [counts, setCounts] = useState<AccessCounts>({ waitlist: 0, active: 0, suspended: 0 });
@@ -270,6 +305,38 @@ function AccessAdmin() {
     }
   };
 
+  const addPerson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = newEmail.trim().toLowerCase();
+    if (!value || busy) return;
+    setBusy(true);
+    setNote('');
+    setLink(null);
+    try {
+      setLink(await teamApi.createLocalUser(value, newName.trim() || undefined));
+      setNewEmail('');
+      setNewName('');
+      await load();
+    } catch (err) {
+      // The hub's own words: «адрес уже занят…» tells the admin to reset instead.
+      setNote(`${value}: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resetLogin = async (row: AccessRow) => {
+    if (!(await askConfirm(`Сбросить вход ${displayName(row)}?\n\nПароль и код аутентификатора сбросятся, все сессии завершатся. Человек заново задаст их по новой ссылке.`, { confirmLabel: 'Сбросить', danger: true }))) return;
+    setBusy(true);
+    setNote('');
+    setLink(null);
+    try {
+      setLink(await teamApi.resetLocalUser(row.userId));
+    } catch (err) {
+      setNote(`Сброс входа ${displayName(row)}: ${(err as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
   const activateOne = (row: AccessRow) =>
     void run(`Активирован ${displayName(row)}`, () => teamApi.activate([row.userId]));
   const suspendOne = async (row: AccessRow) => {
@@ -298,11 +365,28 @@ function AccessAdmin() {
         <article className={counts.suspended > 0 ? 'attn' : ''}><b>{counts.suspended}</b><span>приостановлено</span></article>
       </div>
 
+      {hasLocal && (
+        <section className="team-card">
+          <h3>Добавить человека</h3>
+          <div className="access-local-body">
+          <p className="team-help">Создаст учётную запись и ссылку, по которой человек задаст пароль и код аутентификатора.</p>
+          <form className="team-form access-add" onSubmit={addPerson}>
+            <input type="email" value={newEmail} disabled={busy} onChange={(e) => setNewEmail(e.target.value)} placeholder="name@company.com" autoComplete="off" spellCheck={false} aria-label="Почта человека" required />
+            <input value={newName} disabled={busy} onChange={(e) => setNewName(e.target.value)} placeholder="Имя (необязательно)" autoComplete="off" aria-label="Имя" maxLength={120} />
+            <button className="btn primary" disabled={busy || !newEmail.trim()}>Создать ссылку</button>
+          </form>
+          </div>
+        </section>
+      )}
       {/* Above the three lists, not inside «В списке»: the address of someone
           who has never signed in belongs to no list, and hiding the field
           under one of them makes it reachable only from a list that person is
           by definition not in. */}
-      <form className="team-form access-add" onSubmit={addOne}>
+      {/* Allowing an address in advance only matters to a sign-in that makes
+          the account by itself (OIDC, Google, Telegram…). On a hub whose only
+          door is the local password nobody could ever use that permission —
+          «Добавить человека» above is the way in there. */}
+      {othersSignIn && <form className="team-form access-add" onSubmit={addOne}>
         <input
           type="email"
           value={email}
@@ -315,7 +399,9 @@ function AccessAdmin() {
           required
         />
         <button className="btn primary" disabled={busy || !email.trim()}>Добавить</button>
-      </form>
+      </form>}
+
+      {link && <SetupLinkBox link={link} onClose={() => setLink(null)} />}
 
       {pending && pending.length > 0 && (
         <section className="team-card">
@@ -381,6 +467,9 @@ function AccessAdmin() {
                 <button className="btn" disabled={busy} onClick={() => retryGrant(r)}>{r.githubGrant.status === 'granted' ? 'Проверить доступ' : 'Пригласить снова'}</button>
               )}
               {list === 'waitlist' && <button className="btn primary" disabled={busy} onClick={() => activateOne(r)}>Активировать</button>}
+              {list === 'active' && hasLocal && r.localLogin && r.userId !== selfId && (
+                <button className="btn" disabled={busy} onClick={() => void resetLogin(r)}>Сбросить вход</button>
+              )}
               {list === 'active' && <button className="btn" disabled={busy} onClick={() => suspendOne(r)}>Приостановить</button>}
               {list === 'suspended' && <button className="btn primary" disabled={busy} onClick={() => reactivateOne(r)}>Вернуть</button>}
             </div>

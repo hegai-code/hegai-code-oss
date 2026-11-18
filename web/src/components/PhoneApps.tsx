@@ -4,9 +4,10 @@ import { isExternal, usePublicConfig } from '../publicConfig.js';
 
 /**
  * The phone clients: a QR code that opens `/app` (the server route
- * `/app/qr.svg` encodes `${origin}/app`, and `/app` sends iOS to the App Store
- * and Android to Google Play), the two store buttons, and — on a hub that is
- * not code.acme.test — the line that tells the app which server to use.
+ * `/app/qr.svg` encodes `${origin}/app`; on code.acme.test `/app` sends iOS to
+ * the App Store and Android to Google Play, on a self-hosted hub it offers
+ * «Открыть в приложении» with this server), the two store buttons, and — on a
+ * hub that is not code.acme.test — how the app learns which server to use.
  *
  * Used by the onboarding's last step, the «Приложения» tab and the public
  * `/app` page, so the three never say different things.
@@ -23,13 +24,14 @@ export function StoreButtons() {
 export function OtherHubHint() {
   if (!isCustomHub()) return null;
   const host = hubAddress().host;
-  // The two apps name the same door differently, and the iPhone one changed:
-  // new builds take the bare domain, older ones want the websocket address.
+  // The apps open on code.acme.test. Current builds take this server from the
+  // QR (camera → `/app` → «Открыть в приложении», or the app's own scanner on
+  // its sign-in screen); older ones only from a typed address, and the two
+  // apps name that door differently.
   return (
     <div className="phone-hub">
-      <p className="team-help"><b>iPhone:</b> Войти → Другой хаб / токен → <code>{host}</code><br />
-        <small>В старых версиях приложения: <code>wss://{host}/mobile/ui</code></small></p>
-      <p className="team-help"><b>Android:</b> Другой сервер → <code>{host}</code></p>
+      <p className="team-help">Приложение подключится к этому серверу: откройте код камерой и нажмите «Открыть в приложении», или на экране входа в приложении у строки «Сервер» нажмите «Свой сервер» (Android — «Другой сервер») и отсканируйте код. Адрес сервера: <code>{host}</code></p>
+      <p className="team-help"><small>В старых версиях приложения адрес вводится руками: iPhone — Войти → Другой хаб / токен, Android — Другой сервер.</small></p>
     </div>
   );
 }
@@ -50,7 +52,7 @@ export function PhoneApps({ qr = true }: { qr?: boolean }) {
         <img className="phone-qr" src="/app/qr.svg" width={144} height={144} alt="QR-код: открыть приложение на телефоне" onError={() => setQrOk(false)} />
       )}
       <div className="phone-apps-body">
-        <p className="team-help">{qr && qrOk ? 'Наведите камеру телефона на код — откроется нужный магазин. Или выберите его сами.' : `Приложение для iPhone и Android: сессии и ответы агенту${notifications ? ' и уведомления' : ''}.`}</p>
+        <p className="team-help">{qr && qrOk ? (isCustomHub() ? 'Наведите камеру телефона на код — откроется страница приложения для этого сервера. Или установите его из магазина.' : 'Наведите камеру телефона на код — откроется нужный магазин. Или выберите его сами.') : `Приложение для iPhone и Android: сессии и ответы агенту${notifications ? ' и уведомления' : ''}.`}</p>
         <StoreButtons />
         <OtherHubHint />
       </div>

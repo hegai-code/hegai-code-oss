@@ -683,12 +683,27 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
     private val _publicConfig = MutableStateFlow<HubPublicConfig?>(null)
     val publicConfig = _publicConfig.asStateFlow()
     private var configJob: Job? = null
+    /** True when the last `/api/public-config` ask failed (login screen: «Сервер … не ответил»). */
+    private val _configFailed = MutableStateFlow(false)
+    val configFailed = _configFailed.asStateFlow()
+    /** A hub proposed by a link or QR, waiting for the person's confirmation (never switched silently). */
+    private val _proposedHub = MutableStateFlow<String?>(null)
+    val proposedHub = _proposedHub.asStateFlow()
+    fun proposeHub(text: String) {
+        val base = net.hegai.code.core.HubLink.parse(text) ?: return
+        if (base == hub) return
+        // A proposal already on screen (or being probed) stays: the dialog must
+        // switch to the host it showed, not to whatever link came last.
+        _proposedHub.compareAndSet(null, base)
+    }
+    fun dismissProposedHub() { _proposedHub.value = null }
     /** Asks the current hub which sign-in ways it offers; the login screen reads [publicConfig]. */
     fun refreshPublicConfig() {
         val asked = hub
         _publicConfig.value = null
+        _configFailed.value = false
         configJob?.cancel()
-        configJob = viewModelScope.launch { val config = fetchPublicConfig(asked); if (asked == hub) _publicConfig.value = config }
+        configJob = viewModelScope.launch { val config = fetchPublicConfig(asked); if (asked == hub) { _publicConfig.value = config; _configFailed.value = config == null } }
     }
     private suspend fun fetchPublicConfig(base: String): HubPublicConfig? = withContext(Dispatchers.IO) {
         try {
@@ -1015,7 +1030,12 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
     suspend fun switchHub(raw: String): String? {
         val base = HubUrl.normalize(raw) ?: return "Введите адрес вида https://hub.example.com"
         if (base == hub) return null
+        val hubBefore = hub
+        val tokenBefore = token
         probeHub(base)?.let { return it }
+        // The probe suspends: a sign-in or another switch (a connect link, the dialog) may have landed meanwhile.
+        // This older call must not revoke that newer session or overwrite the newer choice.
+        if (hub != hubBefore || token != tokenBefore) return "Сервер уже изменён — повторите подключение"
         // Transaction: caches and drafts are the person's data, so nothing is destroyed until the new address is
         // stored. The hub is committed first; the old session stays sealed for the OLD hub, so even a process
         // death right after the commit never sends it to the new one. A failed commit changes nothing.

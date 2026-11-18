@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
@@ -19,6 +20,9 @@ fun segment(value: String) = Uri.encode(value)
 fun roleLabel(value: String?) = when(value) { "owner" -> "Владелец"; "manager" -> "Менеджер"; else -> "Участник" }
 
 @Composable fun TeamScreen(state: HubState, model: HubViewModel) {
+    val hubBase by model.hubBase.collectAsStateWithLifecycle()
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val workspace = state.viewer?.workspace ?: return
     val base = "/api/workspaces/${segment(workspace.workspaceId)}"
@@ -80,7 +84,20 @@ fun roleLabel(value: String?) = when(value) { "owner" -> "Владелец"; "ma
                         Button({ scope.launch { runCatching {
                             model.api("$base/invitations", "POST", buildJsonObject { put("email", email.trim()); put("role", inviteRole) })
                         }.onSuccess { invitation = it; email = "" }.onFailure { error = it.message } } }, enabled = email.contains('@')) { Text("Создать приглашение") }
-                        invitation?.let { value -> SelectionContainer { Text(value.string("url") ?: value.string("token") ?: "Приглашение создано") } }
+                        invitation?.let { value ->
+                            val setup = value.string("setupUrl")?.takeIf { it.isNotBlank() }
+                            val link = InviteLink.build(hubBase, value.string("token"), setup)
+                            if (link == null) Text("Приглашение создано") else {
+                                SelectionContainer { Text(link, fontFamily = HegaiTokens.Mono, style = MaterialTheme.typography.bodyMedium) }
+                                Text(if (setup != null) "Ссылка одноразовая: по ней человек задаст пароль и код аутентификатора и сразу попадёт в команду. Письмо сервер не отправляет — перешлите ссылку сами."
+                                    else "Ссылка одноразовая: человек входит с той же почтой и попадает в команду. Письмо сервер не отправляет — перешлите ссылку сами.",
+                                    style = MaterialTheme.typography.bodyMedium)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton({ clipboard.setText(androidx.compose.ui.text.AnnotatedString(link)) }) { Text("Скопировать") }
+                                    OutlinedButton({ context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, link), null)) }) { Text("Поделиться") }
+                                }
+                            }
+                        }
                     } }
                     items(members) { person -> ListItem(headlineContent = { Text(personName(person)) }, supportingContent = { Text(listOfNotNull(person.string("email"), roleLabel(person.string("role"))).joinToString(" · ")) }, modifier = Modifier.clickable(enabled = owner && person.string("role") != "owner") { member = person }) }
                 }

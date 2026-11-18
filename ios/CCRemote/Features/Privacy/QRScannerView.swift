@@ -7,13 +7,17 @@ import UIKit
 /// prints) and hands its text back. The camera is asked for only here, with the
 /// reason in Info.plist (`NSCameraUsageDescription`).
 struct QRScannerScreen: View {
+    /// Which scanned texts count. Pairing codes are `hcp1.…`; the server-code
+    /// scan (login screen) accepts anything and lets `HubLink.parse` judge.
+    var accept: (String) -> Bool = { $0.hasPrefix("hcp1.") }
+    var hint = "Наведите камеру на QR-код, который напечатала команда --pair"
     let onCode: (String) -> Void
     let onCancel: () -> Void
     @State private var failure: String?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            QRScannerRepresentable(onCode: onCode, onFailure: { failure = $0 })
+            QRScannerRepresentable(accept: accept, onCode: onCode, onFailure: { failure = $0 })
                 .ignoresSafeArea()
             if let failure {
                 VStack(spacing: Theme.s3) {
@@ -24,7 +28,7 @@ struct QRScannerScreen: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black.opacity(0.85))
             } else {
-                Text("Наведите камеру на QR-код, который напечатала команда --pair")
+                Text(hint)
                     .font(SettingsStyle.caption).foregroundStyle(.white)
                     .padding(Theme.s3).background(Color.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -44,11 +48,13 @@ struct QRScannerScreen: View {
 }
 
 private struct QRScannerRepresentable: UIViewControllerRepresentable {
+    let accept: (String) -> Bool
     let onCode: (String) -> Void
     let onFailure: (String) -> Void
 
     func makeUIViewController(context: Context) -> QRScannerController {
         let c = QRScannerController()
+        c.accept = accept
         c.onCode = onCode
         c.onFailure = onFailure
         return c
@@ -57,6 +63,7 @@ private struct QRScannerRepresentable: UIViewControllerRepresentable {
 }
 
 final class QRScannerController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+    var accept: (String) -> Bool = { $0.hasPrefix("hcp1.") }
     var onCode: ((String) -> Void)?
     var onFailure: ((String) -> Void)?
     private let session = AVCaptureSession()
@@ -133,7 +140,7 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
                         from connection: AVCaptureConnection) {
         guard !delivered,
               let text = objects.compactMap({ ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue })
-                .first(where: { $0.hasPrefix("hcp1.") })
+                .first(where: accept)
         else { return }
         delivered = true
         UINotificationFeedbackGenerator().notificationOccurred(.success)

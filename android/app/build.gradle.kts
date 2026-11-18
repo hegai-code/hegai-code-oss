@@ -27,8 +27,8 @@ android {
         buildConfigField("String", "FIREBASE_API_KEY", firebaseValue("FIREBASE_API_KEY"))
         buildConfigField("String", "FIREBASE_PROJECT_ID", firebaseValue("FIREBASE_PROJECT_ID"))
         buildConfigField("String", "FIREBASE_SENDER_ID", firebaseValue("FIREBASE_SENDER_ID"))
-        versionCode = 25
-        versionName = "1.0.5"
+        versionCode = 26
+        versionName = "1.0.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     signingConfigs {

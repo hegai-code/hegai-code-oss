@@ -32,6 +32,11 @@ const OUT = `${WEB}.shots`;
 // there fell back to «Настройки» — seven green ticks for the wrong page.
 const PORT = Number(process.env.SHOT_PORT) || 5199;
 
+const UA = {
+  iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+  android: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36',
+};
+
 /** Chrome or Edge, wherever this machine keeps it. */
 function findBrowser() {
   const candidates = [
@@ -83,6 +88,11 @@ const VIEWS = [
   { screen: 'appPage', width: 1440, height: 1000, theme: 'light' },
   { screen: 'appPage', width: 1440, height: 1000, theme: 'dark' },
   { screen: 'appPage', width: 390, height: 844, theme: 'light', dsf: 2 },
+  // A phone on a customer's hub: the QR lands here, not in the store.
+  { screen: 'appPagePhoneExt', width: 390, height: 844, theme: 'light', dsf: 2, ua: 'iphone' },
+  { screen: 'appPagePhoneExt', width: 390, height: 844, theme: 'dark', dsf: 2, ua: 'android' },
+  { screen: 'appPageExt', width: 1440, height: 1000, theme: 'light' },
+  { screen: 'setupDonePhone', width: 390, height: 844, theme: 'light', dsf: 2, ua: 'iphone' },
   { screen: 'settingsMachines', width: 1440, height: 1000, theme: 'light' },
   { screen: 'settingsMachines', width: 1440, height: 1000, theme: 'dark' },
   { screen: 'settingsMachines', width: 390, height: 844, theme: 'light', dsf: 2 },
@@ -132,6 +142,8 @@ const VIEWS = [
   { screen: 'access', width: 1440, height: 1000, theme: 'light' },
   { screen: 'access', width: 1440, height: 1000, theme: 'dark' },
   { screen: 'access', width: 390, height: 844, theme: 'light', dsf: 2 },
+  { screen: 'accessExt', width: 1440, height: 1000, theme: 'light' },
+  { screen: 'accessExt', width: 390, height: 844, theme: 'light', dsf: 2 },
   // The transcript, at both widths it actually gets: a pane in the Колонки
   // lens and the full-width session view. The reading layout is the same CSS
   // in both, and a gutter that is right at 1440 can still be wrong at 380.
@@ -420,6 +432,8 @@ try {
     // touch-only rule were being PHOTOGRAPHED IN THE WRONG STATE and the shot
     // quietly agreed with whatever the desk layout did.
     const touch = (v.dsf ?? 1) > 1;
+    // Pages that branch on the phone's OS (`/app`, `/setup`) need its user agent.
+    if (v.ua) await page.setUserAgent(UA[v.ua]);
     await page.setViewport({
       width: v.width, height: v.height, deviceScaleFactor: v.dsf ?? 1,
       hasTouch: touch, isMobile: touch,

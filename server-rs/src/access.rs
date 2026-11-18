@@ -1222,6 +1222,20 @@ impl WorkspaceStore {
             for (key, value) in joined {
                 v[key] = value;
             }
+            // «Сбросить вход» is only meaningful for an account that signs in
+            // with a local password; the admin UI keys its button on this.
+            let local: bool = conn
+                .query_row(
+                    "SELECT 1 FROM identities WHERE provider=?1 AND user_id=?2",
+                    params![crate::local_login::PROVIDER_LOCAL, record.user_id],
+                    |_| Ok(true),
+                )
+                .optional()
+                .map_err(db_err)?
+                .unwrap_or(false);
+            if local {
+                v["localLogin"] = Value::Bool(true);
+            }
             if let Some(e) = &email {
                 v["email"] = Value::String(e.clone());
             }
@@ -2339,6 +2353,17 @@ mod tests {
         assert_eq!(rows[0]["userId"], "w");
         assert_eq!(rows[0]["invitedTo"], json!(["Alpha"]));
         assert!(rows[0].get("fullName").is_none());
+        assert!(rows[0].get("localLogin").is_none());
+        crate::identity::link(
+            &s.conn.lock().unwrap(),
+            crate::local_login::PROVIDER_LOCAL,
+            "w@x",
+            "w",
+            1,
+        )
+        .unwrap();
+        let rows = s.access_rows(Some("waitlist"), 50, 0).unwrap();
+        assert_eq!(rows[0]["localLogin"], json!(true));
         let all = s.access_rows(None, 50, 0).unwrap();
         assert_eq!(all.len(), 2);
         assert_eq!(

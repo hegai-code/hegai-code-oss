@@ -65,6 +65,11 @@ public struct InvitationInfo: Codable, Hashable, Sendable {
     /// The secret the invite link carries (`origin/?invite=<token>`).
     public let token: String
     public let expiresAt: Double
+    /// Self-hosted hub with password sign-in, a NEW address invited by its
+    /// admin: the hub already made the account, and this one-time link sets its
+    /// password + authenticator and joins the team in one go. `/?invite=` would
+    /// land that person on a sign-in they have no password for.
+    public let setupUrl: String?
 }
 
 public struct EnrollmentCode: Codable, Hashable, Sendable {

@@ -6,6 +6,7 @@ import { usePublicConfig } from './publicConfig.js';
 import { rememberWorkspace } from './shell/workspace.js';
 import { teamApi } from './teamApi.js';
 import { CopyButton } from './components/CopyButton.js';
+import { appConnectLink, isAndroidUa, isIosUa } from './lib.js';
 
 /**
  * `/setup#token=…` — the page the owner's (or an employee's) setup link opens
@@ -22,7 +23,8 @@ type Phase =
   | { kind: 'loading' }
   | { kind: 'dead' }
   | { kind: 'form'; info: LocalSetupBegin }
-  | { kind: 'recovery'; codes: string[] };
+  | { kind: 'recovery'; codes: string[] }
+  | { kind: 'done' };
 
 function tokenFromHash(): string {
   return new URLSearchParams(location.hash.replace(/^#/, '')).get('token') ?? '';
@@ -33,12 +35,20 @@ function inviteFromHash(): string {
   return new URLSearchParams(location.hash.replace(/^#/, '')).get('invite') ?? '';
 }
 
+/** On a phone the next step is usually the app, not this tab. Desktop goes
+ *  straight in, as before. */
+function finish(setPhase: (p: Phase) => void) {
+  if (isIosUa() || isAndroidUa()) setPhase({ kind: 'done' });
+  else location.assign('/');
+}
+
 function words(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   return 'Нет связи с сервером. Проверьте сеть и попробуйте ещё раз.';
 }
 
-export function SetupPage() {
+/** `initialPhase` is for `screens.tsx` only (photograph the phone «Готово»). */
+export function SetupPage({ initialPhase }: { initialPhase?: Phase } = {}) {
   const config = usePublicConfig();
   const brand = config?.brandName ?? 'Hegai Code';
   // Read before the first paint of the form, then wipe: a reload of this page
@@ -46,7 +56,7 @@ export function SetupPage() {
   const token = useMemo(tokenFromHash, []);
   const invite = useMemo(inviteFromHash, []);
   const [invitedTo, setInvitedTo] = useState<{ workspaceName: string; inviterName: string } | null>(null);
-  const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
+  const [phase, setPhase] = useState<Phase>(initialPhase ?? { kind: 'loading' });
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
   const [code, setCode] = useState('');
@@ -54,6 +64,7 @@ export function SetupPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (initialPhase) return;
     if (location.hash) history.replaceState(null, '', location.pathname + location.search);
     if (!token) {
       setPhase({ kind: 'dead' });
@@ -90,7 +101,7 @@ export function SetupPage() {
         if (done.workspaceId) rememberWorkspace(done.workspaceId);
         // No codes were issued when the authenticator already existed.
         if (done.recoveryCodes.length) setPhase({ kind: 'recovery', codes: done.recoveryCodes });
-        else location.assign('/');
+        else finish(setPhase);
       },
       (err) => {
         setError(words(err));
@@ -109,6 +120,15 @@ export function SetupPage() {
       <p>Она устарела, уже использована или скопирована не целиком. Попросите владельца сервера выдать новую.</p>
       <a className="btn" href="/">На страницу входа</a>
     </>;
+  } else if (phase.kind === 'done') {
+    body = <>
+      <h1>Готово</h1>
+      <p>Вход настроен. Теперь можно открыть приложение {brand} на этом телефоне или продолжить в браузере.</p>
+      <div className="signin-methods">
+        <a className="btn primary" href={appConnectLink(location.origin)}>Открыть в приложении</a>
+        <button className="btn" onClick={() => location.assign('/')}>Продолжить в браузере</button>
+      </div>
+    </>;
   } else if (phase.kind === 'recovery') {
     const text = phase.codes.join('\n');
     body = <>
@@ -120,7 +140,7 @@ export function SetupPage() {
       <div className="recovery-codes">{phase.codes.map((c) => <code key={c}>{c}</code>)}</div>
       <div className="signin-methods">
         <CopyButton className="btn" text={text} label="Скопировать коды" />
-        <button className="btn primary" onClick={() => location.assign('/')}>Я сохранил</button>
+        <button className="btn primary" onClick={() => finish(setPhase)}>Я сохранил</button>
       </div>
     </>;
   } else {

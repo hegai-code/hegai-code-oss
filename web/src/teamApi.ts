@@ -40,6 +40,8 @@ export type GrantResult = {
   pending?: PreauthorizedEmail;
 };
 
+export type LocalSetupLink = { userId: string; email: string; setupUrl: string; expiresAt: number };
+
 export const teamApi = {
   /** «Расходы» of a team (owner: everyone, manager: assigned, member: self). */
   usage: (workspaceId: string, from: string, to: string) =>
@@ -136,6 +138,13 @@ export const teamApi = {
     apiJson<unknown>(`/api/admin/access/${encodeURIComponent(userId)}/retry-github-grant`, { method: 'POST', body: '{}' }),
   adminAccess: (state: AccessState, limit = 100, offset = 0) =>
     apiJson<{ users: AccessRow[]; counts: AccessCounts; pending?: PreauthorizedEmail[]; githubRevocations?: GithubRevocation[] }>(`/api/admin/access?state=${state}&limit=${limit}&offset=${offset}`),
+  /** External edition, local login: a person outside any team invite. The
+   *  answer carries the one-time setup link — the hub sends no email. */
+  createLocalUser: (email: string, fullName?: string) =>
+    apiJson<LocalSetupLink>('/api/admin/local-users', { method: 'POST', body: JSON.stringify(fullName ? { email, fullName } : { email }) }),
+  /** Drops password + authenticator, ends their sessions, returns a fresh link. */
+  resetLocalUser: (userId: string) =>
+    apiJson<LocalSetupLink>(`/api/admin/local-users/${encodeURIComponent(userId)}/reset`, { method: 'POST', body: '{}' }),
   /** Row buttons. Opening the product for an ADDRESS is `grant`. */
   activate: (userIds: string[]) =>
     apiJson<ActivateResult>('/api/admin/access/activate', { method: 'POST', body: JSON.stringify({ userIds }) }),

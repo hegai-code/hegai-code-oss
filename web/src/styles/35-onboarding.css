@@ -59,6 +59,7 @@
 .phone-qr { flex: 0 0 auto; width: 144px; height: 144px; padding: var(--space-2); border-radius: var(--radius-md); background: var(--ivory-100); }
 .store-buttons { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .app-page .store-buttons { margin-top: var(--space-1); }
+.app-page .app-connect { display: flex; justify-content: center; width: 100%; min-height: 48px; margin-top: var(--space-2); }
 
 /* ---- Приложения tab / Аккаунт folds ---- */
 .apps-stack { display: grid; gap: var(--space-4); }

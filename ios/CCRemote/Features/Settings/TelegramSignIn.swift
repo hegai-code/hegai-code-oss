@@ -190,6 +190,10 @@ struct TelegramSignInSheet: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     @State private var model = TelegramSignInModel()
+    /// The hub this sign-in was started on. A `ccremote://connect` link can
+    /// switch the hub while the person is away in Telegram; the session the old
+    /// hub then issues must never be stored for — or sent to — the new one.
+    @State private var startedHub = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.s4) {
@@ -242,6 +246,11 @@ struct TelegramSignInSheet: View {
         .background(Theme.settingsBackground.ignoresSafeArea())
         .onAppear {
             model.onApproved = { session, userId, telegram, name in
+                guard HegaiAuth.sameHub(settings.hubURL, startedHub) else {
+                    CentralClient.revoke(session: session, at: startedHub)
+                    dismiss()
+                    return
+                }
                 TelegramSignInMemo.remember(.init(telegram: telegram, name: name, userId: userId))
                 SignOutCleanup.retire(hubURL: settings.hubURL, token: settings.token,
                                       replacingWith: session, client: client)
@@ -266,7 +275,8 @@ struct TelegramSignInSheet: View {
 
     private func restart() {
         let device = UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"
-        model.start(hubURL: settings.hubURL, device: device, linkSession: linkSession)
+        startedHub = settings.hubURL
+        model.start(hubURL: startedHub, device: device, linkSession: linkSession)
     }
 }
 

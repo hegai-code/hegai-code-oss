@@ -42,6 +42,11 @@ struct SettingsView: View {
     @State private var hubConfig: HubPublicConfig?
     /// The hub `hubConfig` was fetched from: a config is only ever used for that hub.
     @State private var hubConfigHub = ""
+    /// `/api/public-config` of a non-default hub did not answer (the login buttons
+    /// are withheld then, «Повторить» refetches).
+    @State private var hubConfigFailed = false
+    @State private var configRetry = 0
+    @State private var showServerSheet = false
     /// «Подключиться» is checking the typed server's `/health`.
     @State private var probing = false
     /// Why the last «Подключиться» did not save the typed server.
@@ -61,8 +66,11 @@ struct SettingsView: View {
                             identityRow(viewer)
                         }
                         rowDivider
-                        if onboarding || client.viewer == nil { signInButton }
-                        else {
+                        if onboarding || client.viewer == nil {
+                            serverRow
+                            rowDivider
+                            signInButton
+                        } else {
                             DisclosureGroup("Войти в другой аккаунт", isExpanded: $showSignInOptions) {
                                 if showSignInOptions { signInButton }
                             }.font(SettingsStyle.body).tint(Theme.text).padding(Theme.s3)
@@ -288,15 +296,24 @@ struct SettingsView: View {
             draftToken = settings.token
             legacyAvailable = ((try? client.legacyPendingCount()) ?? 0) > 0 || DraftStore.legacyCount > 0
         }
-        .task(id: settings.hubURL) {
+        .task(id: "\(settings.hubURL)#\(configRetry)") {
             let hub = settings.hubURL
             hubConfig = nil
+            hubConfigFailed = false
             let fetched = await HubPublicConfig.fetch(hubURL: hub)
             if settings.hubURL == hub {
                 hubConfig = fetched
                 hubConfigHub = hub
+                hubConfigFailed = fetched == nil
             }
         }
+        // The server may change under this screen (server sheet, connect link):
+        // the hidden fields must follow, not keep the old hub's address / token.
+        .onChange(of: settings.hubURL) { _, hub in
+            draftURL = hub
+            draftToken = settings.token
+        }
+        .sheet(isPresented: $showServerSheet) { HubServerSheet() }
         .sheet(isPresented: $showAccountDeletion) { AccountDeletionView() }
         .sheet(isPresented: $showTelegram) { TelegramSignInSheet() }
         .alert("Восстановить в этот аккаунт?", isPresented: $confirmRecovery) {
@@ -344,6 +361,48 @@ struct SettingsView: View {
 
     /// Парадный вход. Вошедший открывает его только чтобы сменить аккаунт.
     private var signInButton: some View {
+        // On a hub that is not ours the Google / Telegram / Apple buttons do not
+        // work, and which ones the hub has is in its public config: draw nothing
+        // until it answered, and offer a retry if it did not. The default hub
+        // keeps its buttons whatever the config says.
+        let configKnown = hubConfig != nil && hubConfigHub == settings.hubURL
+        return Group {
+            if isDefaultHub || configKnown {
+                signInButtons
+            } else if hubConfigFailed {
+                VStack(alignment: .leading, spacing: Theme.s2) {
+                    Text("Сервер \(HubSwitchPlan.label(settings.hubURL)) не ответил")
+                        .font(SettingsStyle.body).foregroundStyle(Theme.negative)
+                    ActionButton("Повторить", kind: .quiet, wide: true) { configRetry += 1 }
+                }
+                .padding(Theme.s3)
+            } else {
+                HStack { Spacer(); ProgressView(); Spacer() }
+                    .frame(minHeight: Theme.tapTarget)
+                    .padding(Theme.s3)
+            }
+        }
+    }
+
+    private var isDefaultHub: Bool { HegaiAuth.sameHub(settings.hubURL, AppSettings.defaultHubURL) }
+
+    /// Строка «Сервер: host» на экране входа: куда войдёт кнопка ниже, и дверь
+    /// к «своему серверу» (`HubServerSheet`) без раскрытия служебных полей.
+    private var serverRow: some View {
+        HStack(spacing: Theme.s2) {
+            Text("Сервер: \(HubSwitchPlan.label(settings.hubURL))")
+                .font(SettingsStyle.body).foregroundStyle(Theme.text)
+                .lineLimit(1).truncationMode(.middle)
+            Spacer()
+            Button(isDefaultHub ? "Свой сервер" : "Изменить") { showServerSheet = true }
+                .font(SettingsStyle.body).foregroundStyle(Theme.link)
+                .accessibilityIdentifier("settings.changeServer")
+        }
+        .padding(.horizontal, Theme.s3)
+        .frame(minHeight: SettingsStyle.rowHeight)
+    }
+
+    private var signInButtons: some View {
         VStack(spacing: 0) {
             Button {
                 Task { await signIn() }
@@ -613,44 +672,6 @@ struct SettingsView: View {
         return t.isEmpty || canApply ? nil : HubSwitchPlan.invalidHubMessage
     }
 
-    /// `nil` = the server answered `/health` with `{"ok":true}`; otherwise the reason (as on Android).
-    private func probeHub(_ hub: String) async -> String? {
-        guard let base = HegaiAuth.apiBase(hubURL: hub),
-              let url = URL(string: base.absoluteString + "/health") else { return "Некорректный адрес сервера" }
-        var req = URLRequest(url: url, timeoutInterval: 10)
-        req.httpMethod = "GET"
-        let cfg = URLSessionConfiguration.ephemeral
-        cfg.timeoutIntervalForRequest = 10
-        cfg.timeoutIntervalForResource = 10
-        let label = HubSwitchPlan.label(hub)
-        do {
-            // No redirects, as on Android: the answer must come from the typed host itself.
-            let (data, resp) = try await URLSession(configuration: cfg, delegate: NoRedirect(), delegateQueue: nil).data(for: req)
-            if let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode),
-               HubSwitchPlan.isHealthy(data) { return nil }
-            return "Это не сервер Hegai Code: нет ответа {\"ok\":true} на /health"
-        } catch let e as URLError {
-            switch e.code {
-            case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate,
-                 .serverCertificateHasUnknownRoot, .serverCertificateNotYetValid, .clientCertificateRejected,
-                 .appTransportSecurityRequiresSecureConnection:
-                return "Не удалось установить защищённое соединение с \(label)"
-            case .badURL, .unsupportedURL: return "Некорректный адрес сервера"
-            default: return "Сервер \(label) недоступен"
-            }
-        } catch {
-            return "Сервер \(label) недоступен"
-        }
-    }
-
-    /// Refuses every redirect, so a 3xx surfaces as «не сервер Hegai Code».
-    private final class NoRedirect: NSObject, URLSessionTaskDelegate {
-        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-                        newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-            completionHandler(nil)
-        }
-    }
-
     private var statusColor: Color {
         switch client.status {
         case .open: return Theme.live
@@ -676,59 +697,17 @@ struct SettingsView: View {
         guard let plan = HubSwitchPlan.make(currentHub: settings.hubURL, currentToken: settings.token,
                                             draftHub: draftURL, draftToken: draftToken) else { return }
         hubProbeError = nil
-        if plan.switching {
-            // Nothing is changed unless the new server really is a Hegai Code hub.
-            probing = true
-            let failure = await probeHub(plan.hub)
-            probing = false
-            if let failure { hubProbeError = (draftURL, failure); Haptics.rigid(); return }
-        }
+        probing = true
+        // Probe + switch live in `HubSwitcher`: the login-screen server sheet and
+        // `ccremote://connect` links go through the very same code.
+        let failure = await HubSwitcher.connect(plan, settings: settings, client: client)
+        probing = false
+        if let failure { hubProbeError = (draftURL, failure); Haptics.rigid(); return }
         if plan.switching {
             hubConfig = nil
             hubConfigHub = ""
-            // The session belongs to the hub that issued it. Revoke it at the
-            // OLD hub (the client still points there) and forget it BEFORE the
-            // new address is stored, so the old bearer can never be sent to a
-            // server that never issued it. A token typed for the new hub is
-            // stored only after the hub.
-            // The Keychain copy goes first, and verifiably: if it cannot be
-            // removed, storing the new hub would pair it with the old bearer on
-            // the next launch — so nothing changes, the app stays connected to
-            // the old hub. (The in-memory token is still known to the client,
-            // which revokes it at the old hub in signOut below.)
-            let oldToken = settings.token
-            guard KeychainStore.deleteToken(), KeychainStore.loadToken() == nil else {
-                if !oldToken.isEmpty { KeychainStore.saveToken(oldToken, hub: settings.hubURL) }
-                Haptics.rigid()
-                return
-            }
-            SignOutCleanup.run(hubURL: settings.hubURL, token: oldToken)
-            client.disconnect()
-            TelegramSignInMemo.forget()
-            settings.token = ""
-            settings.workspaceId = ""
         }
-        settings.hubURL = plan.hub
         draftURL = plan.hub
         draftToken = plan.token
-        // A hand-pasted token is another session: the Telegram banner is not
-        // about it.
-        if plan.token != settings.token { TelegramSignInMemo.forget() }
-        // Clearing the token on the same hub is signing out: the live connection
-        // must not keep the old bearer until the next launch.
-        // (a different pasted token is another account: same cleanup).
-        if !plan.switching {
-            SignOutCleanup.retire(hubURL: settings.hubURL, token: settings.token,
-                                  replacingWith: plan.token, client: client)
-        }
-        settings.token = plan.token
-        if plan.token.isEmpty {
-            settings.workspaceId = ""
-            Haptics.rigid()
-            return
-        }
-        client.connect(endpoint: settings.hubURL, token: settings.token,
-                       workspaceId: settings.workspaceId.isEmpty ? nil : settings.workspaceId)
-        Haptics.light()
     }
 }

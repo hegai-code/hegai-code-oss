@@ -51,6 +51,7 @@ import net.hegai.code.core.Target
         else if (restoring) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
         else WorkspaceScreen(if (showAutomated) state else state.copy(machines = state.machines.map { m -> m.copy(sessions = m.sessions.filterNot { it.entrypoint == "sdk-cli" && it.owner == null }) }), model.engine, model::retry, model::logout, model)
     }
+    ProposedHubDialog(model, signedIn)
     TelegramDialog(model)
     PairKeyDialog(model)
     AIDataConsentDialog(model)
@@ -77,6 +78,15 @@ import net.hegai.code.core.Target
         Text("Ваши проекты.\nВсегда рядом.", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
         Text("Работайте с Claude и Codex. С телефона — на своих машинах.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
+        // Customer hub that has not answered yet: Google/Telegram/review only work on our own hub, so show none of them.
+        val configFailed by model.configFailed.collectAsStateWithLifecycle()
+        val waitingForHub = !HubUrl.isDefault(hubBase) && publicConfig == null
+        if (waitingForHub) {
+            if (configFailed) {
+                Text("Сервер ${HubUrl.label(hubBase)} не ответил", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge)
+                OutlinedButton({ model.refreshPublicConfig() }, Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("Повторить", style = MaterialTheme.typography.titleSmall) }
+            } else Box(Modifier.fillMaxWidth().heightIn(min = 56.dp), contentAlignment = Alignment.Center) { LoadingIndicator() }
+        } else {
         Button(onClick = signIn, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp), shapes = ButtonDefaults.shapes()) {
             Text(if (ownPage) "Войти" else "Войти через Google", style = MaterialTheme.typography.titleSmall)
         }
@@ -88,6 +98,7 @@ import net.hegai.code.core.Target
         // Store reviewers cannot use Google or Telegram; release builds keep this on purpose (it is our hub's door).
         if (!ownPage) TextButton({ reviewOpen = true }, Modifier.align(Alignment.CenterHorizontally)) {
             Text("Вход для проверки (Google Play)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         }
         // Customers who run their own hub choose it before signing in (iOS: Settings → hub URL).
         TextButton({ serverOpen = true }, Modifier.align(Alignment.CenterHorizontally)) {
@@ -680,4 +691,30 @@ private fun projectName(project: DrawerProject) = project.sessions.firstOrNull()
             }
         }
     }
+}
+
+/** A server proposed by a `ccremote://connect` link: asks first, then takes the same path as typing the address. */
+@Composable private fun ProposedHubDialog(model: HubViewModel, signedIn: Boolean) {
+    val proposed by model.proposedHub.collectAsStateWithLifecycle()
+    val base = proposed ?: return
+    val current by model.hubBase.collectAsStateWithLifecycle()
+    var busy by remember(base) { mutableStateOf(false) }
+    var failure by remember(base) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    AlertDialog(onDismissRequest = { if (!busy) model.dismissProposedHub() },
+        title = { Text("Подключиться к серверу ${HubUrl.label(base)}?", fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (signedIn) Text("Вы выйдете из аккаунта на ${HubUrl.label(current)}.", style = MaterialTheme.typography.bodyMedium)
+                failure?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
+                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            TextButton({
+                busy = true; failure = null
+                scope.launch { val message = model.switchHub(base); busy = false; if (message == null) model.dismissProposedHub() else failure = message }
+            }, enabled = !busy) { Text("Подключиться") }
+        },
+        dismissButton = { TextButton({ model.dismissProposedHub() }, enabled = !busy) { Text("Отмена") } })
 }

@@ -92,7 +92,7 @@ test('the OS guess reads the user agent, and everything that is not Windows is M
 });
 
 test('the /go one-liners, the Linux guess and the store links', async () => {
-  const { GO_COMMAND, guessGoOs, isAndroidUa, isIosUa, PLAY_URL, APP_STORE_URL, isCustomHub } = await import('../src/lib.js');
+  const { GO_COMMAND, guessGoOs, isAndroidUa, isIosUa, PLAY_URL, APP_STORE_URL, isCustomHub, appConnectLink } = await import('../src/lib.js');
   assert.equal(GO_COMMAND.unix('https://code.acme.test'), 'curl -fsSL https://code.acme.test/go | bash');
   assert.equal(GO_COMMAND.win('https://code.acme.test'), 'irm https://code.acme.test/go.ps1 | iex');
   // macOS and Linux share one command; only Windows differs.
@@ -107,4 +107,7 @@ test('the /go one-liners, the Linux guess and the store links', async () => {
   assert.match(APP_STORE_URL, /^https:\/\/apps\.apple\.com\//);
   assert.equal(isCustomHub('code.acme.test'), false);
   assert.equal(isCustomHub('hub.example.com'), true);
+  // The phone apps parse exactly this shape (ios HubLink, android HubLink).
+  assert.equal(appConnectLink('https://code.example.com'), 'ccremote://connect?hub=https%3A%2F%2Fcode.example.com');
+  assert.equal(appConnectLink('https://hub.example.com:8443'), 'ccremote://connect?hub=https%3A%2F%2Fhub.example.com%3A8443');
 });

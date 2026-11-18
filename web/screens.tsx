@@ -31,6 +31,7 @@ import { Hardware } from './src/components/Hardware.js';
 import { Onboarding } from './src/components/Onboarding.js';
 import { AppsTab } from './src/components/AppsTab.js';
 import { AppPage } from './src/AppPage.js';
+import { SetupPage } from './src/SetupPage.js';
 import { SettingsTabs } from './src/TeamViews.js';
 import { Appearance } from './src/Appearance.js';
 import type { SettingsTab } from './src/router.js';
@@ -195,7 +196,7 @@ const SCREEN_PARAM = new URLSearchParams(location.search).get('screen') ?? '';
 /* ---- a customer's own hub (external edition) ----------------------------
    `?screen=...Ext` pretends the hub answered `/api/public-config` as a
    self-hosted one: no desktop builds, no HegAI sign-in. */
-const EXTERNAL_SCREENS = new Set(['settingsAccountExt', 'teamPeopleExt', 'settingsAppsExt', 'onboardPhoneExt', 'onboardMachineOnlineExt']);
+const EXTERNAL_SCREENS = new Set(['accessExt', 'appPagePhoneExt', 'appPageExt', 'setupDonePhone', 'settingsAccountExt', 'teamPeopleExt', 'settingsAppsExt', 'onboardPhoneExt', 'onboardMachineOnlineExt']);
 if (EXTERNAL_SCREENS.has(SCREEN_PARAM)) {
   RESPONSES['/api/public-config'] = {
     edition: 'external', brandName: 'Hegai Code', publicUrl: location.origin,
@@ -1630,6 +1631,14 @@ const SCREENS: Record<string, () => React.ReactElement> = {
   startEmpty: () => <StartScreen central={EMPTY_HOME_CENTRAL} onNewSession={() => true} viewer={EMPTY_HOME_CENTRAL.viewer} />,
   /** What the QR code opens on a computer. */
   appPage: () => <AppPage />,
+  /** What the QR opens ON A PHONE on a customer's hub: «Открыть в приложении». */
+  appPagePhoneExt: () => <AppPage />,
+  /** The same page on a computer, customer's hub: QR + stores + how to connect. */
+  appPageExt: () => <AppPage />,
+  /** `/setup` finished on a phone: hand the hub to the app. */
+  setupDonePhone: () => <SetupPage initialPhase={{ kind: 'done' }} />,
+  /** «Доступ» on a customer's hub: «Добавить человека» (local login). */
+  accessExt: () => <TeamAccess viewer={central.viewer} />,
   /** The four Настройки tabs inside the real strip. */
   settingsMachines: () => <SettingsFrame tab="hardware"><Hardware central={HW_CENTRAL as never} viewer={null} /></SettingsFrame>,
   settingsApps: () => <SettingsFrame tab="apps"><AppsTab /></SettingsFrame>,

@@ -320,3 +320,4 @@ button.home-all[aria-expanded="true"] { color: var(--brand); }
   color: var(--text); font: var(--size-small)/1.5 var(--sans); box-shadow: inset 3px 0 0 var(--attn); }
 .rt-notice a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .rt-gate .rt-rows.compact { border: 0; padding: 0; }
+.team-card .access-local-body { display: grid; gap: var(--space-3); padding: var(--space-4); }

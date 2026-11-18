@@ -26,6 +26,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="ccremote" android:host="auth" />
             </intent-filter>
+            <!-- Self-hosted hub link (QR / page button): only proposes a server, the app asks before switching. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ccremote" android:host="connect" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" /><category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" /><data android:mimeType="image/*" />

@@ -125,6 +125,19 @@ struct CCRemoteApp: App {
     /// exact hand-off, so no other ccremote:// open (or a stray link) can slurp
     /// whatever the user happens to have copied.
     private func handleDeepLink(_ url: URL) {
+        // `ccremote://connect?hub=…` — «подключиться к своему серверу». Только
+        // предложение: подтверждение показывает корень (`HubConnectPrompt`),
+        // вошёл человек или нет. Тот же хаб, что сейчас, — тихо ничего.
+        // (`ccremote://auth` — колбэк входа, его ловит сама сессия входа.)
+        if url.scheme == "ccremote", url.host == "connect" {
+            // A proposal already on screen is not replaced: the alert keeps the
+            // host it showed, and «Подключиться» must switch to THAT one.
+            if let hub = HubLink.parse(url.absoluteString), !HegaiAuth.sameHub(settings.hubURL, hub),
+               router.pendingHubLink == nil {
+                router.pendingHubLink = hub
+            }
+            return
+        }
         guard url.scheme == "ccremote", url.host == "share", settings.isConfigured else { return }
         let pb = UIPasteboard.general
         var images: [ImageAttachment] = []

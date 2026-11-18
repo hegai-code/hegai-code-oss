@@ -17,7 +17,9 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        handleIntent(intent)
+        // A recreated Activity (rotation, theme, «Недавние», process restore) still holds the
+        // intent it was launched with; a connect link from it must not be proposed again.
+        handleIntent(intent, fresh = savedInstanceState == null && (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0)
         setContent {
             val theme by model.theme.collectAsStateWithLifecycle()
             // Largest system font (Samsung/Android go to 2.0) makes the composer and bars eat the screen:
@@ -30,10 +32,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent) }
-    private fun handleIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handleIntent(intent, fresh = true) }
+    private fun handleIntent(intent: Intent?, fresh: Boolean) {
         intent ?: return
-        intent.data?.let(model::authCallback)
+        intent.data?.let { uri -> if (uri.scheme == "ccremote" && uri.host == "connect") { if (fresh) model.proposeHub(uri.toString()) } else model.authCallback(uri) }
         if (intent.action == "net.hegai.code.OPEN_SESSION") model.openNotification(intent.getStringExtra("userId"), intent.getStringExtra("machineId"), intent.getStringExtra("sessionId"), intent.getStringExtra("workspaceId"))
         if (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE) {
             val uris = mutableListOf<android.net.Uri>()

@@ -52,7 +52,13 @@ and the web draws only those buttons.
   fullName?}` gets back a 24-hour setup link to send; `POST
   /api/admin/local-users/{userId}/reset` is the lost-phone path (drops the
   password and authenticator, ends the sessions, returns a new link). Both are
-  audited. Accounts the owner or an admin creates are `active`.
+  audited. Accounts the owner or an admin creates are `active`. The same two
+  calls are in the UI for the platform admin at `/w/admin`: «Добавить человека»
+  (shows the link with copy / share; the hub sends no email) and «Сбросить
+  вход» on active local accounts (`localLogin` in `GET /api/admin/access`; never
+  offered for the admin's own row). On a phone, `/setup` ends with «Открыть в
+  приложении» (`ccremote://connect?hub=…`); the app also connects via the QR on
+  the hub's `/app` page (QR → «Открыть в приложении», `ccremote://connect?hub=…`) or the sign-in screen's «Сервер» row («Свой сервер» / Android «Другой сервер»: address or QR).
 - **OIDC** (Google Workspace, Keycloak, Entra, …): `OIDC_ISSUER`,
   `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`; register
   `<CC_REMOTE_PUBLIC_URL>/api/auth/oidc/callback` at the provider. Optional:
