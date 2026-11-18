@@ -52,8 +52,12 @@ jobs:
         run: npm run lint
       - name: Unit tests
         run: npm test
+      # High and above fails, except the dated, expiring entries in
+      # deploy/npm-audit-gate.mjs (an advisory with no fixed release yet).
       - name: npm audit (high and above)
-        run: npm audit --audit-level=high
+        run: |
+          npm audit --json > npm-audit.json || true
+          node deploy/npm-audit-gate.mjs < npm-audit.json
 
   rust:
     runs-on: ubuntu-latest
