@@ -73,3 +73,60 @@ export function hasAssistantReplyAfterLastUser(messages: HistoryMessage[]): bool
     .slice(lastUser + 1)
     .some((m) => m.type === 'assistant' && !(m.blocks.length > 0 && m.blocks.every((b) => b.kind === 'image' && b.generated)));
 }
+
+const squash = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+/**
+ * Does this page of the transcript hold the answer the screen is showing live?
+ *
+ * `hasAssistantReplyAfterLastUser` cannot tell a finished turn from a snapshot
+ * taken in the middle of it: a turn with tools is assistant → tool result →
+ * assistant…, so any mid-turn copy already has "an assistant message after the
+ * last user one". The hub serves exactly such a copy for the first moments
+ * after a turn ends — its replica counts as current until the agent publishes
+ * the file's new mtime — and accepting it replaced the page with the turn as
+ * it stood twenty seconds earlier and cleared the streamed answer (21.11.2026:
+ * «Готово», 16 steps of 18, no answer until a reload).
+ *
+ * So the read is only as new as the screen if the last thing the agent SAID
+ * live is in it. No live answer to look for (a turn that ended on a tool, a
+ * viewer who attached late) — nothing to check, the older test decides alone.
+ */
+export function historyHoldsLiveAnswer(
+  messages: HistoryMessage[],
+  lines: ReadonlyArray<{ kind: string; text?: string }>,
+): boolean {
+  let answer = '';
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i]!;
+    if (l.kind === 'user') break;
+    if (l.kind === 'assistant' && squash(l.text ?? '')) {
+      answer = squash(l.text ?? '');
+      break;
+    }
+  }
+  if (!answer) return true;
+  // Only what follows the person's last words — an identical short answer
+  // («Готово.») from an earlier turn is not this one. The person's turn is any
+  // user message that is not a tool result: a picture with no words is one.
+  let from = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]!;
+    if (m.type === 'user' && !m.blocks.some((b) => b.kind === 'tool_result')) {
+      from = i + 1;
+      break;
+    }
+  }
+  // The file's block IS what was shown: the final `assistant` event replaces
+  // the streamed partial with the block's full text, so a turn that ended
+  // normally matches exactly. Not `includes`/`startsWith` — a short «Готово.»
+  // opens many a mid-turn «Готово. Теперь гоняю тесты…». A line frozen
+  // mid-stream (a reconnect) never matches, and that is the safe side: the
+  // read still lands after the polls run out, the live lines stay.
+  // Known gaps, judged rare enough after three review rounds (21.11.2026): the
+  // same words said twice in one turn, or an earlier turn ending in the same
+  // words as this one seen by a pane that attached mid-turn.
+  return messages
+    .slice(from)
+    .some((m) => m.type === 'assistant' && m.blocks.some((b) => b.kind === 'text' && squash(b.text) === answer));
+}

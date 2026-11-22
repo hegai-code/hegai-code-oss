@@ -130,6 +130,13 @@ async fn supervise(app: AppHandle) {
                 publish(&app, &status);
                 tokio::time::sleep(POLL).await;
             }
+            None if crate::enroll::reconnect_in_progress() => {
+                // The reconnect installer stopped the old agent on purpose and
+                // starts the new one itself; launching the OLD launcher now
+                // would leave a second daemon on the same machineId.
+                status.running = None;
+                tokio::time::sleep(POLL).await;
+            }
             None => {
                 // The gap this module exists to close.
                 println!("[agent] not running — starting it");
@@ -181,5 +188,10 @@ async fn back_off(consecutive_failures: u32) {
 
 /// Put the current state where a person can see it without reading a log.
 fn publish(app: &AppHandle, status: &Status) {
+    // A revoked agent is still a live process; «агент работает» every 15 s
+    // would hide the «отключён» that enroll.rs shows next to its reconnect row.
+    if crate::enroll::is_disconnected(app) {
+        return;
+    }
     crate::set_agent_status(app, &status.summary());
 }

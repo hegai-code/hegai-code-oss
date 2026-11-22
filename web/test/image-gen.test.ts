@@ -189,3 +189,41 @@ test('image cache: the same ref in two sessions never shares an entry', async ()
   assert.notEqual(imageCacheKey(u1 as never, 'r'), imageCacheKey(u2 as never, 'r'));
   assert.equal(peekImage(undefined, 'gen:t#0'), null);
 });
+
+test('a mid-turn copy of the transcript does not hold the live answer', async () => {
+  const { historyHoldsLiveAnswer } = await import('../src/render/imageGen.js');
+  const asH = (m: unknown[]) => m as never as HistoryMessage[];
+  const q = { type: 'user', uuid: 'u', blocks: [{ kind: 'text', text: 'какой номер?' }] };
+  const use = { type: 'assistant', uuid: 't', blocks: [{ kind: 'tool_use', id: 'x', name: 'Bash', input: {} }] };
+  const res = { type: 'user', uuid: 'r', blocks: [{ kind: 'tool_result', toolUseId: 'x', text: 'ok', isError: false }] };
+  const final = { type: 'assistant', uuid: 'f', blocks: [{ kind: 'text', text: 'Шли на **+7 991**\n\nжду' }] };
+  const live = [
+    { kind: 'user', text: 'какой номер?' },
+    { kind: 'tool_use', text: 'Bash' },
+    { kind: 'assistant', text: 'Шли на **+7 991**\n\nжду' },
+  ];
+  // the 21.11 case: the hub's copy from the middle of the turn passes the old test…
+  assert.equal(hasAssistantReplyAfterLastUser(asH([q, use, res, use])), true);
+  // …and is refused by this one
+  assert.equal(historyHoldsLiveAnswer(asH([q, use, res, use]), live), false);
+  assert.equal(historyHoldsLiveAnswer(asH([q, use, res, use, res, final]), live), true);
+  // the same words in an EARLIER turn are not this turn's answer
+  assert.equal(historyHoldsLiveAnswer(asH([q, final, q, use, res, use]), live), false);
+  // a line frozen mid-stream is not the answer — keep it (the safe side)
+  assert.equal(historyHoldsLiveAnswer(asH([q, use, res, final]), [{ kind: 'assistant', text: 'Шли на **+7' }]), false);
+  // whitespace differences do not matter
+  assert.equal(historyHoldsLiveAnswer(asH([q, use, res, final]), [{ kind: 'assistant', text: '  Шли на **+7 991** жду\n' }]), true);
+  // a short live answer inside a longer mid-turn message is not that answer
+  const midway = { type: 'assistant', uuid: 'm', blocks: [{ kind: 'text', text: 'Готово. Теперь гоняю тесты' }] };
+  assert.equal(historyHoldsLiveAnswer(asH([q, midway, use]), [{ kind: 'assistant', text: 'Готово.' }]), false);
+  // two messages of one turn opening alike: only the full answer counts
+  const head = 'x'.repeat(200);
+  const early = { type: 'assistant', uuid: 'e', blocks: [{ kind: 'text', text: head + ' промежуточно' }] };
+  assert.equal(historyHoldsLiveAnswer(asH([q, early, use]), [{ kind: 'assistant', text: head + ' итог' }]), false);
+  // a picture-only question bounds the turn too
+  const pic = { type: 'user', uuid: 'p', blocks: [{ kind: 'image', ref: 'p#0' }] };
+  assert.equal(historyHoldsLiveAnswer(asH([q, final, pic, use]), live), false);
+  // nothing said live — nothing to check
+  assert.equal(historyHoldsLiveAnswer(asH([q, use]), [{ kind: 'user', text: 'q' }, { kind: 'tool_use', text: 'Bash' }]), true);
+  assert.equal(historyHoldsLiveAnswer(asH([q, use]), []), true);
+});

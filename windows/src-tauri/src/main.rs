@@ -757,6 +757,17 @@ pub fn set_agent_status(app: &tauri::AppHandle, text: &str) {
     }
 }
 
+/// «Подключить этот компьютер». Enabled only while the agent is disconnected
+/// (`enroll::publish` drives it, independent of the status row, which on
+/// Windows another supervisor also writes).
+struct ReconnectMenuItem(MenuItem<tauri::Wry>);
+
+pub fn set_reconnect_enabled(app: &tauri::AppHandle, on: bool) {
+    if let Some(item) = app.try_state::<ReconnectMenuItem>() {
+        let _ = item.0.set_enabled(on);
+    }
+}
+
 /// The notification rows, kept so the check marks can be moved when the choice
 /// changes. Tray menus are built once; without a handle the ticked row would
 /// stay on whatever was ticked at startup.
@@ -784,6 +795,8 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Открыть", true, None::<&str>)?;
     // The agent readout — see AgentMenuItem.
     let agent_status = MenuItem::with_id(app, "agent", "агент: проверяю…", false, None::<&str>)?;
+    let agent_reconnect =
+        MenuItem::with_id(app, "agent_reconnect", "Подключить этот компьютер", false, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let sep3 = PredefinedMenuItem::separator(app)?;
@@ -845,6 +858,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     items.extend([
         &sep3 as &dyn tauri::menu::IsMenuItem<tauri::Wry>,
         &agent_status,
+        &agent_reconnect,
     ]);
     items.extend([
         &sep2 as &dyn tauri::menu::IsMenuItem<tauri::Wry>,
@@ -853,6 +867,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &items)?;
     drop(items);
     app.manage(AgentMenuItem(agent_status));
+    app.manage(ReconnectMenuItem(agent_reconnect));
     app.manage(NotifyMenuItems([notify_all, notify_blocking, notify_off]));
     app.manage(update::UpdateMenuItem(update));
 
@@ -881,6 +896,7 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 // menu would end up with two or three rows ticked at once.
                 sync_notify_menu(app);
             }
+            "agent_reconnect" => enroll::request_reconnect(app),
             "update" => update::on_menu_click(app),
             "server" => hubconf::open_server_window(app),
             "quit" => {

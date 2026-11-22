@@ -24,7 +24,7 @@ import { runtimeGate } from '../components/runtimeChips.js';
 import { currentPlan } from '../planProgress.js';
 import { AttachmentContext, type FetchAttachment, scopedFetch } from '../render/Attachment.js';
 import { FilePeekContext, makeFilePeek } from '../render/FilePreviews.js';
-import { hasAssistantReplyAfterLastUser } from '../render/imageGen.js';
+import { hasAssistantReplyAfterLastUser, historyHoldsLiveAnswer } from '../render/imageGen.js';
 import { SquareIcon, ArrowDownIcon, ArrowUpIcon } from '../icons.js';
 import { requestPairDialog, usePrivacy } from '../e2ee/ring.js';
 import { useDictationComposer } from '../useDictationComposer.js';
@@ -577,6 +577,8 @@ export function Chat({
   // seen to contain it. Convergence uses it to avoid dropping a live line that
   // disk has not caught up with yet.
   const lastSentRef = useRef<string | null>(null);
+  const linesRef = useRef(central.lines);
+  linesRef.current = central.lines;
   const busyWas = useRef(central.busy);
   useEffect(() => {
     const was = busyWas.current;
@@ -584,7 +586,10 @@ export function Chat({
     if (!was || central.busy || !gapRef.current || !session.cwd) return;
     gapRef.current = false;
     let cancelled = false;
-    const caughtUp = hasAssistantReplyAfterLastUser;
+    // …and the answer streamed to this screen: a copy taken mid-turn has an
+    // assistant message after the last user one too (historyHoldsLiveAnswer).
+    const caughtUp = (messages: HistoryMessage[]): boolean =>
+      hasAssistantReplyAfterLastUser(messages) && historyHoldsLiveAnswer(messages, linesRef.current);
     // `caughtUp` alone is satisfied by the PREVIOUS user/assistant pair. Send
     // into a working run and the file may not carry that new input yet — the old
     // pair still answers "caught up", and clearLines() then takes the line you

@@ -122,7 +122,9 @@ function StepMachine({ central, viewer, pick }: { central: CentralState; viewer?
                   ? 'Этот компьютер подключится сам, как только вы войдёте.'
                   : shellAgent.phase === 'waiting'
                     ? `Этот компьютер подключится позже: ${shellAgent.reason ?? 'ждём хаб'}.`
-                    : `Не удалось поставить агента на этот компьютер: ${shellAgent.reason ?? 'причина не передана'}. Подключите его командой ниже.`}
+                    : shellAgent.phase === 'disconnected'
+                      ? 'Этот компьютер отключён от сервера. Чтобы подключить снова — меню Hegai Code в трее/строке меню → «Подключить этот компьютер».'
+                      : `Не удалось поставить агента на этот компьютер: ${shellAgent.reason ?? 'причина не передана'}. Подключите его командой ниже.`}
             </p>
           ) : null}
           {!shellAgent || shellAgent.phase === 'failed' || shellAgent.phase === 'waiting' ? (

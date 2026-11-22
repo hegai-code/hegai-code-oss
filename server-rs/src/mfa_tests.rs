@@ -1045,3 +1045,107 @@ async fn the_account_slowdown_grows_past_30s_and_a_right_code_does_not_reset_it(
     ws.mfa_attempts_clear(USER, "sess");
     assert!(ws.mfa_failures_24h(USER) >= 7);
 }
+
+/// Telegram sign-in from the Android app for a person who owes a code: an app
+/// that says it can ask for the code gets the PENDING session and verifies it
+/// with a bearer; an older app still gets the refusal in words.
+#[tokio::test]
+async fn a_native_telegram_poll_hands_a_code_capable_app_the_pending_session() {
+    use crate::telegram_login::{Press, TgUser};
+    let fx = fixture(false);
+    let mut st = fx.st.clone();
+    st.tg_login = Some(crate::telegram_login_api::TgLoginConfig {
+        secret: "x".repeat(48),
+        bot: "Hegaicodebot".into(),
+    });
+    let ws = &st.workspaces;
+    let tg = TgUser::new(7101, Some("owner"), Some("Владелец"), None);
+    let login = |st: &AppState| {
+        let v = st
+            .workspaces
+            .start_telegram_login(
+                None,
+                "native",
+                "Android",
+                Some("203.0.113.7"),
+                Some("203.0.113.7"),
+            )
+            .unwrap();
+        let code = v["code"].as_str().unwrap().to_string();
+        st.workspaces.peek_telegram_login(&code, &tg).unwrap();
+        let done = st
+            .workspaces
+            .decide_telegram_login(
+                &code,
+                &tg,
+                &Press::Number(v["match"].as_str().unwrap().into()),
+            )
+            .unwrap();
+        (
+            v["pollToken"].as_str().unwrap().to_string(),
+            done["account"]["userId"].as_str().unwrap().to_string(),
+        )
+    };
+    let poll = |st: &AppState, token: String, mfa: bool| {
+        let mut body = json!({ "pollToken": token });
+        if mfa {
+            body["mfa"] = json!("code");
+        }
+        crate::telegram_login_api::api_tg_login_poll(
+            State(st.clone()),
+            HeaderMap::new(),
+            Json(body),
+        )
+    };
+    // First sign-in creates the account; then the person enrols.
+    let (t, uid) = login(&st);
+    let (s, body) = body_of(poll(&st, t, true).await).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+    assert_eq!(body["status"], "approved");
+    ws.set_always_active([ADMIN.to_string(), USER.to_string(), uid.clone()]);
+    let secret = enrol(ws, &uid);
+
+    // An app without a code screen: refused, nothing left behind.
+    let before: i64 = ws
+        .with_conn_mfa(|c| c.query_row("SELECT COUNT(*) FROM auth_sessions", [], |r| r.get(0)))
+        .unwrap();
+    let (t, _) = login(&st);
+    let (s, body) = body_of(poll(&st, t, false).await).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    assert_eq!(body["error"], "mfa_browser_required");
+    let after: i64 = ws
+        .with_conn_mfa(|c| c.query_row("SELECT COUNT(*) FROM auth_sessions", [], |r| r.get(0)))
+        .unwrap();
+    assert_eq!(before, after);
+
+    // A code-capable app: a pending session that opens nothing until verified.
+    let (t, _) = login(&st);
+    let (s, body) = body_of(poll(&st, t, true).await).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+    assert_eq!(body["status"], "mfa");
+    let session = body["session"].as_str().unwrap().to_string();
+    assert!(
+        ws.authenticate(&session).unwrap().is_none(),
+        "pending opens nothing"
+    );
+    let mut bearer = HeaderMap::new();
+    bearer.insert(
+        header::AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {session}")).unwrap(),
+    );
+    let (s, _) = body_of(
+        crate::mfa::api_mfa_verify(
+            State(st.clone()),
+            axum::extract::ConnectInfo(peer()),
+            bearer,
+            Bytes::from(json!({ "code": code_for(&secret, crate::totp::now_secs()) }).to_string()),
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(
+        ws.authenticate(&session).unwrap().is_some(),
+        "verified opens the app"
+    );
+}

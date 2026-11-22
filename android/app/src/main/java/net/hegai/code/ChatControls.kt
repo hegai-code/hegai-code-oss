@@ -313,6 +313,9 @@ private fun decodeImage(data: String) = runCatching {
                     }); engine.renamed(title.trim(), target.key) } catch (e: Exception) { error = e.message } finally { saving = false }
                 } }, enabled = model != null && target.sessionId != null && title.isNotBlank() && !saving) { Text("Переименовать") }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                val deleteActions = LocalDeleteActions.current
+                val deletable = state.machine?.let { m -> state.session?.takeIf { target.sessionId != null && state.canDeleteSession(m, it) }?.let { m to it } }
+                if (deleteActions != null && deletable != null) TextButton({ dismiss(); deleteActions.deleteSession(deletable.first.machine.machineId, deletable.second) }) { Text("Удалить сессию", color = MaterialTheme.colorScheme.error) }
                 Row {
                     TextButton({ clipboard.setText(AnnotatedString(markdown())) }) { Text("Копировать") }
                     TextButton({ context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/markdown"; putExtra(Intent.EXTRA_TEXT, markdown()) }, "Экспорт Markdown")) }) { Text("Поделиться") }

@@ -117,7 +117,7 @@ struct SessionRow: View {
             .hereTint(here)
         }
         .buttonStyle(.plain)
-        .contextMenu { favoriteButton }
+        .sessionContextMenu(machineId: item.machineId, session: s) { favoriteButton }
     }
 
     private var fullRow: some View {
@@ -183,7 +183,7 @@ struct SessionRow: View {
             .hereTint(here)
         }
         .buttonStyle(.plain)
-        .contextMenu { favoriteButton }
+        .sessionContextMenu(machineId: item.machineId, session: s) { favoriteButton }
     }
 
     /// Избранное осталось ДОСТУПНЫМ, хотя звезду со строки сняли: долгое

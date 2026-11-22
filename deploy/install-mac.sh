@@ -180,7 +180,14 @@ PLISTEOF
 
 echo "[install] (re)loading LaunchAgent"
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
+# bootout returns before a running agent has exited; bootstrap meanwhile
+# fails with "5: Input/output error" (22.11.2026, every reinstall over a live
+# agent). Wait for the service to leave launchd, then retry once.
+i=0
+while [ "$i" -lt 30 ] && launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; do
+  sleep 0.5; i=$((i + 1))
+done
+launchctl bootstrap "gui/$(id -u)" "$PLIST" || { sleep 3; launchctl bootstrap "gui/$(id -u)" "$PLIST"; }
 sleep 3
 if launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
   echo "[install] ✅ agent '$NAME' running → $CENTRAL_URL"

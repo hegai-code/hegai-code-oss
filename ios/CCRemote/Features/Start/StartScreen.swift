@@ -43,6 +43,9 @@ struct StartScreen: View {
     /// раз, когда кто-то во флоте трогал сессию, — молча.
     @State private var projectKey = UserDefaults.standard.string(forKey: Self.projectKeyDefault) ?? ""
     @State private var machineChoice: String?
+    /// Автоподмена рантайма на этой машине (нет бинарника/входа у выбранного). Только в
+    /// памяти экрана, как в вебе: `preferredAgent` пишет лишь ручной выбор.
+    @State private var runtimeOverride: String?
     @State private var projectByMachine: [String: String] = [:]
     @State private var category: SessionCategory?
     /// Распознаватель живёт ЗДЕСЬ, а не в композере: чип «Рамблинг» и есть
@@ -64,6 +67,16 @@ struct StartScreen: View {
     @State private var newFolderRoot = ""
     @State private var newFolderBusy = false
     @State private var newFolderError: String?
+    /// «Новый проект»: папка под корнем проектов машины через `projects.create`.
+    @State private var showNewProject = false
+    @State private var pendingNewProject = false
+    @State private var newProjectName = ""
+    @State private var newProjectBusy = false
+    @State private var newProjectError: String?
+    /// «Удалить с машины»: проект, о котором спрашиваем, и итог для листа поиска.
+    @State private var removeCandidate: ProjectTarget?
+    @State private var removeBusy = false
+    @State private var findNote: String?
     @State private var keyboardTop: CGFloat = .greatestFiniteMagnitude
     /// Каталог, выбранный руками: цель, которой нет ни в описи, ни в ответе
     /// агента, поэтому она живёт отдельной строкой и подмешивается в полку.
@@ -150,7 +163,7 @@ struct StartScreen: View {
     /// remembered value itself is left alone, so it returns with the rows.
     private var agentChoice: String {
         if agentIsFixed { return "codex" }
-        let remembered = settings.preferredAgent
+        let remembered = runtimeOverride ?? settings.preferredAgent
         if remembered == AgentModels.opencode { return hasGoRows || openCodeWaiting ? remembered : "codex" }
         return remembered
     }
@@ -167,6 +180,36 @@ struct StartScreen: View {
     private var startModel: String? {
         guard agentChoice == AgentModels.opencode else { return startRun.model }
         return AgentModels.defaultGoModel(models: codexModels ?? [], remembered: startRun.model)
+    }
+
+    /// Машина и её рантаймы: по смене любого из двух выбор агента сверяется с
+    /// тем, что на машине можно запустить (`MachineRuntimes.pick`, порт `pickRuntime`).
+    private struct RuntimeKey: Equatable {
+        let machineId: String
+        let runtimes: MachineRuntimes?
+    }
+    private var runtimeKey: RuntimeKey { RuntimeKey(machineId: selectedMachineId, runtimes: machine?.runtimes) }
+
+    /// Как в вебе: непригодный рантайм (нет бинарника или входа) по умолчанию не
+    /// выбирается — сессия на нём падает уже после отправки. Только когда машина
+    /// сама сказала (старый агент молчит → выбор не трогаем). Ручной выбор после
+    /// этого остаётся как есть, а непригодный получает подсказку (`runtimeHint`).
+    private func followRuntimes() {
+        guard !agentIsFixed else { runtimeOverride = nil; return }
+        runtimeOverride = MachineRuntimes.override(machine?.runtimes, remembered: settings.preferredAgent)
+    }
+
+    /// Видимая подсказка, когда выбранный агент на этой машине запуститься не
+    /// может (нет бинарника или входа).
+    private var runtimeHint: String? {
+        guard !agentIsFixed, agentChoice != AgentModels.opencode, let runtimes = machine?.runtimes,
+              !MachineRuntimes.usable(runtimes, engine) else { return nil }
+        let name = engine == "claude" ? "Claude" : "Codex"
+        let other = engine == "claude" ? "codex" : "claude"
+        let alt = MachineRuntimes.usable(runtimes, other)
+            ? " Выберите \(other == "claude" ? "Claude" : "Codex") в настройках запуска."
+            : " Установите или войдите в него на самой машине."
+        return "\(name) на этом сервере не установлен или нет входа — сессия не запустится.\(alt)"
     }
 
     private var codexModelsKey: String {
@@ -284,11 +327,15 @@ struct StartScreen: View {
         .onChange(of: startRun) { _, next in
             StartRunStore.save(next, machineId: selectedMachineId, engine: agentChoice)
         }
+        .onChange(of: selectedMachineId) { _, _ in runtimeOverride = nil }
+        .onChange(of: runtimeKey, initial: true) { _, _ in followRuntimes() }
         .task(id: codexModelsKey) { await loadCodexModels() }
         .sheet(isPresented: $showFind, onDismiss: {
             if pendingCustom { pendingCustom = false; presentCustom() }
             if pendingNewFolder { pendingNewFolder = false; presentNewFolder() }
+            if pendingNewProject { pendingNewProject = false; presentNewProject() }
         }) { findSheet }
+        .sheet(isPresented: $showNewProject) { newProjectSheet }
         .sheet(isPresented: $showCustom) { customSheet }
         .sheet(isPresented: $showNewFolder) { newFolderSheet }
         .sheet(isPresented: $showServers) { serverSheet }
@@ -315,6 +362,13 @@ struct StartScreen: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, Theme.s3)
+            if let hint = runtimeHint {
+                Text(hint)
+                    .font(.ui(Theme.sizeMeta)).foregroundStyle(Theme.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Theme.s3)
+                    .accessibilityIdentifier("start.runtimeHint")
+            }
             if category != nil { categoryChips.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Theme.s3) }
 
             ComposerView(isActive: true,
@@ -333,6 +387,7 @@ struct StartScreen: View {
                     StartRunPicker(machineId: selectedMachineId, isCodex: engine == "codex",
                                    agent: agentChoice, showsOpenCode: hasGoRows || openCodeWaiting,
                                    agentSelection: agentChoice,
+                                   onAgentPick: { _ in runtimeOverride = nil },
                                    value: $startRun, showsAgentPicker: true,
                                    agentIsFixed: agentIsFixed,
                                    fixedAgentLabel: isMember || isSandbox ? "Codex · шлюз" : "Codex",
@@ -480,7 +535,32 @@ struct StartScreen: View {
                         .buttonStyle(.plain)
                         .listRowBackground(Theme.settingsGroup)
                         .accessibilityIdentifier("start.project.\(p.id)")
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if canRemove(p) {
+                                Button(role: .destructive) { removeCandidate = p } label: {
+                                    Label("Удалить с машины", systemImage: "trash")
+                                }
+                            }
+                        }
+                        .contextMenu {
+                            if canRemove(p) {
+                                Button(role: .destructive) { removeCandidate = p } label: {
+                                    Label("Удалить с машины", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
+                }
+                if let findNote {
+                    Text(findNote).font(.ui(Theme.sizeMeta)).foregroundStyle(Theme.textMuted)
+                        .listRowBackground(Theme.settingsGroup)
+                        .accessibilityIdentifier("start.findNote")
+                }
+                if machine?.online == true, machine?.canControl == true {
+                    Button { showFind = false; pendingNewProject = true } label: {
+                        Label("Новый проект", systemImage: "plus.square")
+                    }.listRowBackground(Theme.settingsGroup)
+                        .accessibilityIdentifier("start.newProject")
                 }
                 if !memberRoots.isEmpty {
                     Button { showFind = false; pendingNewFolder = true } label: {
@@ -504,6 +584,15 @@ struct StartScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { SheetCloseButton { showFind = false } }
+            }
+            .onAppear { findNote = nil }
+            .confirmationDialog(removeCandidate.map {
+                ProjectAdmin.removeConfirmation(label: $0.label, machineName: $0.machineName)
+            } ?? "", isPresented: Binding(get: { removeCandidate != nil },
+                                          set: { if !$0 { removeCandidate = nil } }),
+                                titleVisibility: .visible, presenting: removeCandidate) { p in
+                Button("Убрать", role: .destructive) { Task { await removeProject(p) } }
+                Button("Отмена", role: .cancel) {}
             }
         }.tint(Theme.text)
     }
@@ -609,6 +698,122 @@ struct StartScreen: View {
         }
         .presentationDetents([.medium])
         .interactiveDismissDisabled(newFolderBusy)
+    }
+
+    // MARK: - Новый проект и удаление проекта (как в вебе)
+
+    private func canRemove(_ p: ProjectTarget) -> Bool {
+        let m = client.machines.first { $0.machine.machineId == p.machineId }
+        return ProjectAdmin.canRemoveProject(
+            machine: m, origin: p.origin,
+            busy: p.live > 0 || ProjectAdmin.cwdIsBusy(machine: m, cwd: p.cwd, label: p.label, runs: client.activeRuns))
+    }
+
+    /// «Удалить с машины»: агент переносит папку в `~/.cc-remote/trash` и
+    /// отказывает, пока в ней идёт сессия.
+    private func removeProject(_ p: ProjectTarget) async {
+        guard !removeBusy else { return }
+        removeBusy = true
+        defer { removeBusy = false }
+        do {
+            let r = try await client.removeProject(machineId: p.machineId, cwd: p.cwd)
+            if projectKey == p.id { projectKey = ""; UserDefaults.standard.removeObject(forKey: Self.projectKeyDefault) }
+            if custom?.id == p.id { custom = nil }
+            projectByMachine = projectByMachine.filter { $0.value != p.id }
+            owned.forget(machineId: p.machineId, cwd: p.cwd)
+            await owned.refresh(client: client, force: true)
+            findNote = r.movedTo.map { "«\(p.label)» — в корзине агента: \($0)" } ?? "«\(p.label)» убран."
+            Haptics.success()
+        } catch {
+            findNote = ProjectAdmin.describeRemoveError(error.localizedDescription)
+            Haptics.warning()
+        }
+    }
+
+    private var newProjectSheet: some View {
+        let name = newProjectName
+        let valid = ProjectAdmin.nameIsValid(name)
+        return NavigationStack {
+            Form {
+                Section {
+                    TextField("my-app", text: $newProjectName)
+                        .font(.mono(Theme.sizeSmall))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .submitLabel(.done)
+                        .onSubmit { Task { await createProject() } }
+                        .accessibilityIdentifier("start.newProject.name")
+                } header: {
+                    Text("Имя папки на \(machine?.machine.name ?? "машине")")
+                } footer: {
+                    if let msg = newProjectError {
+                        Text(msg).foregroundStyle(Theme.red)
+                    } else if !name.isEmpty, !valid {
+                        Text("Строчные латинские буквы, цифры, точка, дефис и подчёркивание; первый символ — буква или цифра; до 64.")
+                            .foregroundStyle(Theme.red)
+                    } else {
+                        Text("Папка создастся в корне проектов машины: git init, README и первый коммит.")
+                    }
+                }.listRowBackground(Theme.settingsGroup)
+            }
+            .scrollContentBackground(.hidden)
+            .background(Theme.settingsBackground)
+            .navigationTitle("Новый проект")
+            .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: newProjectName) { _, raw in
+                let fixed = ProjectAdmin.normalizeName(raw)
+                if fixed != raw { newProjectName = fixed }
+                newProjectError = nil
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Отмена") { showNewProject = false } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    if newProjectBusy {
+                        ProgressView()
+                    } else {
+                        Button("Создать") { Task { await createProject() } }.fontWeight(.semibold)
+                            .disabled(!valid)
+                            .accessibilityIdentifier("start.newProject.create")
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .interactiveDismissDisabled(newProjectBusy)
+    }
+
+    private func presentNewProject() {
+        guard machine?.canControl == true else { return }
+        newProjectName = ""
+        newProjectError = nil
+        newProjectBusy = false
+        showNewProject = true
+    }
+
+    private func createProject() async {
+        let name = newProjectName
+        let machineId = selectedMachineId
+        guard !newProjectBusy, ProjectAdmin.nameIsValid(name), !machineId.isEmpty else { return }
+        newProjectBusy = true
+        defer { newProjectBusy = false }
+        do {
+            let r = try await client.createProject(machineId: machineId, name: name)
+            let machineName = client.machines.first { $0.machine.machineId == machineId }?.machine.name ?? machineId
+            let t = ProjectTarget(machineId: machineId, machineName: machineName, cwd: r.cwd,
+                                  label: r.label, lastModified: Date().timeIntervalSince1970 * 1000,
+                                  mine: true, origin: .root, hasSessions: false)
+            await owned.refresh(client: client, force: true)
+            // Старый агент не вернёт его в `projects.list` — тогда полке подкидываем руками.
+            if !owned.targets.contains(where: { $0.machineId == machineId && $0.cwd == r.cwd }) {
+                custom = t
+                refreshProjects()
+            }
+            pick(t)
+            showNewProject = false
+            Haptics.success()
+        } catch {
+            newProjectError = ProjectAdmin.describeCreateError(error.localizedDescription)
+            Haptics.warning()
+        }
     }
 
     private func presentNewFolder() {

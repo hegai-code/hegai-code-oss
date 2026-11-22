@@ -457,14 +457,63 @@ public struct MachineInfo: Codable, Identifiable, Hashable, Sendable {
 /// what the phone acts on is decoded; the rest of the reading is ignored.
 public struct MachineRuntimes: Codable, Hashable, Sendable {
     public struct Claude: Codable, Hashable, Sendable {
+        /// False = no Claude session can start here. Absent = unknown.
+        public var present: Bool?
+        /// 'oauth' | 'token' | 'apikey' | 'none' | 'unknown'.
+        public var auth: String?
         /// 'disabled' = switched off by the owner; other values are problems
         /// to fix on the machine (logged_out, token_expired, …).
         public var error: String?
-        public init(error: String? = nil) { self.error = error }
+        public init(present: Bool? = nil, auth: String? = nil, error: String? = nil) {
+            self.present = present; self.auth = auth; self.error = error
+        }
+    }
+    public struct Codex: Codable, Hashable, Sendable {
+        public var present: Bool?
+        public var auth: String?
+        public var error: String?
+        /// 'gateway' = the machine spends the gateway's allowance, no own login.
+        public var provider: String?
+        public init(present: Bool? = nil, auth: String? = nil, error: String? = nil, provider: String? = nil) {
+            self.present = present; self.auth = auth; self.error = error; self.provider = provider
+        }
     }
     public var claude: Claude?
-    public init(claude: Claude? = nil) { self.claude = claude }
+    public var codex: Codex?
+    public init(claude: Claude? = nil, codex: Codex? = nil) { self.claude = claude; self.codex = codex }
     public var claudeOff: Bool { claude?.error == "disabled" }
+
+    /// Can a session of this runtime START here, as far as the machine has said?
+    /// Port of `runtimeUsable` (web/src/components/runtimeChips.ts). Unknown
+    /// (an agent too old to report) reads as usable.
+    public static func usable(_ runtimes: MachineRuntimes?, _ which: String) -> Bool {
+        if which == "claude" {
+            guard let s = runtimes?.claude else { return true }
+            if s.present == false || s.auth == "none" { return false }
+            return !["disabled", "sdk_binary_missing", "logged_out", "token_expired", "token_rejected"]
+                .contains(s.error ?? "")
+        }
+        guard let s = runtimes?.codex else { return true }
+        if s.present == false || s.error == "not_found" { return false }
+        if s.provider == "gateway" { return true }
+        return s.auth != "none" && s.error != "not_logged_in"
+    }
+
+    /// Port of `pickRuntime`: the preferred runtime unless it cannot start and
+    /// the other can. With neither usable the preference stands.
+    public static func pick(_ runtimes: MachineRuntimes?, preferred: String) -> String {
+        let other = preferred == "claude" ? "codex" : "claude"
+        return !usable(runtimes, preferred) && usable(runtimes, other) ? other : preferred
+    }
+
+    /// Подмена выбора на ЭТОЙ машине, живущая только в памяти экрана (как в вебе): nil —
+    /// подмена не нужна. Запомненный выбор (`preferredAgent`) она не трогает и не пишет
+    /// в настройки: другая машина с обоими рантаймами вернёт то, что человек выбрал сам.
+    public static func override(_ runtimes: MachineRuntimes?, remembered: String) -> String? {
+        guard runtimes != nil, remembered == "claude" || remembered == "codex" else { return nil }
+        let next = pick(runtimes, preferred: remembered)
+        return next == remembered ? nil : next
+    }
 }
 
 public struct MachineSnapshot: Codable, Identifiable, Hashable, Sendable {

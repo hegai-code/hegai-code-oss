@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import {
   adoptProject,
   createProject,
@@ -17,6 +17,7 @@ import {
   removeProject,
   scanRoots,
 } from '../src/project-ops.js';
+import { setPolicyForTests } from '../src/policy.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -302,4 +303,80 @@ test('the initial-commit author: internal default, external default, env overrid
     initAuthor({ CC_REMOTE_GIT_AUTHOR_NAME: ' Acme Bot ', CC_REMOTE_GIT_AUTHOR_EMAIL: 'bot@acme.test' }, true),
     { name: 'Acme Bot', email: 'bot@acme.test' },
   );
+});
+
+// ---- removeProject prunes policy.sync ---------------------------------------
+async function syncFixture(projects: string[] | 'all') {
+  const tmp = await tempDir();
+  const root = path.join(tmp, 'work');
+  const trashDir = path.join(tmp, 'trash');
+  const policyFile = path.join(tmp, 'policy.json');
+  const alpha = await createProject({ name: 'alpha' }, { root });
+  const beta = await createProject({ name: 'beta' }, { root });
+  const sync =
+    projects === 'all'
+      ? ('all' as const)
+      : { projects: projects.map((x) => x.replace('<alpha>', alpha.cwd).replace('<beta>', beta.cwd)) };
+  await writeFile(policyFile, JSON.stringify({ chatOnly: true, sync }));
+  setPolicyForTests({ chatOnly: true, sync });
+  test.after(() => setPolicyForTests(undefined));
+  const deps = { root, trashDir, policyFile, liveCwds: async () => [] as string[] };
+  const saved = async () => JSON.parse(await readFile(policyFile, 'utf8'));
+  return { alpha, beta, deps, saved };
+}
+
+test('removing a project drops its path from policy.sync, others stay', async () => {
+  const f = await syncFixture(['<alpha>', '<beta>']);
+  await removeProject({ cwd: f.alpha.cwd }, f.deps);
+  const saved = await f.saved();
+  assert.deepEqual(saved.sync, { projects: [f.beta.cwd] });
+  assert.equal(saved.chatOnly, true, "the owner's other keys are kept");
+});
+
+test('removing a project drops sync paths nested under it', async () => {
+  const f = await syncFixture(['<alpha>/packages/web', '<beta>', '<alpha>-2']);
+  await removeProject({ cwd: f.alpha.cwd }, f.deps);
+  assert.deepEqual((await f.saved()).sync, { projects: [f.beta.cwd, `${f.alpha.cwd}-2`] });
+});
+
+test('removing a project leaves sync "all" alone', async () => {
+  const f = await syncFixture('all');
+  await removeProject({ cwd: f.alpha.cwd }, f.deps);
+  assert.equal((await f.saved()).sync, 'all');
+});
+
+test('a failed removal does not touch policy.sync', async () => {
+  const f = await syncFixture(['<alpha>', '<beta>']);
+  const before = await readFile(f.deps.policyFile, 'utf8');
+  await assert.rejects(
+    removeProject({ cwd: f.alpha.cwd }, { ...f.deps, liveCwds: async () => [f.alpha.cwd] }),
+    /a session is live in/,
+  );
+  await stat(f.alpha.cwd);
+  assert.equal(await readFile(f.deps.policyFile, 'utf8'), before);
+});
+
+test('removing a project calls onSyncChanged only when the sync list changed', async () => {
+  const f = await syncFixture(['<alpha>']);
+  let calls = 0;
+  const deps = { ...f.deps, onSyncChanged: () => void calls++ };
+  await removeProject({ cwd: f.beta.cwd }, deps);
+  assert.equal(calls, 0, 'beta was not in the sync list');
+  await removeProject({ cwd: f.alpha.cwd }, deps);
+  assert.equal(calls, 1);
+  const all = await syncFixture('all');
+  let allCalls = 0;
+  await removeProject({ cwd: all.alpha.cwd }, { ...all.deps, onSyncChanged: () => void allCalls++ });
+  assert.equal(allCalls, 0, 'sync "all" has nothing to prune');
+});
+
+test('removing a symlink moves only the link: the real folder keeps its sync entry', async () => {
+  const f = await syncFixture(['<alpha>', '<beta>']);
+  const link = path.join(f.deps.root, 'alpha-link');
+  await symlink(f.alpha.cwd, link);
+  let calls = 0;
+  await removeProject({ cwd: link }, { ...f.deps, onSyncChanged: () => void calls++ });
+  await stat(f.alpha.cwd); // the real directory is still there
+  assert.deepEqual((await f.saved()).sync, { projects: [f.alpha.cwd, f.beta.cwd] });
+  assert.equal(calls, 0);
 });

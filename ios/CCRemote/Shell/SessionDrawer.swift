@@ -379,7 +379,7 @@ struct SessionDrawer: View, Equatable {
                              unread ? "Готово · не прочитано" : nil,
                              settings.favorites.contains(item.id) ? "Избранное" : nil]
             .compactMap { $0 }.joined(separator: ", "))
-        .contextMenu {
+        .sessionContextMenu(machineId: item.machineId, session: item.session) {
             Button {
                 settings.toggleFavorite(machineId: item.machineId, sessionId: item.session.sessionId)
             } label: {

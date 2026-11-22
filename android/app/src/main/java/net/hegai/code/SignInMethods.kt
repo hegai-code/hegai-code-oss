@@ -19,6 +19,8 @@ sealed interface TelegramPhase {
     data class Confirm(val login: TelegramLogin, val telegram: String) : TelegramPhase
     data object Linking : TelegramPhase
     data class Failed(val message: String, val link: Boolean) : TelegramPhase
+    /** Telegram proved the account; the hub still wants the authenticator code. */
+    data class Code(val session: String, val memo: JsonObject, val hub: String, val error: String? = null, val busy: Boolean = false) : TelegramPhase
 }
 
 @Composable fun TelegramDialog(model: HubViewModel) {
@@ -26,8 +28,9 @@ sealed interface TelegramPhase {
     val current = phase ?: return
     val context = LocalContext.current
     var openError by remember { mutableStateOf<String?>(null) }
-    AlertDialog(onDismissRequest = { if (current != TelegramPhase.Linking) model.closeTelegram() },
-        title = { Text(if (current is TelegramPhase.Starting && !current.link || current is TelegramPhase.Waiting && !current.link || current is TelegramPhase.Failed && !current.link) "Вход через Telegram" else "Привязка Telegram") },
+    var code by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = { if (current != TelegramPhase.Linking && !(current is TelegramPhase.Code && current.busy)) model.closeTelegram() },
+        title = { Text(if (current is TelegramPhase.Starting && !current.link || current is TelegramPhase.Waiting && !current.link || current is TelegramPhase.Failed && !current.link || current is TelegramPhase.Code) "Вход через Telegram" else "Привязка Telegram") },
         text = { Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when (current) {
                 is TelegramPhase.Starting -> { CircularProgressIndicator(); Text("Готовим вход…") }
@@ -41,15 +44,23 @@ sealed interface TelegramPhase {
                 is TelegramPhase.Confirm -> Text("В Telegram подтвердил ${current.telegram}. Это ваш аккаунт? После привязки через него можно будет входить в эту учётку.")
                 TelegramPhase.Linking -> { CircularProgressIndicator(); Text("Привязываем…") }
                 is TelegramPhase.Failed -> Text(current.message)
+                is TelegramPhase.Code -> {
+                    Text("Включена двухфакторная защита. Введите код из приложения-аутентификатора или резервный код.")
+                    OutlinedTextField(code, { code = it.take(64) }, singleLine = true, enabled = !current.busy,
+                        label = { Text("Код") }, modifier = Modifier.fillMaxWidth())
+                    if (current.busy) CircularProgressIndicator()
+                    ErrorNote(current.error)
+                }
             }
             ErrorNote(openError)
         } },
         confirmButton = { when (current) {
             is TelegramPhase.Confirm -> TextButton(model::confirmTelegramLink) { Text("Да, привязать") }
             is TelegramPhase.Failed -> TextButton({ model.startTelegram(current.link) }) { Text("Начать заново") }
+            is TelegramPhase.Code -> TextButton({ model.submitTelegramCode(code.trim()) }, enabled = !current.busy && code.isNotBlank()) { Text("Войти") }
             else -> Unit
         } },
-        dismissButton = { TextButton(model::closeTelegram, enabled = current != TelegramPhase.Linking) { Text(if (current is TelegramPhase.Confirm) "Нет, не мой" else "Отмена") } })
+        dismissButton = { TextButton(model::closeTelegram, enabled = current != TelegramPhase.Linking && !(current is TelegramPhase.Code && current.busy)) { Text(if (current is TelegramPhase.Confirm) "Нет, не мой" else "Отмена") } })
 }
 
 @Composable fun TelegramAccountBanner(model: HubViewModel, userId: String?) {

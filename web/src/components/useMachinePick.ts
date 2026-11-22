@@ -12,7 +12,7 @@ import { claudeOff, runtimeChips, runtimeUsable } from './runtimeChips.js';
  * common case — and offers a picker when there are several, preferring one with
  * something to fix.
  */
-export type ShellAgent = { phase: 'checking' | 'signed_out' | 'installing' | 'installed' | 'waiting' | 'failed'; machineId?: string; reason?: string };
+export type ShellAgent = { phase: 'checking' | 'signed_out' | 'installing' | 'installed' | 'waiting' | 'failed' | 'disconnected'; machineId?: string; reason?: string };
 
 function readShellAgent(): ShellAgent | undefined {
   const a = (window as { __HEGAI_AGENT__?: ShellAgent }).__HEGAI_AGENT__;

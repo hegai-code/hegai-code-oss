@@ -3,6 +3,7 @@ import type { ViewerContext } from '@cc-remote/shared';
 import { linkProps } from '../router.js';
 import { viewerName } from '../lib.js';
 import { storageRemove, storageSet } from '../storage.js';
+import { isExternal, usePublicConfig } from '../publicConfig.js';
 
 /**
  * «Здравствуй» — the one card a community seat reads once.
@@ -42,9 +43,31 @@ export function shouldWelcome(viewer: ViewerContext | null | undefined): boolean
   return !seenBy(viewer.userId);
 }
 
+/** What a seat reads on a self-hosted hub: no sandbox, no hosting by us. */
+export function WelcomeSelfHost() {
+  return (
+    <>
+      <p>
+        Подключите свой компьютер или сервер — сессии появятся здесь. Агент Hegai Code на машине запускает
+        Claude Code или Codex в папке проекта, а эта вкладка — пульт к ним: терминал, файлы, git.
+      </p>
+      <p>
+        Модели — ваши: подписку на Claude Code или Codex вы подключаете свою, на экране «Начало» напротив
+        каждого стоит кнопка «Войти».
+      </p>
+    </>
+  );
+}
+
 export function Welcome({ viewer }: { viewer: ViewerContext }) {
   const [seen, setSeen] = useState(() => seenBy(viewer.userId));
-  if (seen) return null;
+  // On a customer's own hub there is no «our cloud» to speak of.
+  const config = usePublicConfig();
+  const external = isExternal(config);
+  // Not before the hub has said which edition it is (nor when it could not):
+  // on a self-hosted hub the internal text would show — and could be
+  // dismissed for good.
+  if (seen || config == null) return null;
   // First name, else the address's local part; a Telegram-only account may
   // have neither.
   const firstName = viewerName(viewer, 'друг');
@@ -57,8 +80,10 @@ export function Welcome({ viewer }: { viewer: ViewerContext }) {
   const create = linkProps({ kind: 'new', create: true });
   return (
     <section className="home-card welcome">
-      <div className="eyebrow eyebrow--mark">Здравствуй</div>
+      <div className="eyebrow eyebrow--mark">{external ? 'Здравствуйте' : 'Здравствуй'}</div>
       <div className="welcome-body">
+        {external ? <WelcomeSelfHost /> : (
+          <>
         <p>
           Здравствуй, {firstName}. Тебе выделена машина {machine ? <code>{machine}</code> : 'в песочнице'} —
           обычный Linux-сервер в нашем облаке с агентом Hegai Code и Codex. Она твоя: терминал, файлы, git.
@@ -78,6 +103,8 @@ export function Welcome({ viewer }: { viewer: ViewerContext }) {
           Уйти можно в любой момент вместе с кодом: отправь проект в свой репозиторий или подключи свою
           машину — всё в «Настройках → Забрать своё». Проект твой, а не наш.
         </p>
+          </>
+        )}
       </div>
       <div className="welcome-actions">
         <button className="btn" onClick={dismiss}>Понятно</button>

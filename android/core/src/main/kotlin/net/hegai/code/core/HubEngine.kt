@@ -312,6 +312,32 @@ class HubEngine(
         })
     }
 
+    /** `projects.remove` succeeded: the folder is in the agent's trash, so its sessions leave the lists too. */
+    fun projectRemoved(machineId: String, cwd: String) {
+        val win32 = state.machines.firstOrNull { it.machine.machineId == machineId }?.machine?.os.let { it == "windows" || it == "win32" }
+        fun inside(path: String?) = cwdInside(path, cwd, win32)
+        val open = state.target
+        state = state.copy(machines = state.machines.map { m ->
+            if (m.machine.machineId != machineId) m else m.copy(sessions = m.sessions.filterNot { inside(it.cwd) })
+        })
+        if (open != null && open.machineId == machineId && inside(open.cwd))
+            state = state.copy(target = null, history = emptyList(), live = emptyList(), runId = null, busy = false, approval = null)
+        command("rescan", buildJsonObject { put("machineId", machineId) })
+    }
+
+    /** `session.delete` succeeded: drop the row now (the rescan will confirm) and leave the chat if it was open. */
+    fun sessionDeleted(machineId: String, sessionId: String) {
+        val open = state.target
+        state = state.copy(machines = state.machines.map { m ->
+            if (m.machine.machineId != machineId) m else m.copy(sessions = m.sessions.filter { it.sessionId != sessionId })
+        })
+        if (open != null && open.machineId == machineId && open.sessionId == sessionId) {
+            state = state.copy(target = null, history = emptyList(), live = emptyList(), runId = null, busy = false, approval = null)
+            if (open.cwd.isNotBlank()) select(Target(machineId, open.cwd, source = open.source))
+        }
+        command("rescan", buildJsonObject { put("machineId", machineId) })
+    }
+
     fun connecting() { state = state.copy(connection = Connection.CONNECTING, error = null) }
     fun connected() {
         notificationSeeded = false; previousRunStates = emptyMap()

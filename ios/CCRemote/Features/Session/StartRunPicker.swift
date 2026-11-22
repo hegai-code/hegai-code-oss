@@ -32,6 +32,7 @@ struct StartRunPicker: View {
     /// Passed through to the in-sheet `AgentPicker`.
     var showsOpenCode = false
     var agentSelection: String?
+    var onAgentPick: ((String) -> Void)?
     @Binding var value: StartRunSettings
     var showsAgentPicker = false
     var agentIsFixed = false
@@ -98,7 +99,8 @@ struct StartRunPicker: View {
         RunSettingsSheet(onDone: { showSheet = false }) {
             if showsAgentPicker {
                 AgentPicker(isMember: agentIsFixed, height: Theme.tapTarget, fixedLabel: fixedAgentLabel,
-                            showsOpenCode: showsOpenCode, selection: agentSelection)
+                            showsOpenCode: showsOpenCode, selection: agentSelection,
+                            onPick: onAgentPick)
             }
             RunSettingGroup {
                 // OpenCode has no account default: left unset it would land on

@@ -41,6 +41,18 @@ if ($Token -and $EnrollmentCode) { throw "Pass only one of -EnrollmentCode or -T
 
 $src = Split-Path -Parent $MyInvocation.MyCommand.Path
 $dest = Join-Path $env:USERPROFILE "cc-remote-agent"
+# A reinstall (the app's "Connect this computer" after a revoke) must not leave
+# the old agent running on its dead credential: IgnoreNew would drop the start
+# below while that instance lives. Done before touching the bundle: a running
+# agent keeps node-pty's .node mapped and npm could not replace it. Only node
+# running THIS agent.mjs (exact path), and only this user's: run elevated, it
+# must not stop other users' agents.
+try { Stop-ScheduledTask -TaskName "cc-remote-agent" -ErrorAction SilentlyContinue } catch {}
+$agentPattern = '^\s*(?:"[^"]*node\.exe"|[^\s"]*node\.exe)\s+"?' + [regex]::Escape((Join-Path $dest "agent.mjs")) + '"?(?:\s|$)'
+Get-CimInstance Win32_Process -Filter "name = 'node.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -and $_.CommandLine -match $agentPattern } |
+  Where-Object { (Invoke-CimMethod -InputObject $_ -MethodName GetOwner -ErrorAction SilentlyContinue).User -eq $env:USERNAME } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 $downloadBase = (($Url -replace '^wss://', 'https://') -replace '^ws://', 'http://').TrimEnd('/')
 $localAgent = Join-Path $src "agent.mjs"

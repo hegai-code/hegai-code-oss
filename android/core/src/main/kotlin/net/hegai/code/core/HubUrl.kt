@@ -48,6 +48,7 @@ object HubUrl {
     fun reviewLogin(base: String) = "$base/api/auth/review-login"
     fun telegram(base: String, path: String) = "$base/api/auth/telegram/$path"
     fun logout(base: String) = "$base/api/logout"
+    fun mfaVerify(base: String) = "$base/api/auth/mfa/verify"
     fun privacy(base: String) = "$base/privacy/"
     fun deleteAccount(base: String) = "$base/delete-account/"
     fun install(base: String) = "$base/install"

@@ -22,6 +22,8 @@ struct SessionInfoSheet: View {
     @State private var saving = false
     @State private var error: String?
     @State private var confirmEnd = false
+    @State private var confirmDelete = false
+    @State private var deleting = false
     @State private var document: ConversationDocument?
     @State private var loading = false
     @State private var exporting = false
@@ -78,6 +80,12 @@ struct SessionInfoSheet: View {
                                 if document != nil, error == nil { exporting = true }
                             }
                         }.disabled(loading)
+                        if canControl, session.cwd != nil {
+                            separator
+                            action(deleting ? "Удаляю…" : "Удалить", "trash", id: "session.delete") {
+                                confirmDelete = true
+                            }.disabled(deleting).foregroundStyle(Theme.negative)
+                        }
                     }
                     .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.radiusLg))
                     if loading { ProgressView("Загружаю разговор…").font(.footnote) }
@@ -161,6 +169,11 @@ struct SessionInfoSheet: View {
                 Button("Сохранить") { Task { await rename() } }
                     .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            .confirmationDialog(ProjectAdmin.deleteSessionConfirmation, isPresented: $confirmDelete,
+                                titleVisibility: .visible) {
+                Button("Удалить", role: .destructive) { Task { await deleteSession() } }
+                Button("Отмена", role: .cancel) {}
+            }
             .alert("Завершить запуск?", isPresented: $confirmEnd) {
                 Button("Завершить запуск", role: .destructive) {
                     if let run { client.closeRun(runId: run.runId) }
@@ -235,6 +248,21 @@ struct SessionInfoSheet: View {
             client.rescan(machineId: machineId)
             Haptics.success()
         } catch { self.error = "Не удалось переименовать: \(error.localizedDescription)" }
+    }
+    /// Как в вебе: запись уходит с машины (живой ран агент гасит сам), экран
+    /// удалённой сессии закрывается, список обновляется пересканом.
+    private func deleteSession() async {
+        guard let cwd = session.cwd else { return }
+        deleting = true
+        defer { deleting = false }
+        do {
+            try await client.deleteSession(machineId: machineId, cwd: cwd, sessionId: session.sessionId,
+                                           source: session.source)
+            client.rescan(machineId: machineId)
+            Haptics.success()
+            dismiss()
+            if router.currentSession?.id == "\(machineId)::\(session.sessionId)" { router.home() }
+        } catch { self.error = "Не удалось удалить: \(error.localizedDescription)" }
     }
     private func loadDocument() async {
         guard let cwd = session.cwd else { error = "Папка сессии ещё не получена."; return }

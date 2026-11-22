@@ -163,7 +163,8 @@ struct NewRunView: View {
                    let machine = client.machines.first(where: { $0.machine.machineId == active.machineId }),
                    let session = machine.sessions.first(where: { $0.sessionId == active.sessionId }) {
                     SessionInfoSheet(session: session, machineId: active.machineId,
-                                     machineName: machineName, canControl: machine.hasControl,
+                                     machineName: machineName,
+                                     canControl: ProjectAdmin.canDeleteSession(machine: machine, session: session, viewerId: client.viewer?.userId),
                                      canDrive: machine.canDrive,
                                      canRename: machine.hasControl || machine.canStartHere)
                 } else {

@@ -27,7 +27,7 @@ import { TakeYourCode } from './TakeYourCode.js';
 import { StartRunPicker } from './StartRunPicker.js';
 import { goModelOrDefault, modelsForSide, useModelList } from './run-settings.js';
 import { shouldWelcome, Welcome } from './Welcome.js';
-import { claudeOff, codexOnGateway, pickRuntime, runtimeGate } from './runtimeChips.js';
+import { claudeOff, codexOnGateway, pickRuntime, runtimeGate, runtimeHint } from './runtimeChips.js';
 import { RuntimeGate } from './RuntimeGate.js';
 import { useHiddenMachines, useHiddenProjects } from '../appHooks.js';
 import { storageGet, storageRemove, storageSet } from '../storage.js';
@@ -204,7 +204,12 @@ export function StartScreen({
     const kept = storageGet('cc-agent');
     return kept === 'codex' || kept === 'opencode' ? kept : 'claude';
   });
+  // The machine the person last picked an agent on by hand: there the
+  // follow-the-logins effect below leaves their choice alone (they get a
+  // notice instead of a silent switch).
+  const handPickedOn = useRef<string | undefined>(undefined);
   const pickAgent = (next: AgentChoice) => {
+    handPickedOn.current = project?.machineId;
     setAgent(next);
     storageSet('cc-agent', next);
   };
@@ -716,6 +721,9 @@ export function StartScreen({
   // as it has said): don't start a run that can only answer «Not logged in».
   // A member's session runs on the machine's Codex via the hub; skip them.
   const gated = !isMember && !isOpenCode && selectedMachine && project ? runtimeGate(selectedRuntimes, wireAgent) : undefined;
+  // Not proven enough to refuse, but the machine says the coder is missing or
+  // signed out: say so beside the picker instead of after the send.
+  const softHint = !gated && !isMember && !isOpenCode && selectedMachine && project ? runtimeHint(selectedRuntimes, wireAgent) : undefined;
   const source: 'claude' | 'codex' | undefined = isMember ? undefined : wireAgent;
   // The «/» menu for the folder the chat will start in: skills and commands on
   // disk, since there is no run to ask yet (SlashMenu.tsx). Claude only.
@@ -743,10 +751,11 @@ export function StartScreen({
     // One rule with the light shell, which has no picker to correct it with
     // (`runtimeUsable`): a login the CLI has blanked counts as no login.
     if (agent === 'opencode') return; // Not a login of its own: it needs no such check.
+    if (handPickedOn.current && handPickedOn.current === project?.machineId) return;
     const next = pickRuntime(selectedRuntimes, agent);
     if (next !== agent) setAgent(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRuntimes, isMember]);
+  }, [selectedRuntimes, isMember, project?.machineId]);
 
   // Model / effort / mode for the session about to start, remembered per
   // machine AND engine. Per pair because neither list is portable: a Codex
@@ -1063,6 +1072,7 @@ export function StartScreen({
       <div className="start-dock">
         <div className="start-dock-inner">
           {gated && project && <RuntimeGate central={central} machineId={project.machineId} runtime={wireAgent} />}
+          {softHint && project && <RuntimeGate soft central={central} machineId={project.machineId} runtime={wireAgent} />}
           <div className="composer start-composer">
             {/* WHERE, as two buttons on a tray above the field — the server and
                 the project, the way Codex and the phone app say it. Each opens
@@ -1282,7 +1292,7 @@ export function StartScreen({
                               : id === 'opencode'
                                 ? 'OpenCode — модели подписки Go'
                                 : viaGateway
-                                  ? 'Codex — на этой машине через шлюз a.test'
+                                  ? 'Codex — на этой машине через шлюз'
                                   : 'Codex — вход на этой машине (codex login)'
                           }
                         >
@@ -1297,7 +1307,7 @@ export function StartScreen({
                     </span>
                   )}
                   {isSandbox && viaGateway && !isMember && (
-                    <span className="role-chip gateway" title="Codex этой песочницы ходит через шлюз моделей a.test.">
+                    <span className="role-chip gateway" title="Codex этой песочницы ходит через шлюз моделей.">
                       шлюз
                     </span>
                   )}

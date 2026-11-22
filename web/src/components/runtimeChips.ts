@@ -51,7 +51,7 @@ export function codexChip(s: CodexRuntimeStatus): RuntimeChip {
   if (s.provider === 'gateway') {
     // A gateway machine spends the gateway's allowance; whose auth.json sits
     // beside it is irrelevant, and saying «Plus» here would mislead.
-    return { runtime: 'codex', label: `Codex · шлюз${s.providerName ? ` ${s.providerName === 'hegai' ? 'a.test' : s.providerName}` : ''}`, tone: 'ok' };
+    return { runtime: 'codex', label: `Codex · шлюз${s.providerName && s.providerName !== 'hegai' ? ` ${s.providerName}` : ''}`, tone: 'ok' };
   }
   if (s.error === 'not_logged_in' || s.auth === 'none') {
     return { runtime: 'codex', label: 'Codex · нет входа', tone: 'attn', hint: CODEX_LOGIN_HINT, action: 'login' };
@@ -177,6 +177,21 @@ export function runtimeUsable(r: RuntimeStatus | undefined, which: 'claude' | 'c
 export function pickRuntime(r: RuntimeStatus | undefined, preferred: 'claude' | 'codex'): 'claude' | 'codex' {
   const other = preferred === 'claude' ? 'codex' : 'claude';
   return !runtimeUsable(r, preferred) && runtimeUsable(r, other) ? other : preferred;
+}
+
+/** The softer sibling of `runtimeGate`: the runtime is not usable on this
+ *  machine (`runtimeUsable`) and a button fixes it, but the evidence is not
+ *  strong enough to refuse sending (login_cli_missing, auth «none» alone). The
+ *  composer shows a notice with the same button and still lets the person send.
+ *  Unknown (an old agent) and «switched off» yield nothing. */
+export function runtimeHint(r: RuntimeStatus | undefined, which: 'claude' | 'codex'): 'install' | 'login' | undefined {
+  const hard = runtimeGate(r, which);
+  if (hard) return hard;
+  if (runtimeUsable(r, which)) return undefined;
+  const s = which === 'claude' ? r?.claude : r?.codex;
+  if (!s) return undefined;
+  const chip = which === 'claude' ? claudeChip(s as ClaudeRuntimeStatus) : codexChip(s as CodexRuntimeStatus);
+  return chip.action;
 }
 
 /**

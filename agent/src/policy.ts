@@ -316,6 +316,21 @@ export function removeSyncProject(dir: string, file: string = policyFile()): boo
   return true;
 }
 
+/** Drop `dir` and every `sync.projects` entry under it — for a project the
+ *  agent has just moved to the trash, so the list does not keep folders that
+ *  no longer exist. Same atomic write as the other `sync` changes; a no-op
+ *  under `sync: "all"`. Returns whether anything changed. */
+export function removeSyncProjectsUnder(dir: string, file: string = policyFile()): boolean {
+  const p = policy();
+  if (p.sync === 'all') return false;
+  const projects = p.sync.projects.filter((x) => !within(x, dir));
+  if (projects.length === p.sync.projects.length) return false;
+  const next: AgentPolicy = { ...p, sync: { projects } };
+  writePolicyFile(next, file);
+  current = next;
+  return true;
+}
+
 /** Read the policy file as the owner wrote it, let `mutate` change what this
  *  call owns, and write it back atomically with everything else untouched. */
 function updatePolicyFile(file: string, mutate: (raw: Record<string, unknown>) => void): void {

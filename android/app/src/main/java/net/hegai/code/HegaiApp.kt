@@ -146,7 +146,11 @@ import net.hegai.code.core.Target
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
-@Composable fun WorkspaceScreen(state: HubState, engine: HubEngine, retry: () -> Unit, logout: () -> Unit, model: HubViewModel? = null) {
+@Composable fun WorkspaceScreen(state: HubState, engine: HubEngine, retry: () -> Unit, logout: () -> Unit, model: HubViewModel? = null) =
+    DeleteHost(model) { WorkspaceContent(state, engine, retry, logout, model) }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable private fun WorkspaceContent(state: HubState, engine: HubEngine, retry: () -> Unit, logout: () -> Unit, model: HubViewModel?) {
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var settings by rememberSaveable { mutableStateOf(false) }
@@ -165,8 +169,8 @@ import net.hegai.code.core.Target
     LaunchedEffect(state.connection, state.activeAccess, state.viewer?.workspace?.workspaceId) { model?.refreshSharedProjects() }
     val startProjects = remember(state.machines, state.runs, state.viewer, catalog, sharedRoots, showAutomated) {
         val discovered = drawerProjects(state, showAutomated, "")
-        discovered + state.machines.flatMap { machine -> mergeProjectPaths(catalog[machine.machine.machineId].orEmpty(), sharedRoots.filter { it.machineId == machine.machine.machineId }.map { it.root }, ignoreCase = machine.machine.os == "win32").filter { cwd ->
-            discovered.none { it.machine.machine.machineId == machine.machine.machineId && it.cwd.equals(cwd, machine.machine.os == "win32") }
+        discovered + state.machines.flatMap { machine -> mergeProjectPaths(catalog[machine.machine.machineId].orEmpty(), sharedRoots.filter { it.machineId == machine.machine.machineId }.map { it.root }, ignoreCase = machine.machine.os.let { it == "windows" || it == "win32" }).filter { cwd ->
+            discovered.none { it.machine.machine.machineId == machine.machine.machineId && it.cwd.equals(cwd, machine.machine.os.let { it == "windows" || it == "win32" }) }
         }.map { cwd -> DrawerProject("${machine.machine.machineId}:$cwd", machine, cwd, emptyList()) } }
     }
     val isStart = state.target.let { t -> t == null || (t.sessionId == null && state.messages.isEmpty() && !state.busy && !state.opening) }
@@ -174,7 +178,8 @@ import net.hegai.code.core.Target
     // Showing automation history must not make its transient directory the default workspace.
     val defaultProject = startProjects.firstOrNull { startable(it) && (it.sessions.isEmpty() || it.sessions.any { session -> !session.automated }) }
     // A workspace member runs Codex only (the start chooser has no engine picker for them).
-    val defaultSource = if (state.viewer?.workspace?.role == "member") "codex" else "claude"
+    // Otherwise Claude, unless the machine says it cannot start there and Codex can (web `pickRuntime`).
+    val defaultSource = if (state.viewer?.workspace?.role == "member") "codex" else Runtimes.pick(defaultProject?.machine?.runtimes, "claude")
     val newChat: () -> Unit = {
         val t = state.target
         val next = if (t != null && t.cwd.isNotBlank()) Target(t.machineId, t.cwd, source = t.source,
@@ -187,12 +192,24 @@ import net.hegai.code.core.Target
         if (state.target == null && state.activeAccess && state.connection == Connection.READY)
             defaultProject?.let { engine.select(Target(it.machine.machine.machineId, it.cwd, source = defaultSource)) }
     }
+    // The machine's runtimes can arrive after the first selection: follow them while the chat is still empty.
+    val startRuntimes = state.machine?.runtimes
+    // The machine the person picked a runtime on by hand: there the switch below leaves their choice alone (web `handPickedOn`);
+    // the «не вошёл» note under the project chip still says what is wrong.
+    var handPickedOn by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(startRuntimes, state.target?.machineId) {
+        val t = state.target
+        if (t != null && t.sessionId == null && t.agent == null && isStart && handPickedOn != t.machineId && state.viewer?.workspace?.role != "member") {
+            val next = Runtimes.pick(startRuntimes, "claude")
+            if (t.source == "claude" && next != t.source) engine.select(t.copy(source = next))
+        }
+    }
     LaunchedEffect(state.target?.key, state.busy, state.loadingHistory, state.messages.lastOrNull()?.id) { model?.enrichConversation() }
     val shared = model?.share?.collectAsStateWithLifecycle()?.value
     LaunchedEffect(shared) { if (shared != null) chooseProject = true }
     val reportOpen = model?.report?.collectAsStateWithLifecycle()?.value != null
-    LaunchedEffect(isStart, chooseProject, state.connection, state.machines.filter { it.online && it.canControl }.map { it.machine.machineId }) {
-        if (isStart || chooseProject) model?.refreshProjects()
+    LaunchedEffect(isStart, chooseProject, drawer.isOpen, state.connection, state.machines.filter { it.online && it.canControl }.map { it.machine.machineId }) {
+        if (isStart || chooseProject || drawer.isOpen) model?.refreshProjects()
     }
     val conversationVisible = !reportOpen && fullError == null && !isStart && !settings && !inbox && !team && !flow && !reports && !chooseProject && !sessionMenu && drillProject == null && !drawer.isOpen
     LaunchedEffect(conversationVisible, state.target?.key, state.connection, state.loadingHistory, state.messages.lastOrNull()?.id, state.busy) {
@@ -327,7 +344,7 @@ import net.hegai.code.core.Target
     fullError?.let { error -> AlertDialog(onDismissRequest = { fullError = null }, title = { Text("Сообщение об ошибке") },
         text = { Text(error, Modifier.verticalScroll(rememberScrollState())) }, confirmButton = { TextButton({ fullError = null }) { Text("Закрыть") } }) }
     if (sessionMenu) SessionMenu(state, model, engine) { sessionMenu = false }
-    if (chooseProject && model != null) AdvancedProjectPicker(state, model, { chooseProject = false; model.cancelShare() }) { target -> model.selectShared(target); chooseProject = false }
+    if (chooseProject && model != null) AdvancedProjectPicker(state, model, { chooseProject = false; model.cancelShare() }, { handPickedOn = it }) { target -> model.selectShared(target); chooseProject = false }
     if (chooseProject && model == null) ProjectPicker(state, { chooseProject = false }) { target -> engine.select(target); chooseProject = false }
     val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
     state.approval?.let { ApprovalDialog(it) { allow, answers, mode ->
@@ -427,6 +444,9 @@ private fun working(state: HubState, machineId: String, sessionId: String?) =
             }
         }
     }
+    // A runtime the machine says cannot start (no binary / no login) stays selectable, but not silently.
+    val problem = state.target?.takeIf { it.sessionId == null && it.agent == null }?.let { Runtimes.problem(state.machine?.runtimes, it.source) }
+    if (problem != null) Text(problem, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -515,7 +535,7 @@ private fun drawerProjects(state: HubState, automated: Boolean, search: String):
     return state.machines.flatMap { machine ->
         machine.sessions.filter { state.isMine(machine, it) && (automated || !it.automated) }
             .filter { search.isBlank() || "${state.titleFor(machine.machine.machineId, it)} ${it.title} ${it.project} ${it.cwd} ${machine.machine.name}".contains(search.trim(), ignoreCase = true) }
-            .groupBy { it.cwd.orEmpty().let { cwd -> if (machine.machine.os == "win32") cwd.lowercase() else cwd } }
+            .groupBy { it.cwd.orEmpty().let { cwd -> if (machine.machine.os.let { it == "windows" || it == "win32" }) cwd.lowercase() else cwd } }
             .map { (cwd, group) ->
                 DrawerProject("${machine.machine.machineId}:$cwd", machine, group.first().cwd.orEmpty(), group.sortedWith(
                     compareByDescending<Session> { rank(machine, it) }.thenByDescending { created(it) }.thenBy { it.sessionId }))
@@ -536,6 +556,7 @@ private fun drawerProjects(state: HubState, automated: Boolean, search: String):
                 Text(machine.machine.name + (if (machine.machine.isPrivate) " · зашифрована" else "") + (if (machine.online) "" else " · офлайн"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             if (cwd.isNotBlank() && machine.online && (machine.canStart || machine.canControl)) IconButton({ select(Target(machine.machine.machineId, cwd)) }) { Icon(Icons.Outlined.Add, "Новый чат в проекте") }
+            ProjectRemoveMenu(state, machine, cwd, projectName(project), sorted)
         }
         val shown = if (searching) sorted else sorted.filterIndexed { i, it -> i < 4 || working(state, machine.machine.machineId, it.sessionId) }
         shown.forEach { session -> SessionItem(machine, session, state, select) }
@@ -568,6 +589,7 @@ private fun projectName(project: DrawerProject) = project.sessions.firstOrNull()
         label = { Text(state.titleFor(machine.machine.machineId, session).ifBlank { "Без названия" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         selected = selected,
         onClick = { select(Target(machine.machine.machineId, session.cwd.orEmpty(), session.sessionId, session.title, session.source)) },
+        badge = { SessionDeleteMenu(state, machine, session) },
         icon = if (busy) { { LoadingIndicator(Modifier.size(24.dp)) } } else if (state.unread(machine.machine.machineId, session.sessionId)) { { Icon(Icons.Outlined.MarkChatUnread, "Непрочитано") } } else null,
         modifier = Modifier.heightIn(min = 48.dp),
         colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = androidx.compose.ui.graphics.Color.Transparent, selectedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh),

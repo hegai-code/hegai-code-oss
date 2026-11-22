@@ -16,6 +16,7 @@ import { readLiveSessions } from './sessions.js';
 import { moveToTrash, trashRoot } from './trash.js';
 import { childEnv } from './child-env.js';
 import { isExternal } from './edition.js';
+import { removeSyncProjectsUnder } from './policy.js';
 
 /**
  * Project directories under this machine's projects root — the "Create
@@ -60,6 +61,12 @@ export interface ProjectOpsDeps {
   /** Where the adopted list is persisted. Tests redirect it; production uses
    *  `stateDir()`. */
   adoptedFile?: string;
+  /** The policy file `removeProject` prunes `sync.projects` in. Tests
+   *  redirect it; production uses `policyFile()`. */
+  policyFile?: string;
+  /** Called when `removeProject` changed the sync list, so the hub re-sends
+   *  the inventory without the removed folder's sessions (as `sync.set` does). */
+  onSyncChanged?: () => void;
 }
 
 export function projectsRoot(env: NodeJS.ProcessEnv = process.env): string {
@@ -243,6 +250,20 @@ export async function removeProject(
   // the EXDEV fallback this used to lack (a project on another volume failed
   // with a raw errno).
   const movedTo = await moveToTrash(target, deps.trashDir ?? trashRoot());
+  // The folder is gone from where it was, so its `sync.projects` entries would
+  // only point at nothing. Done AFTER a successful move, and a failed write must
+  // not turn a finished removal into an error. Agent-side only: the policy file
+  // is not reachable from the wire. When `target` is a symlink the move carried
+  // only the link: the resolved directory is still there, and its entry stays.
+  try {
+    const dirs = [target];
+    if (realTarget !== target && !(await stat(realTarget).catch(() => undefined))) dirs.push(realTarget);
+    let changed = false;
+    for (const dir of dirs) changed = removeSyncProjectsUnder(dir, deps.policyFile) || changed;
+    if (changed) deps.onSyncChanged?.();
+  } catch (err) {
+    console.error(`[agent] could not drop ${target} from policy.json sync list: ${(err as Error).message}`);
+  }
   return { ok: true, movedTo };
 }
 

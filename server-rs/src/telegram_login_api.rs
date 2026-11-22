@@ -221,11 +221,23 @@ pub(crate) async fn api_tg_login_poll(
     let user_id = result["userId"].as_str().unwrap_or_default();
     let client = result["client"].as_str().unwrap_or("web");
     let ttl_days = session_days(client);
-    // A native poll has no browser to ask for a second factor: refuse in words
-    // rather than hand out a session that opens nothing. The web poll gets a
-    // pending cookie and the SPA shows the code screen.
+    // A native client that can ask for the code itself (`"mfa": "code"`, the
+    // Android app since 1.0.7) gets the PENDING session and posts the code to
+    // `/api/auth/mfa/verify` with it as a bearer — exactly what the web poll
+    // does with a pending cookie. The pending session opens nothing else and
+    // lapses in `mfa::PENDING_TTL_MS`. An older app has no code screen: refuse
+    // in words rather than hand out a session that opens nothing. A person
+    // who owes a code but has no authenticator (an admin held to
+    // `CC_REMOTE_ADMIN_MFA`) cannot verify anywhere: same refusal.
+    let asks_code = client == "native" && body.get("mfa").and_then(Value::as_str) == Some("code");
     if client == "native" && st.workspaces.mfa_required(user_id) {
-        return crate::mfa_browser_required();
+        let enrolled = st
+            .workspaces
+            .with_conn_mfa(|c| crate::user_totp::is_enrolled(c, user_id))
+            .unwrap_or(false);
+        if !(asks_code && enrolled) {
+            return crate::mfa_browser_required();
+        }
     }
     let session = match st
         .workspaces
@@ -244,9 +256,14 @@ pub(crate) async fn api_tg_login_poll(
         }
     };
     // Close the check-then-mint gap: what was really minted decides.
-    if client == "native"
-        && matches!(st.workspaces.authenticate_pending(&session), Ok(Some(m)) if m.pending)
-    {
+    let pending = client == "native"
+        && matches!(st.workspaces.authenticate_pending(&session), Ok(Some(m)) if m.pending);
+    let enrolled = pending
+        && st
+            .workspaces
+            .with_conn_mfa(|c| crate::user_totp::is_enrolled(c, user_id))
+            .unwrap_or(false);
+    if pending && !(asks_code && enrolled) {
         st.workspaces.drop_session(&session);
         return crate::mfa_browser_required();
     }
@@ -254,7 +271,9 @@ pub(crate) async fn api_tg_login_poll(
     // Who signed in, so the client can say «Вы вошли как @x (Имя)» with a
     // way out — the last line against a code seen on a shared screen.
     let mut out = json!({
-        "status": "approved",
+        // `mfa`: the session is pending; the app asks for the code and sends
+        // it to `/api/auth/mfa/verify` before using it.
+        "status": if pending { "mfa" } else { "approved" },
         "userId": user_id,
         "created": result["created"],
         "telegram": result["telegram"],

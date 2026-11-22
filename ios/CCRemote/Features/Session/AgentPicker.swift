@@ -19,6 +19,9 @@ struct AgentPicker: View {
     /// The choice actually in force. Differs from the remembered one when
     /// "opencode" is remembered but this machine has no Go rows.
     var selection: String?
+    /// Ручной тап — в том числе по уже выбранному сегменту: экран по нему
+    /// снимает автоподмену рантайма, которой значение в настройках не меняется.
+    var onPick: ((String) -> Void)?
     @Environment(AppSettings.self) private var settings
 
     var body: some View {
@@ -38,7 +41,7 @@ struct AgentPicker: View {
 
     private func segment(_ label: String, value: String) -> some View {
         let active = (selection ?? settings.preferredAgent) == value
-        return Button { settings.preferredAgent = value; Haptics.light() } label: {
+        return Button { settings.preferredAgent = value; onPick?(value); Haptics.light() } label: {
             Text(label)
                 .font(.ui(Theme.sizeMicro, weight: .medium))
                 .foregroundStyle(active ? Theme.onSelect : Theme.textMuted)

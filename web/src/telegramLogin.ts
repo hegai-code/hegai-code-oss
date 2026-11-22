@@ -69,7 +69,8 @@ export function telegramLoginError(error: unknown): string {
 }
 
 /** What a finished poll means for the person, when it is not a success. */
-export function telegramPollEnd(status: 'denied' | 'expired' | 'used' | 'unknown'): string {
+// `mfa` goes only to a native client that asked for it; the web never does.
+export function telegramPollEnd(status: 'denied' | 'expired' | 'used' | 'unknown' | 'mfa'): string {
   switch (status) {
     case 'denied':
       return 'Вход отменён в Telegram: там нажали «Это не я», не то число, или ссылку открыли с двух аккаунтов.';

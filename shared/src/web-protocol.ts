@@ -177,6 +177,18 @@ export const TelegramLoginPoll = z.discriminatedUnion('status', [
     created: z.boolean().optional(),
     session: z.string().optional(),
   }),
+  /** Only to a native client that polled with `mfa: "code"` (Android ≥1.0.7):
+   *  Telegram proved the account, the authenticator code is still owed.
+   *  `session` is PENDING — it opens nothing until `POST /api/auth/mfa/verify`
+   *  with it as a bearer, and lapses in 10 minutes. */
+  z.object({
+    status: z.literal('mfa'),
+    userId: z.string(),
+    telegram: z.string(),
+    account: TelegramLoginAccount,
+    created: z.boolean().optional(),
+    session: z.string(),
+  }),
 ]);
 export type TelegramLoginPoll = z.infer<typeof TelegramLoginPoll>;
 

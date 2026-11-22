@@ -351,11 +351,11 @@ export function UsageMeter({
     ...(budgetUsage ? [{ id: 'budget', label: 'Мой лимит', accounts: [{ usage: budgetUsage, machines: [] }] }] : []),
     { id: 'claude', label: 'Claude', accounts: claudeAccounts.slice(0, 1) },
     gateway
-      ? { id: 'gateway', label: 'Codex', sub: 'шлюз a.test', pill: gateway.usage, accounts: codexPools.length ? codexPools : [gateway] }
+      ? { id: 'gateway', label: 'Codex', sub: 'шлюз', pill: gateway.usage, accounts: codexPools.length ? codexPools : [gateway] }
       : codexPools.length
         ? // The caller's own counter is down, the other pools are not: list
           // them, but keep their numbers off the pill (not the caller's).
-          { id: 'gateway-pools', label: 'Codex', sub: 'шлюз a.test', accounts: codexPools }
+          { id: 'gateway-pools', label: 'Codex', sub: 'шлюз', accounts: codexPools }
         : { id: 'codex', label: 'Codex', accounts: codexAccounts.slice(0, 1) },
     // Popover only: the pill stays Claude + Codex.
     ...(goPools.length ? [{ id: 'opencode', label: 'OpenCode', accounts: goPools }] : []),

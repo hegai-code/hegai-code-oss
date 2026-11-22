@@ -49,6 +49,12 @@ struct ShelfAccumulator {
         byMachine[machineId] = rows
     }
 
+    /// Убрать проект, который только что удалили: молчание машины на следующем опросе
+    /// иначе вернуло бы его из прошлого ответа.
+    mutating func remove(_ machineId: String, cwd: String) {
+        byMachine[machineId]?.removeAll { $0.cwd == cwd }
+    }
+
     /// Порядок — по машинам, а не по тому, кто успел первым: иначе полка
     /// перетасовывалась бы на каждом прилетевшем ответе.
     func targets(order ids: [String]) -> [ExtraTarget] {
@@ -88,6 +94,14 @@ struct ShelfAskPolicy {
     }
 }
 
+/// Поколение запроса: принимается только ответ ПОСЛЕДНЕГО. Иначе уже летевший
+/// запрос, начатый до remove/create, вернул бы удалённый проект и стёр созданный.
+struct RequestGeneration {
+    private(set) var current = 0
+    mutating func begin() -> Int { current += 1; return current }
+    func accepts(_ token: Int) -> Bool { token == current }
+}
+
 @MainActor
 @Observable
 final class OwnedProjects {
@@ -99,6 +113,7 @@ final class OwnedProjects {
 
     private var shelf = ShelfAccumulator()
     private var lastKey = ""
+    private var requests = RequestGeneration()
     /// Решение «спрашивать ли» — `ShelfAskPolicy`. `wasOpen`: ключ, записанный пока
     /// спрашивать было некого, надо спросить, как только сокет откроется.
     private var ask = ShelfAskPolicy.State()
@@ -109,6 +124,12 @@ final class OwnedProjects {
             .map(\.machine.machineId)
             .sorted()
             .joined(separator: ",")
+    }
+
+    /// Проект удалён на машине: сразу с полки и из прошлых ответов.
+    func forget(machineId: String, cwd: String) {
+        shelf.remove(machineId, cwd: cwd)
+        targets.removeAll { $0.machineId == machineId && $0.cwd == cwd }
     }
 
     /// Обновить по `ShelfAskPolicy`: состав машин изменился, открылся новый сокет, либо
@@ -123,6 +144,7 @@ final class OwnedProjects {
         let generation = client.socketGeneration
         guard ShelfAskPolicy.shouldAsk(ask, key: key, open: open, generation: generation,
                                        appeared: appeared, force: force, now: now) else { return }
+        let token = requests.begin()
         lastKey = key
         ask.key = key
         ask.wasOpen = open
@@ -167,7 +189,7 @@ final class OwnedProjects {
             }
             for await (machineId, rows) in group {
                 // Ответ мог прийти на запрос, который уже не про этот флот.
-                guard lastKey == key else { break }
+                guard lastKey == key, requests.accepts(token) else { break }
                 if rows != nil { silent.remove(machineId) }
                 shelf.put(machineId, rows)
                 awaiting.remove(machineId)
@@ -176,7 +198,7 @@ final class OwnedProjects {
                 targets = shelf.targets(order: ids)
             }
         }
-        guard lastKey == key else { return }
+        guard lastKey == key, requests.accepts(token) else { return }
         // A machine that did not answer (mid-reconnect, or too old for
         // `projects.list`) is asked again the next time the socket opens.
         if !silent.isEmpty { ask.wasOpen = false }

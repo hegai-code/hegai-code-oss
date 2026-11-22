@@ -1,6 +1,6 @@
 [package]
 name = "hegai-code"
-version = "0.1.28"
+version = "0.1.31"
 description = "Hegai Code — пульт для сессий Claude Code и Codex, десктопный клиент (Windows, macOS)"
 authors = ["Hegai"]
 edition = "2021"

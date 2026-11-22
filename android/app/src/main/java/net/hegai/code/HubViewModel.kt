@@ -211,6 +211,9 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
     val prefetch = _prefetch.asStateFlow()
     private val _projectCatalog = MutableStateFlow<Map<String, List<String>>>(emptyMap())
     val projectCatalog = _projectCatalog.asStateFlow()
+    /** Per machine: folders `projects.list` marks `origin: "root"` — the only ones «Удалить с машины» may offer. */
+    private val _removableProjects = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+    val removableProjects = _removableProjects.asStateFlow()
     private val _sharedProjects = MutableStateFlow<List<SharedProject>>(emptyList())
     /** Projects shared into the current organization workspace with control access (a member may have no sessions there yet). */
     val sharedProjects = _sharedProjects.asStateFlow()
@@ -481,6 +484,18 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
     }
     suspend fun rpc(machineId: String, method: String, params: JsonObject = buildJsonObject {}): JsonObject =
         request("rpc_request", buildJsonObject { put("machineId", machineId); put("method", method); put("params", params) }).objectValue("result") ?: buildJsonObject {}
+    /** `session.delete` as the web sends it; throws the agent's refusal. A live session is stopped by the agent first. */
+    suspend fun deleteSession(machineId: String, sessionId: String, cwd: String, source: String) {
+        rpc(machineId, "session.delete", buildJsonObject { put("sessionId", sessionId); put("cwd", cwd); put("source", source) })
+        engine.sessionDeleted(machineId, sessionId)
+    }
+    /** `projects.remove`: the folder moves to ~/.cc-remote/trash on the machine. */
+    suspend fun removeProject(machineId: String, cwd: String) {
+        rpc(machineId, "projects.remove", buildJsonObject { put("cwd", cwd) })
+        _projectCatalog.value = _projectCatalog.value + (machineId to _projectCatalog.value[machineId].orEmpty().filter { it != cwd })
+        _removableProjects.value = _removableProjects.value + (machineId to _removableProjects.value[machineId].orEmpty().filter { it != cwd }.toSet())
+        engine.projectRemoved(machineId, cwd)
+    }
     suspend fun api(path: String, method: String = "GET", body: JsonObject? = null): JsonObject {
         require(path.startsWith("/api/") && !path.contains(".."))
         val credential = token ?: error("Войдите в аккаунт")
@@ -655,10 +670,15 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
         if (!force && key == projectAsk && System.currentTimeMillis() - projectAskedAt < 300_000) return@supervisorScope
         projectAsk = key; projectAskedAt = System.currentTimeMillis()
         _projectCatalog.value = _projectCatalog.value.filterKeys { it in ids }
+        _removableProjects.value = _removableProjects.value.filterKeys { it in ids }
         ids.map { id -> launch {
             try {
-                val projects = rpc(id, "projects.list").rows("projects").mapNotNull { it.string("cwd")?.takeIf(String::isNotBlank) }.distinct()
-                if (stamp == cacheEpoch && key == projectAsk) _projectCatalog.value = _projectCatalog.value + (id to projects)
+                val rows = rpc(id, "projects.list").rows("projects")
+                val projects = rows.mapNotNull { it.string("cwd")?.takeIf(String::isNotBlank) }.distinct()
+                if (stamp == cacheEpoch && key == projectAsk) {
+                    _projectCatalog.value = _projectCatalog.value + (id to projects)
+                    _removableProjects.value = _removableProjects.value + (id to removableProjectCwds(rows))
+                }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { /* Old/silent agent: retain that machine's last successful list. */ }
         } }.joinAll()
@@ -753,9 +773,11 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
         }
     }
     private fun invalidateAuth() {
+        // A pending 2FA session the code screen held: nothing will verify it now.
+        (_telegram.value as? TelegramPhase.Code)?.let { c -> viewModelScope.launch { revokeAbandoned(c.session, c.hub) } }
         closeReport(); _consentDialog.value = false
         prefetchJob?.cancel(); prefetchKey = ""; _prefetch.value = null
-        _projectCatalog.value = emptyMap(); projectAsk = ""; _sharedProjects.value = emptyList(); sharedAsk = ""
+        _projectCatalog.value = emptyMap(); _removableProjects.value = emptyMap(); projectAsk = ""; _sharedProjects.value = emptyList(); sharedAsk = ""
         authEpoch++; telegramStopped = true; _telegram.value = null; googleLinkEpoch = null
         // Do not cancel an in-flight poll: it may carry the one-use approval.
     }
@@ -794,7 +816,7 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
                     delay((login.interval * 1000).toLong().coerceIn(1000, 10_000))
                     if (stamp != authEpoch || telegramStopped) break
                     if (android.os.SystemClock.elapsedRealtime() >= deadline) error(telegramEnd("expired"))
-                    val result = try { telegramPost("poll", buildJsonObject { put("pollToken", login.pollToken) }, base = flowHub) }
+                    val result = try { telegramPost("poll", buildJsonObject { put("pollToken", login.pollToken); put("mfa", "code") }, base = flowHub) }
                         catch (e: CancellationException) { throw e }
                         // A second factor is owed and an app has no browser here: say so
                         // instead of polling until the code expires.
@@ -817,6 +839,18 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
                             if (token == session) { telegramMemoVault.write(memo.toString()); _telegramMemo.value = memo }
                             return@launch
                         }
+                        "mfa" -> {
+                            // Telegram proved the account; the authenticator code is still owed.
+                            // The session is pending: it opens nothing until verified.
+                            check(!link) { "Неожиданный результат привязки" }
+                            val session = result.string("session")?.takeIf { it.isNotBlank() && it.length <= 4096 } ?: error("Сервер не вернул сессию")
+                            val memo = buildJsonObject {
+                                put("userId", result.string("userId")); put("telegram", result.string("telegram"))
+                                put("name", result.objectValue("account")?.string("displayName"))
+                            }
+                            _telegram.value = TelegramPhase.Code(session, memo, flowHub)
+                            return@launch
+                        }
                         "confirm_link" -> {
                             check(link) { "Неожиданное подтверждение привязки" }
                             if (!telegramStopped) _telegram.value = TelegramPhase.Confirm(login, result.string("telegram") ?: "Telegram")
@@ -829,7 +863,45 @@ class HubViewModel(application: Application, private val saved: SavedStateHandle
             catch (e: Exception) { if (stamp == authEpoch && !telegramStopped) _telegram.value = TelegramPhase.Failed(e.message ?: "Нет связи с сервером", link) }
         }
     }
-    fun closeTelegram() { telegramStopped = true; _telegram.value = null }
+    fun closeTelegram() {
+        (_telegram.value as? TelegramPhase.Code)?.let { viewModelScope.launch { revokeAbandoned(it.session, it.hub) } }
+        telegramStopped = true; _telegram.value = null
+    }
+    fun submitTelegramCode(code: String) {
+        val phase = _telegram.value as? TelegramPhase.Code ?: return
+        if (phase.busy || code.isBlank()) return
+        val stamp = authEpoch
+        _telegram.value = phase.copy(busy = true, error = null)
+        viewModelScope.launch {
+            val outcome = withContext(Dispatchers.IO) { runCatching {
+                http.newBuilder().readTimeout(15, TimeUnit.SECONDS).followRedirects(false).build().newCall(
+                    Request.Builder().url(HubUrl.mfaVerify(phase.hub)).header("Authorization", "Bearer ${phase.session}")
+                        .post(buildJsonObject { put("code", code) }.toString().toRequestBody("application/json".toMediaType())).build()
+                ).execute().use { response ->
+                    val raw = response.body?.string().orEmpty()
+                    val value = runCatching { wireJson.parseToJsonElement(raw.ifEmpty { "{}" }).jsonObject }.getOrNull()
+                    when {
+                        response.isSuccessful -> null
+                        response.code == 401 -> "Время на ввод кода вышло. Начните вход заново."
+                        response.code == 429 -> "Слишком много попыток. Подождите немного."
+                        else -> value?.string("error") ?: "Код не подошёл."
+                    }
+                }
+            } }
+            if (stamp != authEpoch || (_telegram.value as? TelegramPhase.Code)?.session != phase.session) {
+                // Another sign-in won meanwhile: never leave this session behind.
+                revokeAbandoned(phase.session, phase.hub); return@launch
+            }
+            outcome.fold({ problem ->
+                if (problem == null) {
+                    if (phase.hub != hub) { revokeAbandoned(phase.session, phase.hub); _telegram.value = null; return@fold }
+                    _telegram.value = null // or invalidateAuth() would revoke the session just verified
+                    acceptSession(phase.session)
+                    if (token == phase.session) { telegramMemoVault.write(phase.memo.toString()); _telegramMemo.value = phase.memo }
+                } else _telegram.value = phase.copy(busy = false, error = problem)
+            }, { _telegram.value = phase.copy(busy = false, error = "Нет связи с сервером") })
+        }
+    }
     fun confirmTelegramLink() {
         val phase = _telegram.value as? TelegramPhase.Confirm ?: return
         val credential = token ?: return

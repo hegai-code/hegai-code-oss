@@ -135,4 +135,24 @@ final class OwnedProjectsTests: XCTestCase {
                        "only an appearance triggers the time-based refresh")
         XCTAssertFalse(ask(state(askedAt: nil), appeared: true, at: 9_999), "nothing was ever asked: the key task owns the first ask")
     }
+
+    /// Ответ запроса, начатого до remove/create, не принимается: принимает только последний.
+    func testOnlyLatestRequestGenerationIsAccepted() {
+        var g = RequestGeneration()
+        let first = g.begin()
+        XCTAssertTrue(g.accepts(first))
+        let second = g.begin()
+        XCTAssertFalse(g.accepts(first))
+        XCTAssertTrue(g.accepts(second))
+    }
+
+    /// Удалённый проект не возвращается молчанием машины на следующем опросе.
+    func testRemovedProjectStaysGoneWhenMachineGoesSilent() {
+        var shelf = ShelfAccumulator()
+        shelf.keep(["a"])
+        shelf.put("a", [target("a", "x"), target("a", "y")])
+        shelf.remove("a", cwd: "/home/x")
+        shelf.put("a", nil)
+        XCTAssertEqual(shelf.targets(order: ["a"]).map(\.label), ["y"])
+    }
 }

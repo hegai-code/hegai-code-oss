@@ -700,7 +700,7 @@ async function dispatchRpcUnchecked(method: RpcMethod, params: Params): Promise<
     }
     case 'projects.remove': {
       const a = RpcParams['projects.remove'].parse(params);
-      return removeProject(a, { liveCwds });
+      return removeProject(a, { liveCwds, onSyncChanged: () => syncHost?.changed() });
     }
     case 'projects.adopt': {
       const a = RpcParams['projects.adopt'].parse(params);

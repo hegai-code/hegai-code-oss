@@ -300,8 +300,7 @@ public extension CentralClient {
     }
     public func deleteSession(machineId: String, cwd: String, sessionId: String,
                               source: String? = nil) async throws {
-        var params: [String: JSONValue] = ["cwd": .string(cwd), "sessionId": .string(sessionId)]
-        if let source { params["source"] = .string(source) }
+        let params = ProjectAdmin.deleteSessionParams(cwd: cwd, sessionId: sessionId, source: source)
         _ = try await rpc(machineId: machineId, method: "session.delete", params: .object(params))
     }
     public func forkSession(machineId: String, cwd: String, sessionId: String) async throws -> String {
@@ -355,6 +354,17 @@ public extension CentralClient {
     public func listProjects(machineId: String) async throws -> [ProjectInfo] {
         let r: ProjectsResult = try await call(machineId, "projects.list", [:])
         return r.projects
+    }
+
+    /// «Новый проект»: папка под корнем проектов машины (git init, README, первый
+    /// коммит — делает агент), как в вебе. Только владелец устройства.
+    public func createProject(machineId: String, name: String, gitUrl: String? = nil) async throws -> ProjectCreateResult {
+        try await call(machineId, "projects.create", ProjectAdmin.createParams(name: name, gitUrl: gitUrl))
+    }
+
+    /// «Удалить с машины»: папка уходит в `~/.cc-remote/trash`, живая сессия — отказ.
+    public func removeProject(machineId: String, cwd: String) async throws -> ProjectRemoveResult {
+        try await call(machineId, "projects.remove", ProjectAdmin.removeParams(cwd: cwd))
     }
 
     // Hardware
