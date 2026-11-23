@@ -12,7 +12,28 @@ import { claudeOff, runtimeChips, runtimeUsable } from './runtimeChips.js';
  * common case — and offers a picker when there are several, preferring one with
  * something to fix.
  */
-export type ShellAgent = { phase: 'checking' | 'signed_out' | 'installing' | 'installed' | 'waiting' | 'failed' | 'disconnected'; machineId?: string; reason?: string };
+export type ShellAgent = { phase: 'checking' | 'signed_out' | 'installing' | 'installed' | 'waiting' | 'failed' | 'disconnected' | 'offer' | 'declined'; machineId?: string; reason?: string; hub?: string };
+
+/** The shell's consent bridge (0.1.32+). Absent in older shells, which install
+ *  on their own and never report `offer` — feature-detect, never assume. */
+type AgentApi = { connect: () => Promise<unknown>; decline: () => Promise<unknown> };
+function agentApi(): AgentApi | undefined {
+  const a = (window as { __HEGAI_AGENT_API__?: Partial<AgentApi> }).__HEGAI_AGENT_API__;
+  return a && typeof a.connect === 'function' && typeof a.decline === 'function' ? (a as AgentApi) : undefined;
+}
+
+/** «Подключить»: the person's yes. False when this shell cannot take it. */
+export async function connectShellAgent(): Promise<boolean> {
+  const api = agentApi();
+  if (!api) return false;
+  try { await api.connect(); return true; } catch { return false; }
+}
+
+/** «Не подключать»: remembered by the shell per hub. Safe to call anywhere —
+ *  a no-op outside the shell or in a shell that has no such command. */
+export async function declineShellAgent(): Promise<void> {
+  try { await agentApi()?.decline(); } catch { /* shell refused: nothing to decline */ }
+}
 
 function readShellAgent(): ShellAgent | undefined {
   const a = (window as { __HEGAI_AGENT__?: ShellAgent }).__HEGAI_AGENT__;
@@ -44,14 +65,20 @@ export function needsOnboarding(central: Pick<CentralState, 'machines' | 'runtim
   return own.length === 0 || !own.some((m) => machineHasLogin(central, m));
 }
 
-export function useMachinePick(central: CentralState) {
-  const own = useMemo(() => ownMachines(central), [central.machines]); // eslint-disable-line react-hooks/exhaustive-deps
+/** What the desktop shell says about installing its agent, live. */
+export function useShellAgent(): ShellAgent | undefined {
   const [shellAgent, setShellAgent] = useState<ShellAgent | undefined>(() => readShellAgent());
   useEffect(() => {
     const onChange = () => setShellAgent(readShellAgent());
     window.addEventListener('hegai-agent', onChange);
     return () => window.removeEventListener('hegai-agent', onChange);
   }, []);
+  return shellAgent;
+}
+
+export function useMachinePick(central: CentralState) {
+  const own = useMemo(() => ownMachines(central), [central.machines]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shellAgent = useShellAgent();
   const shellMachine = shellAgent?.machineId;
   const preferred = useMemo(() => {
     const online = own.filter((m) => m.online);

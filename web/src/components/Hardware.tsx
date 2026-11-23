@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Cpu, RefreshCw } from '../icons.js';
 import { linkProps } from '../router.js';
 import { ConnectMachine } from './ConnectMachine.js';
+import { AgentOffer } from './AgentOffer.js';
+import { useShellAgent } from './useMachinePick.js';
 import { MyDevices } from '../TeamViews.js';
 import { RuntimeRows } from './RuntimeRows.js';
 import { pluralRu, relTimeRu } from '../lib.js';
@@ -531,6 +533,7 @@ export function Hardware({ central, viewer }: { central: CentralState; viewer?: 
   // hold the interest while this one is mounted, release it on the way out.
   const { watchStats } = central;
   useEffect(() => watchStats(), [watchStats]);
+  const shellAgent = useShellAgent();
   // A machine the viewer only sees through a share (no control) that the hub
   // also lists under «Машины команды» is drawn once, there — its hardware is
   // stripped from the share's own entry.
@@ -558,6 +561,7 @@ export function Hardware({ central, viewer }: { central: CentralState; viewer?: 
           {machines.filter((m) => m.online).length} из {machines.length} на связи
         </span>
       </div>
+      <AgentOffer shellAgent={shellAgent} />
       {machines.length === 0 && !pending ? (
         // Someone standing here has exactly one question, so the answer is the
         // whole view: the same one-command block the first-run screen shows.

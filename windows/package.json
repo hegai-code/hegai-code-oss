@@ -1,6 +1,6 @@
 {
   "name": "hegai-code-desktop",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "private": true,
   "description": "Hegai Code — оболочка Tauri для Windows и macOS. Не входит в npm workspaces корня: это cargo-проект, а npm тут только ради Tauri CLI. Версия, которая что-то решает, живёт в src-tauri/Cargo.toml и tauri.conf.json; эта просто не должна им противоречить.",
   "scripts": {

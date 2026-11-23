@@ -85,7 +85,8 @@ pub fn load(app: &AppHandle) {
     let _ = FILE_HUB.set(hub);
 }
 
-const BRIDGE_CAPABILITIES: [(&str, &str); 3] = [
+const BRIDGE_CAPABILITIES: [(&str, &str); 4] = [
+    ("agent-consent", include_str!("../capabilities/agent-consent.json")),
     ("app-menu", include_str!("../capabilities/app-menu.json")),
     ("window-chrome", include_str!("../capabilities/window-chrome.json")),
     ("window-drag-mac", include_str!("../capabilities/window-drag-mac.json")),
@@ -102,7 +103,7 @@ fn bridge_capability(id: &str, json: &str, hub: &str) -> Result<String, String> 
     Ok(v.to_string())
 }
 
-/// Grant the three bridges to a non-default hub. Returns whether all landed;
+/// Grant the bridges to a non-default hub. Returns whether all landed;
 /// on `false` the callers keep the degraded behaviour (no bridge, no overlay).
 /// NOTE: a malformed pattern panics inside tauri rather than returning `Err` —
 /// callers must pass a clean origin (`init_bridges` checks with `parse_hub`).

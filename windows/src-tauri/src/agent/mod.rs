@@ -188,7 +188,8 @@ async fn back_off(consecutive_failures: u32) {
 
 /// Put the current state where a person can see it without reading a log.
 fn publish(app: &AppHandle, status: &Status) {
-    // A revoked agent is still a live process; «агент работает» every 15 s
+    // Offer/Declined (no agent by the person's choice) and a revoked agent are
+    // owned by enroll.rs. A revoked agent is still a live process; «агент работает» every 15 s
     // would hide the «отключён» that enroll.rs shows next to its reconnect row.
     if crate::enroll::is_disconnected(app) {
         return;

@@ -5,7 +5,8 @@ import { Check } from '../icons.js';
 import { ConnectMachine } from './ConnectMachine.js';
 import { PhoneApps, usePhonePromise } from './PhoneApps.js';
 import { RuntimeRows } from './RuntimeRows.js';
-import { machineHasLogin, useMachinePick } from './useMachinePick.js';
+import { AgentOffer } from './AgentOffer.js';
+import { declineShellAgent, machineHasLogin, useMachinePick } from './useMachinePick.js';
 
 /**
  * The first screens after signing in: computer · Claude and Codex · phone.
@@ -59,7 +60,11 @@ export function Onboarding({ central, viewer, onFinish, initialStep = 0 }: {
           {step === 2 && <StepPhone />}
         </section>
         <div className="onb-nav">
-          <button className="btn onb-skip" onClick={onFinish}>Пропустить</button>
+          <button className="btn onb-skip" onClick={() => {
+            // Skipping the first step while the shell is asking means «не подключать».
+            if (pick.shellAgent?.phase === 'offer') void declineShellAgent();
+            onFinish();
+          }}>Пропустить</button>
           <span className="onb-nav-gap" />
           {step > 0 && <button className="btn" onClick={() => setStep(step - 1)}>Назад</button>}
           {last
@@ -80,6 +85,7 @@ function hasLoginReport(central: CentralState, m: CentralState['machines'][numbe
 
 type Pick = ReturnType<typeof useMachinePick>;
 
+
 function StepMachine({ central, viewer, pick }: { central: CentralState; viewer?: ViewerContext | null; pick: Pick }) {
   const online = pick.own.filter((m) => m.online);
   const sandbox = (viewer ?? central.viewer)?.access?.sandbox;
@@ -88,6 +94,7 @@ function StepMachine({ central, viewer, pick }: { central: CentralState; viewer?
   return (
     <>
       <h1 className="onb-title">{online.length > 0 ? 'Компьютер подключён' : 'Подключите компьютер'}</h1>
+      <AgentOffer shellAgent={shellAgent} />
       {online.length > 0 ? (
         <>
           <p className="onb-lead">Агент на связи — сессии этой машины уже видны здесь.</p>
@@ -110,7 +117,9 @@ function StepMachine({ central, viewer, pick }: { central: CentralState; viewer?
           {pendingSandbox && (
             <p className="onb-lead">Ваша песочница «{sandbox.machineName ?? 'Песочница'}» готовится — обычно две-пять минут. Она появится сама.</p>
           )}
-          {shellAgent && (shellAgent.phase === 'installed' || shellAgent.phase === 'checking') ? (
+          {shellAgent?.phase === 'offer' ? null : shellAgent?.phase === 'declined' ? (
+            <p className="onb-lead">Этот компьютер не подключён — как вы и решили. Передумаете: меню Hegai Code в трее/строке меню → «Подключить этот компьютер».</p>
+          ) : shellAgent && (shellAgent.phase === 'installed' || shellAgent.phase === 'checking') ? (
             // «installed» can come before the machine is online (the shell counts
             // an agent without a device token as installed): never a blank step.
             <p className="onb-lead">Агент на этом компьютере стоит — ждём, пока он выйдет на связь. Обычно это секунды; если не появляется, подключите его командой ниже.</p>
@@ -119,7 +128,7 @@ function StepMachine({ central, viewer, pick }: { central: CentralState; viewer?
               {shellAgent.phase === 'installing'
                 ? 'Приложение подключает этот компьютер — ставит агента, обычно минута-две. Ничего делать не нужно.'
                 : shellAgent.phase === 'signed_out'
-                  ? 'Этот компьютер подключится сам, как только вы войдёте.'
+                  ? 'После входа приложение спросит, подключать ли этот компьютер.'
                   : shellAgent.phase === 'waiting'
                     ? `Этот компьютер подключится позже: ${shellAgent.reason ?? 'ждём хаб'}.`
                     : shellAgent.phase === 'disconnected'

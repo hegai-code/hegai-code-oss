@@ -1030,6 +1030,8 @@ fn main() {
             appmenu::shell_update_row,
             appmenu::shell_update,
             hubconf::shell_set_hub,
+            enroll::agent_connect,
+            enroll::agent_decline,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -1563,6 +1565,23 @@ const APP_BRIDGE: &str = r#"
 })();
 "#;
 
+/// The consent bridge (0.1.32), both platforms: the page answers «Подключить
+/// этот компьютер?» with these two. Its OWN global, so a page can feature-detect
+/// it and an older shell (which installed on its own and has no such commands)
+/// simply never shows the question.
+const AGENT_BRIDGE: &str = r#"
+(() => {
+  const invoke = (cmd) =>
+    window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke
+      ? window.__TAURI_INTERNALS__.invoke(cmd, {})
+      : Promise.reject(new Error('no bridge'));
+  window.__HEGAI_AGENT_API__ = {
+    connect: () => invoke('agent_connect'),
+    decline: () => invoke('agent_decline'),
+  };
+})();
+"#;
+
 /// The Mac's half of the bridge: a title bar there has two behaviours the page
 /// must now provide — drag, and double-click to zoom — plus one question, «is
 /// this native fullscreen?», which decides whether the page leaves room for
@@ -1619,6 +1638,8 @@ fn shell_init_script() -> String {
     // `wants_browser`. Without it the page keeps the own-window flag, which is
     // the right answer for a shell that cannot read the new one.
     let agent = format!("{agent}window.__HEGAI_LINKS_TO_BROWSER__ = 1;\n");
+    // Only where `agent-consent` is granted, as for the menu bridge below.
+    let agent = if hubconf::bridges_granted() { format!("{agent}{AGENT_BRIDGE}") } else { agent };
     if cfg!(target_os = "macos") {
         let bridge = if mac_overlay() { MAC_WINDOW_BRIDGE } else { "" };
         format!("window.__HEGAI_SHELL__ = 'mac';\n{agent}{bridge}")
@@ -1758,6 +1779,18 @@ mod tests {
         assert!(!script.contains("__VERSION__"));
         for cmd in ["shell_quit", "shell_update_row", "shell_update"] {
             assert!(script.contains(&format!("invoke('{cmd}'")), "bridge lost {cmd}");
+        }
+    }
+
+    #[test]
+    fn init_script_installs_the_consent_bridge() {
+        if !hubconf::bridges_granted() {
+            return;
+        }
+        let script = shell_init_script();
+        assert!(script.contains("window.__HEGAI_AGENT_API__ = {"));
+        for cmd in ["agent_connect", "agent_decline"] {
+            assert!(script.contains(&format!("invoke('{cmd}')")), "bridge lost {cmd}");
         }
     }
 

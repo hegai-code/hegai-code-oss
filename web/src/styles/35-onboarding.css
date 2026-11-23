@@ -85,3 +85,4 @@
 .phone-hub { display: grid; gap: var(--space-2); }
 .phone-hub .team-help { overflow-wrap: anywhere; }
 .phone-hub small { display: block; margin-top: 2px; font-size: var(--size-meta); color: var(--text-muted); }
+.onb-offer { display: flex; flex-direction: column; gap: var(--space-3); }

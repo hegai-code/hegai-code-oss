@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "agent-consent",
+  "description": "Две команды согласия на подключение компьютера (src/enroll.rs): «Подключить» и «Не подключать». Обе работают только пока приложение спрашивает (фаза offer/declined) и не трогают уже подключённый компьютер. Windows и macOS, только origin хаба и только окна приложения — не окно входа (`popup-*`) и не офлайн-окно.",
+  "windows": ["main", "window-*"],
+  "local": false,
+  "remote": {
+    "urls": ["https://code.acme.test/*"]
+  },
+  "permissions": [
+    "allow-agent-connect",
+    "allow-agent-decline"
+  ]
+}

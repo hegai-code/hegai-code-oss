@@ -120,7 +120,7 @@ impl Drop for PromptGuard {
     }
 }
 
-async fn confirm(window: &tauri::WebviewWindow, title: &str, text: &str) -> bool {
+pub(crate) async fn confirm(window: &tauri::WebviewWindow, title: &str, text: &str) -> bool {
     if PROMPT_OPEN.swap(true, Ordering::SeqCst) {
         return false;
     }
@@ -151,9 +151,31 @@ async fn confirm(window: &tauri::WebviewWindow, title: &str, text: &str) -> bool
         .await
         .unwrap_or(false)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
     {
-        // The capability that grants these commands is Windows-only.
+        // A system dialog drawn by osascript, outside the webview: the page can
+        // neither render nor press it. Cancel is the default button.
+        let _ = window;
+        let (title, text) = (title.to_string(), text.to_string());
+        tauri::async_runtime::spawn_blocking(move || {
+            let script = r#"on run argv
+display dialog (item 2 of argv) with title (item 1 of argv) buttons {"Отмена", "Подключить"} default button "Отмена" cancel button "Отмена" with icon caution
+return button returned of result
+end run"#;
+            std::process::Command::new("/usr/bin/osascript")
+                .arg("-e")
+                .arg(script)
+                .arg(title)
+                .arg(text)
+                .output()
+                .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "Подключить")
+                .unwrap_or(false)
+        })
+        .await
+        .unwrap_or(false)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
         let _ = (window, title, text);
         false
     }

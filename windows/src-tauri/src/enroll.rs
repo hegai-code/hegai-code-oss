@@ -39,6 +39,13 @@ pub enum Phase {
     /// the hourly cap). The message is what the tray shows.
     Waiting(String),
     Failed(String),
+    /// Signed in, no agent ever enrolled on this hub from this computer, no
+    /// answer yet. We ASK («Подключить этот компьютер?») and install nothing
+    /// until the person says yes — in the page or from the tray.
+    Offer,
+    /// The person said «не подключать» for this hub. Quiet: no prompt, no
+    /// install, until they connect from the page or the tray.
+    Declined,
     /// The hub revoked this machine, or the agent was removed from a computer
     /// that had one. Not a fault to fix by itself: re-enrolling on our own is
     /// exactly what brought a revoked Mac back, so we wait for the person.
@@ -49,7 +56,7 @@ impl Phase {
     pub fn summary(&self) -> String {
         match self {
             Phase::Checking => "агент: проверяю…".into(),
-            Phase::NotSignedIn => "агент: подключу после входа".into(),
+            Phase::NotSignedIn => "агент: после входа спрошу, подключать ли компьютер".into(),
             Phase::Installing => "агент: устанавливаю…".into(),
             Phase::Installed { .. } => {
                 if cfg!(target_os = "macos") {
@@ -60,6 +67,8 @@ impl Phase {
             }
             Phase::Waiting(why) => format!("агент: {why}"),
             Phase::Failed(why) => format!("агент не установился: {why}"),
+            Phase::Offer => "агент: подключить этот компьютер?".into(),
+            Phase::Declined => "агент: не подключён".into(),
             Phase::Disconnected(_) => "агент: компьютер отключён".into(),
         }
     }
@@ -73,6 +82,8 @@ impl Phase {
             Phase::Installed { machine_id } => json!({"phase":"installed","machineId":machine_id}),
             Phase::Waiting(why) => json!({"phase":"waiting","reason":why}),
             Phase::Failed(why) => json!({"phase":"failed","reason":why}),
+            Phase::Offer => json!({"phase":"offer","hub":hub_base()}),
+            Phase::Declined => json!({"phase":"declined"}),
             Phase::Disconnected(why) => json!({"phase":"disconnected","reason":why}),
         }
     }
@@ -104,6 +115,11 @@ pub static RECONNECT: AtomicBool = AtomicBool::new(false);
 /// computer from one whose person removed the agent on purpose.
 const HUBS_MARKER: &str = "agent-hubs";
 
+/// Same format: the hubs the person answered «не подключать» to. Checked only
+/// when there is no agent and no earlier enrollment, so it never affects a
+/// computer that already works.
+const DECLINED_MARKER: &str = "agent-declined";
+
 /// What one pass of the loop should do, decided from facts only.
 #[derive(Debug, PartialEq, Eq)]
 enum Action {
@@ -115,22 +131,32 @@ enum Action {
     /// Enroll. `retire_config` when the person asked to reconnect, because a
     /// leftover agent.json (deviceToken) outranks the fresh code.
     Install { retire_config: bool },
+    /// Never connected, no answer: ask, do not install.
+    Offer,
+    /// Never connected and the person declined this hub: stay quiet.
+    Declined,
 }
 
-fn decide(installed: bool, hub_known: bool, reconnect: bool, signed_in: bool) -> Action {
+/// `consent` is the explicit «Подключить» (page command or tray item); it is
+/// the only way to `Install`. A fresh computer with no consent is only ever
+/// offered or left alone.
+fn decide(installed: bool, hub_known: bool, consent: bool, signed_in: bool, declined: bool) -> Action {
     if installed {
         return Action::Installed;
     }
     if !signed_in {
         return Action::NotSignedIn;
     }
-    if reconnect {
+    if consent {
         return Action::Install { retire_config: true };
     }
     if hub_known {
         return Action::Disconnected;
     }
-    Action::Install { retire_config: false }
+    if declined {
+        return Action::Declined;
+    }
+    Action::Offer
 }
 
 /// What the current hub says about this machine.
@@ -204,6 +230,22 @@ fn remember_hub(marker: &std::path::Path, hub: &str) -> std::io::Result<bool> {
     text.push_str(hub.trim_end_matches('/'));
     text.push('\n');
     std::fs::write(marker, text)?;
+    Ok(true)
+}
+
+/// Remove `hub` from the marker. Returns whether the file changed.
+fn forget_hub(marker: &std::path::Path, hub: &str) -> std::io::Result<bool> {
+    if !hub_listed(marker, hub) {
+        return Ok(false);
+    }
+    let hub = hub.trim_end_matches('/');
+    let text = std::fs::read_to_string(marker).unwrap_or_default();
+    let kept: String = text
+        .lines()
+        .filter(|l| l.trim().trim_end_matches('/') != hub)
+        .map(|l| format!("{l}\n"))
+        .collect();
+    std::fs::write(marker, kept)?;
     Ok(true)
 }
 
@@ -299,8 +341,10 @@ fn restore_agent_config(home: &std::path::Path, backup: &std::path::Path) -> std
 /// Is the loop showing «отключён»? The Windows process supervisor asks before
 /// it writes the tray row, or «агент работает» would paper over it.
 pub fn is_disconnected(app: &AppHandle) -> bool {
+    // Offer and Declined own the row too: «агент не установлен» next to
+    // «подключить этот компьютер?» would contradict it.
     app.try_state::<EnrollState>()
-        .map(|st| matches!(*st.0.lock().unwrap(), Phase::Disconnected(_)))
+        .map(|st| matches!(*st.0.lock().unwrap(), Phase::Disconnected(_) | Phase::Offer | Phase::Declined))
         .unwrap_or(false)
 }
 
@@ -322,10 +366,66 @@ pub fn reconnect_in_progress() -> bool {
 static INSTALLING: AtomicBool = AtomicBool::new(false);
 
 /// Tray click: ask the loop to enroll again and show that something happens.
+/// Also the explicit consent for a never-connected computer, so it lifts a
+/// remembered «не подключать» for this hub.
 pub fn request_reconnect(app: &AppHandle) {
+    if let Some(m) = crate::update::state_path(app, DECLINED_MARKER) {
+        if let Err(e) = forget_hub(&m, &hub_base()) {
+            eprintln!("[enroll] cannot update {DECLINED_MARKER}: {e}");
+        }
+    }
     RECONNECT.store(true, Ordering::SeqCst);
     WAKE.store(true, Ordering::SeqCst);
     publish(app, Phase::Installing);
+}
+
+fn phase_now(app: &AppHandle) -> Option<Phase> {
+    app.try_state::<EnrollState>().map(|st| st.0.lock().unwrap().clone())
+}
+
+/// Page command «Подключить». The page is the hub's remote content, so its
+/// call is only a request: the person's yes is the shell's own system dialog
+/// (`appmenu::confirm`, outside the webview, Cancel by default). Only while we
+/// are asking (or after a decline), so a page cannot reinstall a working
+/// computer, and a page calling in a loop gets one dialog at a time.
+#[tauri::command]
+pub async fn agent_connect(app: AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    if !matches!(phase_now(&app), Some(Phase::Offer | Phase::Declined)) {
+        return Err("сейчас не нужно".into());
+    }
+    let host = hub_base();
+    let text = format!(
+        "Подключить этот компьютер к {host}? Сессии Claude и Codex с этого сервера смогут работать на нём от вашего имени."
+    );
+    if !crate::appmenu::confirm(&window, "Hegai Code", &text).await {
+        return Err("отменено".into());
+    }
+    // The phase may have moved while the dialog was open.
+    if !matches!(phase_now(&app), Some(Phase::Offer | Phase::Declined)) {
+        return Err("сейчас не нужно".into());
+    }
+    request_reconnect(&app);
+    Ok(())
+}
+
+/// Page command «Не подключать»: remember it for this hub and stop asking.
+/// Refused once an agent is installed or installing — there is nothing to
+/// decline then.
+#[tauri::command]
+pub fn agent_decline(app: AppHandle) -> Result<(), String> {
+    let phase = phase_now(&app);
+    if matches!(phase, Some(Phase::Installed { .. } | Phase::Installing)) {
+        return Err("агент уже подключается".into());
+    }
+    let marker = crate::update::state_path(&app, DECLINED_MARKER).ok_or("нет папки настроек")?;
+    remember_hub(&marker, &hub_base()).map_err(|e| format!("не удалось сохранить: {e}"))?;
+    // Withdraws a consent that is waiting for the hub («доступ ещё не открыт»).
+    RECONNECT.store(false, Ordering::SeqCst);
+    if matches!(phase, Some(Phase::Offer | Phase::Waiting(_) | Phase::Failed(_))) {
+        publish(&app, Phase::Declined);
+    }
+    WAKE.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 /// Sleep, but wake early (once) when the person clicks «Подключить».
@@ -353,7 +453,11 @@ async fn supervise(app: AppHandle) {
         let token = crate::hub::session_token(&app);
         let hub_known = marker.as_deref().map(|m| hub_listed(m, &hub)).unwrap_or(false);
         let reconnect = RECONNECT.load(Ordering::SeqCst);
-        let action = decide(found.is_some(), hub_known, reconnect, token.is_some());
+        let declined = crate::update::state_path(&app, DECLINED_MARKER)
+            .as_deref()
+            .map(|m| hub_listed(m, &hub))
+            .unwrap_or(false);
+        let action = decide(found.is_some(), hub_known, reconnect, token.is_some(), declined);
         match action {
             Action::Installed => {
                 let found = found.expect("decide returned Installed");
@@ -407,35 +511,48 @@ async fn supervise(app: AppHandle) {
                 publish(&app, Phase::Disconnected("агент удалён с компьютера".into()));
                 nap(INSTALLED_POLL).await;
             }
-            Action::Install { retire_config } => {
+            Action::Offer => {
+                publish(&app, Phase::Offer);
+                nap(IDLE_POLL).await;
+            }
+            Action::Declined => {
+                publish(&app, Phase::Declined);
+                nap(INSTALLED_POLL).await;
+            }
+            Action::Install { .. } => {
+                // Only an explicit consent gets here (`decide`): the install
+                // is the reconnect path, which also retires a stale agent.json.
                 let token = token.expect("decide checked the session");
-                if retire_config {
-                    reconnect_install(&app, &token, &mut retry).await;
-                } else {
-                    install_once(&app, &token, &mut retry).await;
-                }
+                // A «not yet» from the hub (access not open, hourly cap) keeps
+                // the person's consent: retried with back-off, no second click.
+                let wait = install_with(&app, &token, &mut retry, true).await;
+                RECONNECT.store(wait, Ordering::SeqCst);
             }
         }
     }
+}
+
+/// Does this outcome leave the person's consent standing? Only a retryable
+/// refusal; success is done, and a real failure shows its reason first.
+fn keeps_consent(outcome: &Result<(), Refusal>) -> bool {
+    matches!(outcome, Err(Refusal::Wait(_)))
 }
 
 /// Reconnect: retire the stale agent.json, enroll, and drop the request
 /// whether or not it worked (a failure shows as Failed; the menu item lets
 /// the person try again from Disconnected).
 async fn reconnect_install(app: &AppHandle, token: &str, retry: &mut Duration) {
-    install_with(app, token, retry, true).await;
+    let _ = install_with(app, token, retry, true).await;
     RECONNECT.store(false, Ordering::SeqCst);
 }
 
-async fn install_once(app: &AppHandle, token: &str, retry: &mut Duration) {
-    install_with(app, token, retry, false).await;
-}
-
-async fn install_with(app: &AppHandle, token: &str, retry: &mut Duration, retire: bool) {
+/// Returns whether the consent behind this install stands (`keeps_consent`).
+async fn install_with(app: &AppHandle, token: &str, retry: &mut Duration, retire: bool) -> bool {
     publish(app, Phase::Installing);
     INSTALLING.store(true, Ordering::SeqCst);
     let outcome = install(token, retire).await;
     INSTALLING.store(false, Ordering::SeqCst);
+    let keep = keeps_consent(&outcome);
     match outcome {
         Ok(()) => {
             println!("[enroll] agent installed and enrolled");
@@ -454,6 +571,7 @@ async fn install_with(app: &AppHandle, token: &str, retry: &mut Duration, retire
             *retry = (*retry * 2).min(RETRY_MAX);
         }
     }
+    keep
 }
 
 enum Refusal {
@@ -759,10 +877,18 @@ fn publish(app: &AppHandle, phase: Phase) {
     if speak {
         crate::set_agent_status(app, &phase.summary());
     }
-    crate::set_reconnect_enabled(app, matches!(phase, Phase::Disconnected(_)));
-    // Installed and Disconnected are re-sent on every pass: a reloaded page
-    // starts at «checking» and would otherwise never hear them again.
-    if changed || matches!(phase, Phase::Installed { .. } | Phase::Disconnected(_)) {
+    crate::set_reconnect_enabled(
+        app,
+        matches!(phase, Phase::Disconnected(_) | Phase::Offer | Phase::Declined),
+    );
+    // Installed, Disconnected, Offer and Declined are re-sent on every pass: a
+    // reloaded page starts at «checking» and would otherwise never hear them.
+    if changed
+        || matches!(
+            phase,
+            Phase::Installed { .. } | Phase::Disconnected(_) | Phase::Offer | Phase::Declined
+        )
+    {
         if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
             let _ = w.eval(&page_script(&phase));
         }
@@ -826,12 +952,52 @@ mod tests {
     #[test]
     fn decide_never_reinstalls_on_its_own_after_an_agent_was_here() {
         use Action::*;
-        assert_eq!(decide(true, true, false, true), Installed);
-        assert_eq!(decide(false, false, false, false), NotSignedIn);
-        assert_eq!(decide(false, true, true, false), NotSignedIn, "request waits for sign-in");
-        assert_eq!(decide(false, false, false, true), Install { retire_config: false });
-        assert_eq!(decide(false, true, false, true), Disconnected);
-        assert_eq!(decide(false, true, true, true), Install { retire_config: true });
+        assert_eq!(decide(true, true, false, true, false), Installed);
+        assert_eq!(decide(false, false, false, false, false), NotSignedIn);
+        assert_eq!(decide(false, true, true, false, false), NotSignedIn, "request waits for sign-in");
+        assert_eq!(decide(false, true, false, true, false), Disconnected);
+        assert_eq!(decide(false, true, true, true, false), Install { retire_config: true });
+    }
+
+    #[test]
+    fn a_fresh_computer_is_asked_never_installed_without_consent() {
+        use Action::*;
+        assert_eq!(decide(false, false, false, true, false), Offer, "no consent: ask only");
+        assert_eq!(decide(false, false, true, true, false), Install { retire_config: true }, "consent installs");
+        assert_eq!(decide(false, false, false, true, true), Declined, "declined: quiet");
+        assert_eq!(decide(false, false, true, true, true), Install { retire_config: true }, "connect after decline");
+        // Existing installs are untouched by the decline mark.
+        assert_eq!(decide(true, true, false, true, true), Installed);
+        assert_eq!(decide(true, false, false, true, false), Installed, "upgrade: agent present is never asked");
+        assert_eq!(decide(false, true, false, true, true), Disconnected);
+        assert_eq!(decide(false, false, false, false, false), NotSignedIn);
+    }
+
+    #[test]
+    fn consent_survives_a_not_yet_but_not_success_or_failure() {
+        assert!(keeps_consent(&Err(Refusal::Wait("доступ ещё не открыт".into()))));
+        assert!(!keeps_consent(&Ok(())));
+        assert!(!keeps_consent(&Err(Refusal::Failed("x".into()))));
+        // With consent pending the next pass installs again, never re-asks.
+        assert_eq!(decide(false, false, true, true, false), Action::Install { retire_config: true });
+    }
+
+    #[test]
+    fn decline_mark_is_per_hub_and_removable() {
+        let dir = tempfile::tempdir().unwrap();
+        let m = dir.path().join("agent-declined");
+        assert!(remember_hub(&m, "https://a.example").unwrap());
+        assert!(remember_hub(&m, "https://b.example").unwrap());
+        assert!(forget_hub(&m, "https://a.example/").unwrap());
+        assert!(!hub_listed(&m, "https://a.example"));
+        assert!(hub_listed(&m, "https://b.example"));
+        assert!(!forget_hub(&m, "https://a.example").unwrap());
+    }
+
+    #[test]
+    fn the_page_hears_offer_and_declined() {
+        assert!(page_script(&Phase::Offer).contains(r#""phase":"offer""#));
+        assert!(page_script(&Phase::Declined).contains(r#""phase":"declined""#));
     }
 
     #[test]

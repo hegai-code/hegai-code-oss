@@ -5,7 +5,7 @@ fn main() {
     // to the hub's origin on Windows only. `shell_set_hub` is the tray's «Сервер»
     // window's (`hubconf.rs`, `capabilities/server-window.json`), local only.
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&["shell_quit", "shell_update_row", "shell_update", "shell_set_hub"]),
+        tauri_build::AppManifest::new().commands(&["shell_quit", "shell_update_row", "shell_update", "shell_set_hub", "agent_connect", "agent_decline"]),
     ))
     .expect("tauri build script failed");
 }
