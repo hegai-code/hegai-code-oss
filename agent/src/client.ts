@@ -44,6 +44,7 @@ import { claudeRuntimeStatus, codexRuntimeStatus, describeClaude, describeCodex,
 import { fetchGatewayLimits } from './gateway-limits.js';
 import { isExternal } from './edition.js';
 import { setRuntimeChangedHook } from './runtime-jobs.js';
+import { setCodexProviderDeps } from './codex-provider.js';
 import { computeProfile } from './profile.js';
 import { syncBundledSkills, installedSkills } from './skills-sync.js';
 import { ensureTranscriptRetention } from './transcript-retention.js';
@@ -350,6 +351,10 @@ export class AgentClient {
     // `projects.remove` must not move a directory one of our runs is working in.
     setLiveCwdProvider(() => this.runManager.activeCwds());
     setSubagentStopper((sessionId, id) => this.runManager.stopSubagent(sessionId, id));
+    setCodexProviderDeps({
+      codexBusy: () => this.runManager.hasBusyCodexRun(),
+      closeIdleCodexRuns: () => this.runManager.closeIdleCodexRuns(),
+    });
     // `projects.list` reads the inventory we already hold instead of rebuilding
     // it from disk — the rebuild is what made the call miss the browser's RPC
     // deadline on a machine with thousands of transcripts.
@@ -693,6 +698,7 @@ export class AgentClient {
           // Claude gate reasons about a hook the Codex path does not have.
           codexPermissionModes: availableCodexPermissionModes(codexBypassAllowed() && bypassAllowed()),
           gatewaySessions: true,
+          codexProviderSwitch: true,
           // Private machine: the hub treats this machine as content-blind.
           // From e2ee() (read once), not policy(): the flag and the sealing must agree.
           ...(e2ee() ? { private: true as const } : {}),

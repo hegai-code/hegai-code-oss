@@ -302,8 +302,9 @@ export function AccessPage() {
 
       <p className="install-hint">
         Нужен <b>Node.js</b> — команда сама поставит Codex через npm. Ключ личный, не передавайте его.
-        Вернуть обычный ChatGPT: удалите строку <code>model_provider = "hegai"</code> из
-        <code> ~/.codex/config.toml</code> (рядом лежит бэкап).
+        Вернуть обычный ChatGPT: переключатель «Шлюз | Своя подписка» в Настройки → Машины
+        (или удалите строку <code>model_provider = "hegai"</code> из
+        <code> ~/.codex/config.toml</code> — рядом лежит бэкап).
       </p>
     </div>
 

@@ -193,11 +193,12 @@ pub(crate) fn brand_name() -> String {
         .unwrap_or_else(|| "Hegai Code".to_string())
 }
 
-fn valid_email(email: &str) -> bool {
+pub(crate) fn valid_email(email: &str) -> bool {
     let Some((local, domain)) = email.split_once('@') else {
         return false;
     };
     email.len() <= 254
+        && !email.to_ascii_lowercase().ends_with("@users.invalid")
         && !local.is_empty()
         && domain.contains('.')
         && !domain.starts_with('.')

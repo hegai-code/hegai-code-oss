@@ -412,6 +412,76 @@ fn access_state_for(explicit: Option<&str>, external: bool, vouched: bool) -> &'
     }
 }
 
+/// Domain of the synthetic seat key of an account without an e-mail. It can
+/// never be a real mailbox (`.invalid`), and it is derived from the user id so
+/// it is stable for ANY no-email account (Telegram-only, GitHub + Telegram…).
+const SEAT_KEY_DOMAIN: &str = "users.invalid";
+
+pub(crate) fn synthetic_seat_key(user_id: &str) -> String {
+    format!("{}@{SEAT_KEY_DOMAIN}", user_id.to_ascii_lowercase())
+}
+
+/// The user a synthetic seat key belongs to (its account has no e-mail).
+pub(crate) fn user_of_seat_key(conn: &Connection, key: &str) -> Option<String> {
+    let id = key
+        .trim()
+        .to_ascii_lowercase()
+        .strip_suffix(&format!("@{SEAT_KEY_DOMAIN}"))?
+        .to_string();
+    conn.query_row(
+        "SELECT user_id FROM users WHERE lower(user_id)=?1 AND (email IS NULL OR email='')",
+        params![id],
+        |r| r.get::<_, String>(0),
+    )
+    .optional()
+    .ok()
+    .flatten()
+}
+
+/// Seats are named `hegai:<key>`: the e-mail, or — on a self-hosted hub only —
+/// the synthetic key of an account that has none.
+pub(crate) fn seat_key_for(user_id: &str, email: Option<&str>) -> Option<String> {
+    // A stored address in the synthetic domain is never a real mailbox: it
+    // must not name (or collide with) another account's seat.
+    let real = email.map(str::trim).filter(|e| !e.is_empty()).filter(|e| {
+        !e.to_ascii_lowercase()
+            .ends_with(&format!("@{SEAT_KEY_DOMAIN}"))
+    });
+    match real {
+        Some(e) => Some(e.to_string()),
+        None if crate::edition::is_external() => Some(synthetic_seat_key(user_id)),
+        None => None,
+    }
+}
+
+/// Whether `inviter` has used up their invitation activations in the rolling
+/// 30 days (counted from the `access.activated` audit rows, so the ledger is
+/// the trail). Shared by the e-mail and the Telegram invitation paths.
+pub(crate) fn invite_cap_reached(
+    conn: &Connection,
+    inviter: &str,
+    cap: usize,
+) -> Result<bool, String> {
+    let since = now_ms() - 30 * 24 * 60 * 60 * 1000;
+    let spent: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM audit_events WHERE actor_user_id=?1 AND action='access.activated' \
+             AND metadata_json LIKE '%\"source\":\"invitation\"%' AND created_at>?2",
+            params![inviter, since],
+            |r| r.get(0),
+        )
+        .map_err(db_err)?;
+    Ok(spent as usize >= cap)
+}
+
+/// Invitation activations per inviter per month (`CC_REMOTE_INVITE_ACTIVATIONS_PER_MONTH`).
+pub(crate) fn invite_activation_cap() -> usize {
+    std::env::var("CC_REMOTE_INVITE_ACTIVATIONS_PER_MONTH")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(INVITE_ACTIVATIONS_PER_MONTH_DEFAULT)
+}
+
 pub(crate) fn device_cap_for_plan(plan: &str) -> usize {
     if plan == "employee" {
         env_usize("CC_REMOTE_DEVICE_CAP_EMPLOYEE", DEVICE_CAP_EMPLOYEE_DEFAULT)
@@ -783,8 +853,14 @@ impl WorkspaceStore {
     }
 
     /// Active community members whose seat is not ready and still has
-    /// attempts left: `(user_id, email)`. The reconciler's worklist.
-    pub fn seats_needing_work(&self, max_attempts: i64) -> Result<Vec<(String, String)>, String> {
+    /// attempts left: `(user_id, seat key)`. The reconciler's worklist.
+    /// `include_none` (a self-hosted hub with its own gateway) also lists
+    /// members whose seat was never requested (`none`): they get one.
+    pub fn seats_needing_work(
+        &self,
+        max_attempts: i64,
+        include_none: bool,
+    ) -> Result<Vec<(String, String)>, String> {
         let conn = self
             .conn
             .lock()
@@ -792,17 +868,43 @@ impl WorkspaceStore {
         let mut stmt = conn
             .prepare(
                 "SELECT a.user_id,u.email FROM user_access a JOIN users u ON u.user_id=a.user_id \
-                 WHERE a.state='active' AND a.plan='community' AND a.seat_status IN ('pending','failed') AND a.seat_attempts<?1 \
-                   AND u.email IS NOT NULL \
+                 WHERE a.state='active' AND a.plan='community' \
+                   AND ((a.seat_status IN ('pending','failed') AND a.seat_attempts<?1) \
+                        OR (?2=1 AND a.seat_status='none' AND EXISTS(\
+                              SELECT 1 FROM memberships m JOIN workspaces w ON w.workspace_id=m.workspace_id \
+                              WHERE m.user_id=a.user_id AND w.kind<>'personal'))) \
                  ORDER BY a.activated_at ASC",
             )
             .map_err(db_err)?;
         let rows = stmt
-            .query_map(params![max_attempts], |r| Ok((r.get(0)?, r.get(1)?)))
+            .query_map(params![max_attempts, include_none as i64], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?))
+            })
             .map_err(db_err)?
             .filter_map(Result::ok)
+            .filter_map(|(id, email)| seat_key_for(&id, email.as_deref()).map(|k| (id, k)))
             .collect();
         Ok(rows)
+    }
+
+    /// Whether the user belongs to a team (a non-personal workspace).
+    pub fn is_team_member(&self, user_id: &str) -> bool {
+        let Ok(conn) = self.conn.lock() else {
+            return false;
+        };
+        conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM memberships m JOIN workspaces w ON w.workspace_id=m.workspace_id \
+             WHERE m.user_id=?1 AND w.kind<>'personal')",
+            params![user_id],
+            |r| r.get(0),
+        )
+        .unwrap_or(false)
+    }
+
+    /// The name a user's gateway seat is keyed by: the e-mail, or — for a
+    /// Telegram-only account on a self-hosted hub — a synthetic address.
+    pub fn seat_key(&self, user_id: &str) -> Option<String> {
+        seat_key_for(user_id, self.user_email(user_id).as_deref())
     }
 
     /// A user-level audit row (`gateway.seat_ready`, …) in the workspace the
@@ -994,21 +1096,14 @@ impl WorkspaceStore {
         if !self.is_active(inviter) {
             return Ok(InviteActivation::InviterInactive);
         }
-        let since = now_ms() - 30 * 24 * 60 * 60 * 1000;
-        let spent: i64 = {
+        let capped = {
             let conn = self
                 .conn
                 .lock()
                 .map_err(|_| "workspace database lock poisoned".to_string())?;
-            conn.query_row(
-                "SELECT COUNT(*) FROM audit_events WHERE actor_user_id=?1 AND action='access.activated' \
-                 AND metadata_json LIKE '%\"source\":\"invitation\"%' AND created_at>?2",
-                params![inviter, since],
-                |r| r.get(0),
-            )
-            .map_err(db_err)?
+            invite_cap_reached(&conn, inviter, cap)?
         };
-        if spent as usize >= cap {
+        if capped {
             return Ok(InviteActivation::CapReached);
         }
         match self.activate_with_source(
@@ -2690,5 +2785,77 @@ mod tests {
         assert!(s.ensure_user("h", "hire@x", None).unwrap().claimed_preauth);
         assert_eq!(raw_state(&s, "h"), ("active".into(), "employee".into()));
         assert_eq!(s.access_state("h").unwrap().plan, "employee");
+    }
+
+    #[test]
+    fn seat_key_is_the_email_or_a_synthetic_address_only_on_a_self_hosted_hub() {
+        use crate::edition::{with_edition, Edition};
+        assert_eq!(
+            seat_key_for("u1", Some(" A@X.io ")).as_deref(),
+            Some("A@X.io")
+        );
+        with_edition(Edition::Internal, || {
+            assert_eq!(seat_key_for("tg-abc", None), None);
+        });
+        with_edition(Edition::External, || {
+            assert_eq!(
+                seat_key_for("tg-abc", None).as_deref(),
+                Some("tg-abc@users.invalid")
+            );
+            assert_eq!(
+                seat_key_for("u2", Some("TG-X@users.invalid")).as_deref(),
+                Some("u2@users.invalid"),
+                "a stored synthetic-domain address is not a real mailbox"
+            );
+            assert_eq!(
+                seat_key_for("gh-ABC", None).as_deref(),
+                Some("gh-abc@users.invalid"),
+                "any account without an e-mail"
+            );
+        });
+    }
+
+    #[test]
+    fn the_seat_sweep_lists_unrequested_seats_only_when_asked() {
+        use crate::edition::{with_edition, Edition};
+        let s = WorkspaceStore::open_memory();
+        s.ensure_user("m", "m@x", None).unwrap();
+        s.activate_access("m", "tests").unwrap();
+        assert_eq!(s.access_state("m").unwrap().seat_status, "none");
+        assert!(s.seats_needing_work(5, false).unwrap().is_empty());
+        // Not in a team yet: no seat is requested.
+        assert!(!s.is_team_member("m"));
+        assert!(s.seats_needing_work(5, true).unwrap().is_empty());
+        s.create_organization("m", "Team", "m").unwrap();
+        assert!(s.is_team_member("m"));
+        let rows = s.seats_needing_work(5, true).unwrap();
+        assert_eq!(rows, vec![("m".to_string(), "m@x".to_string())]);
+        s.set_seat_status("m", "ready", None).unwrap();
+        assert!(s.seats_needing_work(5, true).unwrap().is_empty());
+        // A Telegram-only member is listed with the synthetic key on a
+        // self-hosted hub, and skipped elsewhere.
+        s.with_conn_for_tests(|c| {
+            c.execute("INSERT INTO users(user_id,email,created_at) VALUES('tg-1',NULL,1)", [])
+                .unwrap();
+            c.execute(
+                "INSERT INTO user_access(user_id,state,plan,requested_at,updated_at) VALUES('tg-1','active','community',1,1)",
+                [],
+            )
+            .unwrap();
+            c.execute(
+                "INSERT INTO memberships(workspace_id,user_id,role,created_at) SELECT workspace_id,'tg-1','member',1 FROM workspaces WHERE kind<>'personal' LIMIT 1",
+                [],
+            )
+            .unwrap();
+        });
+        with_edition(Edition::Internal, || {
+            assert!(s.seats_needing_work(5, true).unwrap().is_empty());
+        });
+        with_edition(Edition::External, || {
+            assert_eq!(
+                s.seats_needing_work(5, true).unwrap(),
+                vec![("tg-1".to_string(), "tg-1@users.invalid".to_string())]
+            );
+        });
     }
 }

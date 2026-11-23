@@ -234,3 +234,39 @@ export function notLoggedInRuntime(text: string): 'claude' | 'codex' | undefined
   if (t.length <= 200 && /^(not logged in|authentication required)\b.*\b(codex|chatgpt)\b/i.test(t)) return 'codex';
   return undefined;
 }
+
+/**
+ * Should the Codex row offer «Шлюз | Своя подписка»? Only when the machine's
+ * agent says it answers `runtime.codex.provider` (capability flag in its
+ * register frame, absent on older agents), the viewer may control it, and
+ * Codex is there to switch.
+ */
+export function showCodexSwitch(a: {
+  supported: boolean | undefined;
+  online: boolean;
+  canControl: boolean;
+  chatOnly: boolean;
+  codexPresent: boolean | undefined;
+}): boolean {
+  return a.supported === true && a.online && a.canControl && !a.chatOnly && a.codexPresent === true;
+}
+
+/** Russian text for an error code of `runtime.codex.provider`. */
+export function codexSwitchError(code: string | undefined): string {
+  switch (code) {
+    case 'busy':
+      return 'Сейчас идут сессии Codex — переключение после их завершения';
+    case 'no_gateway':
+      return 'На этой машине не настроен шлюз';
+    case 'bad_key':
+      return 'Ключ шлюза не подошёл — откройте страницу «Доступ» и проверьте ключ';
+    case 'custom_provider':
+      return 'В конфиге Codex свой провайдер — переключение отключено';
+    case 'bad_model':
+      return 'Шлюз назвал модель, которую агент не принял';
+    case 'write_failed':
+      return 'Не удалось записать конфиг Codex на машине';
+    default:
+      return `Не получилось переключить Codex${code ? ` (${code})` : ''}`;
+  }
+}

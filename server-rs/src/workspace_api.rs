@@ -268,6 +268,12 @@ pub(crate) async fn api_members(
     }
 }
 
+/// Where a Telegram-invited person signs in: the hub's login bot, or `None`
+/// when Telegram sign-in is off on this hub.
+fn telegram_invite_bot_url(bot: Option<&str>) -> Option<String> {
+    bot.map(|b| format!("https://t.me/{b}"))
+}
+
 pub(crate) async fn api_invite(
     AxumPath(workspace_id): AxumPath<String>,
     State(st): State<AppState>,
@@ -286,10 +292,48 @@ pub(crate) async fn api_invite(
     {
         return api_error(StatusCode::UNAUTHORIZED, "authentication required");
     }
+    // An invitation by Telegram @username instead of an e-mail: no link, the
+    // person signs in with the hub's Telegram bot and lands in the team.
+    if let Some(username) = body.get("telegram").and_then(Value::as_str) {
+        if !crate::edition::is_external() {
+            return api_error(
+                StatusCode::CONFLICT,
+                "Приглашение по Telegram доступно только на своём сервере",
+            );
+        }
+        let Some(bot_url) = telegram_invite_bot_url(st.tg_login.as_ref().map(|c| c.bot.as_str()))
+        else {
+            return api_error(
+                StatusCode::CONFLICT,
+                "На этом сервере не включён вход через Telegram",
+            );
+        };
+        return match st.workspaces.invite_telegram_from(
+            &actor,
+            &workspace_id,
+            username,
+            body.get("role").and_then(Value::as_str).unwrap_or("member"),
+            session.as_deref(),
+        ) {
+            Ok(mut value) => {
+                value["botUrl"] = Value::String(bot_url);
+                let mut response = (StatusCode::CREATED, Json(value)).into_response();
+                response
+                    .headers_mut()
+                    .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+                response
+            }
+            Err(error) => refusal(StatusCode::BAD_REQUEST, error),
+        };
+    }
+    let email = body.get("email").and_then(Value::as_str).unwrap_or("");
+    if !crate::local_login::valid_email(&crate::workspace::normalize_email(email)) {
+        return api_error(StatusCode::BAD_REQUEST, "invalid e-mail address");
+    }
     match st.workspaces.invite_from(
         &actor,
         &workspace_id,
-        body.get("email").and_then(Value::as_str).unwrap_or(""),
+        email,
         body.get("role").and_then(Value::as_str).unwrap_or("member"),
         session.as_deref(),
     ) {
@@ -404,6 +448,9 @@ pub(crate) async fn api_accept_invitation(
             // inviter vouched, the email matched. Nothing to do for someone
             // already active; the store says which.
             let activated = crate::access_api::activate_user_by_invitation(&st, &inviter, &actor);
+            // A member who was already active (or whom the activation did not
+            // reach) still gets a seat on a self-hosted hub with a gateway.
+            crate::access_api::auto_seat_for_member(&st, &actor);
             Json(json!({"workspaceId":workspace_id, "activated": activated})).into_response()
         }
         Err(error) => refusal(StatusCode::BAD_REQUEST, error),
@@ -1189,6 +1236,113 @@ mod tests {
         assert_eq!(body["error"], "access_not_active");
         assert_eq!(body["state"], "suspended");
         assert_eq!(role_of(&store, &wid, "mate"), "manager");
+        cleanup(&db);
+    }
+
+    async fn invite(st: &AppState, token: &str, wid: &str, body: Value) -> (StatusCode, Value) {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+        );
+        let res = api_invite(
+            AxumPath(wid.to_string()),
+            State(st.clone()),
+            headers,
+            Json(body),
+        )
+        .await;
+        let status = res.status();
+        let bytes = axum::body::to_bytes(res.into_body(), 1 << 16)
+            .await
+            .unwrap();
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
+    }
+
+    /// `with_edition` is thread-local, so the async body runs on this thread.
+    #[test]
+    fn invite_by_telegram_needs_telegram_login_and_a_valid_username() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        crate::edition::with_edition(crate::edition::Edition::External, || {
+            rt.block_on(invite_by_telegram_body())
+        });
+        crate::edition::with_edition(crate::edition::Edition::Internal, || {
+            rt.block_on(invite_by_telegram_internal_body())
+        });
+    }
+
+    async fn invite_by_telegram_internal_body() {
+        let store = WorkspaceStore::open_memory();
+        store.ensure_user("boss", "boss@example.com", None).unwrap();
+        store.activate_access("boss", "tests").unwrap();
+        let team = store.create_organization("boss", "Team", "boss").unwrap();
+        let wid = team["workspaceId"].as_str().unwrap().to_string();
+        let token = store.create_auth_session("boss", 30).unwrap();
+        let db = temp_db();
+        let st = app_state(store.clone(), &db);
+        let (status, body) = invite(&st, &token, &wid, json!({"telegram": "vasya_pupkin"})).await;
+        assert_eq!(status, StatusCode::CONFLICT, "{body}");
+        assert_eq!(
+            body["error"],
+            "Приглашение по Telegram доступно только на своём сервере"
+        );
+        let (status, _) = invite(&st, &token, &wid, json!({"email": "not-an-email"})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let (status, _) = invite(&st, &token, &wid, json!({"email": "tg-x@Users.Invalid"})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "synthetic seat domain");
+        cleanup(&db);
+    }
+
+    async fn invite_by_telegram_body() {
+        let store = WorkspaceStore::open_memory();
+        store.ensure_user("boss", "boss@example.com", None).unwrap();
+        store.activate_access("boss", "tests").unwrap();
+        let team = store.create_organization("boss", "Team", "boss").unwrap();
+        let wid = team["workspaceId"].as_str().unwrap().to_string();
+        let token = store.create_auth_session("boss", 30).unwrap();
+        let db = temp_db();
+        let mut st = app_state(store.clone(), &db);
+
+        // Telegram sign-in is off on this hub: 409 with the reason in Russian.
+        let (status, body) = invite(&st, &token, &wid, json!({"telegram": "@Vasya_Pupkin"})).await;
+        assert_eq!(status, StatusCode::CONFLICT, "{body}");
+        assert_eq!(
+            body["error"],
+            "На этом сервере не включён вход через Telegram"
+        );
+
+        st.tg_login = Some(crate::telegram_login_api::TgLoginConfig {
+            secret: "s".repeat(40),
+            bot: "MyHubBot".into(),
+        });
+        let (status, body) = invite(&st, &token, &wid, json!({"telegram": "ab"})).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        let (status, body) = invite(
+            &st,
+            &token,
+            &wid,
+            json!({"telegram": "@Vasya_Pupkin", "role": "member"}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        assert_eq!(body["telegram"], "vasya_pupkin");
+        assert_eq!(body["botUrl"], "https://t.me/MyHubBot");
+        assert!(body.get("setupUrl").is_none() && body.get("token").is_none());
+        let stored: (String, String) = store.with_conn_for_tests(|c| {
+            c.query_row(
+                "SELECT telegram_username,email FROM invitations WHERE invitation_id=?1",
+                [body["invitationId"].as_str().unwrap()],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap()
+        });
+        assert_eq!(stored, ("vasya_pupkin".to_string(), String::new()));
         cleanup(&db);
     }
 }

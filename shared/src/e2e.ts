@@ -192,6 +192,9 @@ export const RPC_SEALED_PARAMS: Readonly<Record<string, readonly string[]>> = {
   'git.pr.create': ['title', 'body'],
   'session.rename': ['title'],
   'runtime.login.input': ['code'],
+  // The gateway key goes into the machine's config: a private machine's hub must not see it,
+  // nor flip gateway/own or the model behind the person's back - every param is sealed.
+  'runtime.codex.provider': ['mode', 'apiKey', 'model', 'effort'],
 };
 
 /** Clear rpc params that tell WHAT a sealed request does to WHERE. They stay in

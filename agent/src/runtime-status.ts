@@ -144,7 +144,7 @@ export function codexAuthFromAuthJson(
   return { auth: 'none' };
 }
 
-function codexHome(): string {
+export function codexHome(): string {
   return process.env['CODEX_HOME'] || path.join(os.homedir(), '.codex');
 }
 

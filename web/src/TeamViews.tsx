@@ -4,6 +4,7 @@ import type { CentralState } from './useCentral.js';
 import { Briefcase, DownloadIcon, Eye, MonitorIcon, PhoneIcon, Plus, Trash2 } from './icons.js';
 import { APP_INSTALL_COMMAND, attentionLabel, displayName, guessDesktopOs, pluralRu, relTimeRu, sessionAuthor, type DesktopOs } from './lib.js';
 import { CopyButton } from './components/CopyButton.js';
+import { parseInviteTarget } from './inviteTarget.js';
 import { teamApi, type SignInSession } from './teamApi.js';
 import type { WorkspaceSummary } from '@cc-remote/shared';
 import { navigate, pathFor, type SettingsTab, type TeamTab } from './router.js';
@@ -202,7 +203,7 @@ export function TeamMembers({ central, workspace, canInvite, onOpen, viewer, onS
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'manager' | 'member'>('member');
   const [note, setNote] = useState('');
-  const [invite, setInvite] = useState<{ email: string; link: string; setup?: boolean } | null>(null);
+  const [invite, setInvite] = useState<{ email: string; link: string; setup?: boolean; telegram?: boolean } | null>(null);
   const [openUserId, setOpenUserId] = useState<string | null>(null);
   // An answer is applied only while its workspace is still the one on screen:
   // after a switch, the previous team's late response must not overwrite the
@@ -231,33 +232,55 @@ export function TeamMembers({ central, workspace, canInvite, onOpen, viewer, onS
   const sendInvite = (e: React.FormEvent) => {
     e.preventDefault();
     const invited = email.trim();
-    teamApi.invite(workspace.workspaceId, invited, selfServe ? 'member' : role)
-      .then((r) => { setEmail(''); setNote(''); setInvite({ email: invited, link: r.setupUrl ?? `${location.origin}/?invite=${encodeURIComponent(r.token)}`, setup: !!r.setupUrl }); })
+    const target = parseInviteTarget(invited);
+    if (!target || ('telegram' in target && !tgInvites)) { setNote(tgInvites ? 'Введите e-mail или @username в Telegram' : 'Введите корректный e-mail'); return; }
+    teamApi.invite(workspace.workspaceId, target, selfServe ? 'member' : role)
+      .then((r) => {
+        setEmail(''); setNote('');
+        if ('telegram' in target) setInvite({ email: `@${target.telegram}`, link: r.botUrl ?? '', telegram: true });
+        else setInvite({ email: invited, link: r.setupUrl ?? `${location.origin}/?invite=${encodeURIComponent(r.token ?? '')}`, setup: !!r.setupUrl });
+      })
       .catch((err) => setNote(err.message));
   };
   const removeMember = async (m: MemberSummary) => {
     if (!(await askConfirm(`Убрать ${displayName(m)} из команды?`, { confirmLabel: 'Убрать', danger: true }))) return;
     teamApi.removeMember(workspace.workspaceId, m.userId).then(refresh).catch((err) => setNote(err.message));
   };
-  const external = isExternal(usePublicConfig());
+  const publicConfig = usePublicConfig();
+  const external = isExternal(publicConfig);
+  // «@username» works only where Telegram sign-in is on, on a self-hosted hub.
+  const tgInvites = external && !!publicConfig?.auth.telegram;
   return <Panel title="Команда" tab="people" admin={!!viewer?.platformAdmin} usage={canSeeUsageTab(viewer)} subtitle={external ? 'Роли действуют только в этой команде.' : 'Роли действуют только в этой команде; роли HegAI сюда не переносятся.'}
                 head={<TeamSelect viewer={viewer} current={central.viewer?.workspace} onSelect={onSelectWorkspace} />}>
     {noTeamYet && (canCreateOrg(viewer)
       ? <CreateTeamCard viewer={viewer} onCreated={onWorkspaceCreated} />
       : <div className="team-empty">Команда появится вместе с активацией доступа.</div>)}
     {canManage && <form className="team-form" onSubmit={sendInvite}>
-      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="colleague@example.com" type="email" required />
+      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={tgInvites ? 'colleague@example.com или @username в Telegram' : 'colleague@example.com'} required />
       {!selfServe && <select value={role} onChange={(e) => setRole(e.target.value as 'manager' | 'member')}><option value="member">Участник</option><option value="manager">Менеджер</option></select>}
       <button className="btn primary"><Plus size={14} /> Пригласить</button>
     </form>}
     {invite && <section className="team-card settings-section">
       <h3>Приглашение для {invite.email}</h3>
-      <pre className="install-command">{invite.link}</pre>
-      <div className="settings-actions">
-        <CopyButton className="btn primary" text={invite.link} label="Скопировать ссылку" />
-        <button className="btn" onClick={() => setInvite(null)}>Готово</button>
-      </div>
-      <p className="team-help">Отправьте ссылку человеку любым способом — письмо не уходит. Ссылка одноразовая, действует 7 дней.{!invite.setup && ' Если у человека ещё нет входа на этот сервер, его заводит администратор.'}</p>
+      {invite.telegram
+        ? <>
+          <p className="team-help">Отправьте человеку: откройте приложение Hegai Code → «Другой хаб» → {location.host} → «Войти через Telegram».</p>
+          {invite.link && <pre className="install-command">{invite.link}</pre>}
+          <div className="settings-actions">
+            {invite.link && <CopyButton className="btn primary" text={invite.link} label="Скопировать ссылку на бота" />}
+            <CopyButton className="btn" text={`Откройте приложение Hegai Code → «Другой хаб» → ${location.host} → «Войти через Telegram»${invite.link ? ` (${invite.link})` : ''}`} label="Скопировать текст" />
+            <button className="btn" onClick={() => setInvite(null)}>Готово</button>
+          </div>
+          <p className="team-help">Письмо не уходит. Человек должен войти через Telegram с именем {invite.email}; приглашение действует 7 дней.</p>
+        </>
+        : <>
+          <pre className="install-command">{invite.link}</pre>
+          <div className="settings-actions">
+            <CopyButton className="btn primary" text={invite.link} label="Скопировать ссылку" />
+            <button className="btn" onClick={() => setInvite(null)}>Готово</button>
+          </div>
+          <p className="team-help">Отправьте ссылку человеку любым способом — письмо не уходит. Ссылка одноразовая, действует 7 дней.{!invite.setup && ' Если у человека ещё нет входа на этот сервер, его заводит администратор.'}</p>
+        </>}
     </section>}
     {(!noTeamYet || members.length > 0) && <section className="team-card">{members.map((m) => {
       const count = sessionsBy(m.userId);

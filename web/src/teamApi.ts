@@ -2,6 +2,7 @@ import { ApiError, apiJson } from './api.js';
 import { forgetTelegramSignIn } from './telegramLogin.js';
 import { LAST_ROUTE_KEY, RESTORE_PAUSED } from './router.js';
 import { storageRemove } from './storage.js';
+import type { InviteTarget } from './inviteTarget.js';
 import { AgentReleaseStatus, UsageReport } from '@cc-remote/shared';
 import type { AccessRow, AuditEvent, BoardCardPatch, DeviceSummary, MemberSummary, PreauthorizedEmail, ProjectShare, ProvisionJob, SupportGrant, SupportGrantCreated, SupportGrantLog, ViewerContext, WorkspaceRole, WorkspaceSummary } from '@cc-remote/shared';
 
@@ -95,8 +96,8 @@ export const teamApi = {
   deleteTeam: (workspaceId: string, confirm?: string) =>
     apiJson<void>(`/api/workspaces/${workspaceId}`, { method: 'DELETE', body: JSON.stringify(confirm ? { confirm } : {}) }),
   members: (workspaceId: string) => apiJson<{ members: MemberSummary[] }>(`/api/workspaces/${workspaceId}/members`),
-  invite: (workspaceId: string, email: string, role: Exclude<WorkspaceRole, 'owner'>) =>
-    apiJson<{ invitationId: string; token: string; expiresAt: number; setupUrl?: string }>(`/api/workspaces/${workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ email, role }) }),
+  invite: (workspaceId: string, who: InviteTarget, role: Exclude<WorkspaceRole, 'owner'>) =>
+    apiJson<{ invitationId: string; token?: string; expiresAt: number; setupUrl?: string; telegram?: string; botUrl?: string }>(`/api/workspaces/${workspaceId}/invitations`, { method: 'POST', body: JSON.stringify({ ...who, role }) }),
   /** Before sign-in: who invites to which team (the token is the credential). */
   invitePreview: (token: string) => apiJson<{ workspaceName: string; inviterName: string; email: string }>('/api/invitations/preview', { method: 'POST', body: JSON.stringify({ token }) }),
   acceptInvitation: (token: string) => apiJson<{ workspaceId: string }>('/api/invitations/accept', { method: 'POST', body: JSON.stringify({ token }) }),

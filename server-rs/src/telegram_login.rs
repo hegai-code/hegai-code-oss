@@ -438,6 +438,186 @@ fn create_account(conn: &Connection, tg: &TgUser, now: i64) -> Result<String, St
     Ok(user_id)
 }
 
+/// A live invitation addressed to a Telegram username.
+struct TgInvite {
+    id: String,
+    workspace_id: String,
+    role: String,
+    created_by: String,
+}
+
+/// Pending, unexpired invitations for `username` (case-insensitive; stored
+/// lowercase), oldest first.
+fn pending_telegram_invites(
+    conn: &Connection,
+    username: Option<&str>,
+    now: i64,
+) -> Result<Vec<TgInvite>, String> {
+    let Some(name) = username.map(|u| u.trim().trim_start_matches('@').to_ascii_lowercase()) else {
+        return Ok(Vec::new());
+    };
+    if name.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn
+        .prepare(
+            "SELECT invitation_id,workspace_id,role,created_by FROM invitations \
+             WHERE telegram_username=?1 AND accepted_at IS NULL AND expires_at>?2 \
+             ORDER BY created_at",
+        )
+        .map_err(db_err)?;
+    let rows = stmt
+        .query_map(params![name, now], |r| {
+            Ok(TgInvite {
+                id: r.get(0)?,
+                workspace_id: r.get(1)?,
+                role: r.get(2)?,
+                created_by: r.get(3)?,
+            })
+        })
+        .map_err(db_err)?
+        .filter_map(Result::ok)
+        .collect();
+    Ok(rows)
+}
+
+fn inviter_is_active(conn: &Connection, inviter: &str) -> bool {
+    conn.query_row(
+        "SELECT state FROM user_access WHERE user_id=?1",
+        params![inviter],
+        |r| r.get::<_, String>(0),
+    )
+    .map(|s| s == "active")
+    .unwrap_or(false)
+}
+
+/// Join `user_id` to the invitations' teams (never changing an owner's role),
+/// mark them accepted and audit it like the e-mail path. Opens access for an
+/// account that was waiting. Returns whether access was opened here.
+fn accept_telegram_invites(
+    tx: &Connection,
+    user_id: &str,
+    invites: &[TgInvite],
+    now: i64,
+) -> Result<bool, String> {
+    for inv in invites {
+        let existing_role: Option<String> = tx
+            .query_row(
+                "SELECT role FROM memberships WHERE workspace_id=?1 AND user_id=?2",
+                params![inv.workspace_id, user_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(db_err)?;
+        if existing_role.as_deref() == Some("owner") {
+            // Already the owner: the invitation is used up, nothing changes.
+            tx.execute(
+                "UPDATE invitations SET accepted_by=?2,accepted_at=?3,created_membership=0 WHERE invitation_id=?1",
+                params![inv.id, user_id, now],
+            )
+            .map_err(db_err)?;
+            continue;
+        }
+        // An invitation never lowers an existing member's role (a manager
+        // invited as «member» stays a manager); a raise is audited like any
+        // other role change.
+        let rank = |r: &str| if r == "manager" { 1 } else { 0 };
+        match existing_role.as_deref() {
+            None => {
+                tx.execute(
+                    "INSERT INTO memberships(workspace_id,user_id,role,created_at) VALUES(?1,?2,?3,?4)",
+                    params![inv.workspace_id, user_id, inv.role, now],
+                )
+                .map_err(db_err)?;
+            }
+            Some(from) if rank(&inv.role) > rank(from) => {
+                tx.execute(
+                    "UPDATE memberships SET role=?3 WHERE workspace_id=?1 AND user_id=?2 AND role<>'owner'",
+                    params![inv.workspace_id, user_id, inv.role],
+                )
+                .map_err(db_err)?;
+                insert_audit(
+                    tx,
+                    &inv.workspace_id,
+                    &inv.created_by,
+                    "membership.role_changed",
+                    "member",
+                    user_id,
+                    &json!({"role": inv.role, "from": from, "via": "invitation"}),
+                )?;
+            }
+            Some(_) => {}
+        }
+        tx.execute(
+            "UPDATE invitations SET accepted_by=?2,accepted_at=?3,created_membership=?4 WHERE invitation_id=?1",
+            params![inv.id, user_id, now, i64::from(existing_role.is_none())],
+        )
+        .map_err(db_err)?;
+        insert_audit(
+            tx,
+            &inv.workspace_id,
+            user_id,
+            "invitation.accepted",
+            "invitation",
+            &inv.id,
+            &json!({"via": "telegram"}),
+        )?;
+    }
+    let state: Option<String> = tx
+        .query_row(
+            "SELECT state FROM user_access WHERE user_id=?1",
+            params![user_id],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(db_err)?;
+    let waiting = !matches!(state.as_deref(), Some("active") | Some("suspended") | None);
+    if !waiting {
+        return Ok(false);
+    }
+    // Opening access is the inviter's monthly allowance, same as an e-mail
+    // invitation: over the cap the person joins the team but waits for an admin.
+    let cap = crate::access::invite_activation_cap();
+    let mut inviter = None;
+    for inv in invites {
+        if !crate::access::invite_cap_reached(tx, &inv.created_by, cap)? {
+            inviter = Some(&inv.created_by);
+            break;
+        }
+    }
+    let Some(inviter) = inviter else {
+        if let Some(ws) = crate::access::audit_workspace_in(tx, user_id)? {
+            insert_audit(
+                tx,
+                &ws,
+                &invites[0].created_by,
+                "access.activation_refused",
+                "user",
+                user_id,
+                &json!({"source": "invitation", "via": "telegram", "reason": "invite_cap"}),
+            )?;
+        }
+        return Ok(false);
+    };
+    tx.execute(
+        "UPDATE user_access SET state='active',activated_at=?2,activated_by=?3,updated_at=?2 WHERE user_id=?1",
+        params![user_id, now, inviter],
+    )
+    .map_err(db_err)?;
+    if let Some(ws) = crate::access::audit_workspace_in(tx, user_id)? {
+        insert_audit(
+            tx,
+            &ws,
+            inviter,
+            "access.activated",
+            "user",
+            user_id,
+            &json!({"source": "invitation", "invitedBy": inviter, "via": "telegram"}),
+        )?;
+    }
+    Ok(true)
+}
+
 /// Link `('telegram', id)` to `user_id` and stamp its label.
 fn link_telegram(
     conn: &Connection,
@@ -696,10 +876,25 @@ impl WorkspaceStore {
             return Ok(json!({"status": "approved", "intent": "link"}));
         }
 
+        // An owner may have invited this @username: the first sign-in then
+        // joins the team (and, for a newcomer, opens access) instead of
+        // waiting on the waitlist.
+        let invites: Vec<TgInvite> = if crate::edition::is_external() {
+            pending_telegram_invites(&tx, tg.username.as_deref(), now)?
+        } else {
+            Vec::new()
+        }
+        .into_iter()
+        .filter(|i| self.is_privileged(&i.created_by) || inviter_is_active(&tx, &i.created_by))
+        .collect();
         let (user_id, created) = match existing {
             Some(holder) => (holder, false),
             None => (create_account(&tx, tg, now)?, true),
         };
+        let mut invite_outcome = None;
+        if !invites.is_empty() {
+            invite_outcome = Some(accept_telegram_invites(&tx, &user_id, &invites, now)?);
+        }
         link_telegram(&tx, &subject, tg.username.as_deref(), &user_id, now)?;
         tx.execute(
             "UPDATE telegram_logins SET approved_at=?2,user_id=?3,created_account=?4 WHERE code_hash=?1",
@@ -725,7 +920,13 @@ impl WorkspaceStore {
         }
         let account = account_summary(&tx, &user_id)?;
         tx.commit().map_err(db_err)?;
-        Ok(json!({"status": "approved", "intent": "login", "created": created, "account": account}))
+        let mut out = json!({"status": "approved", "intent": "login", "created": created, "account": account});
+        if let Some(activated) = invite_outcome {
+            // The handler runs the post-activation hooks (seat, sandbox).
+            out["invitationJoined"] = json!(true);
+            out["invitationActivated"] = json!(activated);
+        }
+        Ok(out)
     }
 
     /// The client's side. A sign-in's `approved` is handed out exactly once,
@@ -2548,5 +2749,260 @@ mod tests {
             )
             .unwrap();
         assert_eq!(in_team, 0);
+    }
+
+    #[test]
+    fn telegram_username_validation() {
+        use crate::workspace::normalize_telegram_username as n;
+        assert_eq!(n("@Vasya_Pupkin").as_deref(), Some("vasya_pupkin"));
+        assert_eq!(n("  abcde ").as_deref(), Some("abcde"));
+        assert_eq!(n("abcd"), None, "too short");
+        assert_eq!(n(&"a".repeat(33)), None, "too long");
+        assert_eq!(n("ab cde"), None);
+        assert_eq!(n("ab-cde"), None);
+        assert_eq!(n("пользователь"), None);
+        assert_eq!(n("a@b.ru"), None);
+    }
+
+    fn owner_with_team(s: &WorkspaceStore) -> String {
+        s.ensure_user("boss", "boss@example.com", None).unwrap();
+        s.activate_access("boss", "tests").unwrap();
+        let team = s.create_organization("boss", "Team", "boss").unwrap();
+        team["workspaceId"].as_str().unwrap().to_string()
+    }
+
+    fn state_of(s: &WorkspaceStore, user: &str) -> String {
+        s.access_state(user).unwrap().state
+    }
+
+    fn role_in(s: &WorkspaceStore, wid: &str, user: &str) -> Option<String> {
+        s.conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT role FROM memberships WHERE workspace_id=?1 AND user_id=?2",
+                params![wid, user],
+                |r| r.get(0),
+            )
+            .optional()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_matching_username_invitation_creates_an_active_member_with_identity() {
+        crate::edition::with_edition(crate::edition::Edition::External, || {
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            let inv = s
+                .invite_telegram_from("boss", &wid, "@Danis_Latypov", "manager", None)
+                .unwrap();
+            let st = start(&s, None);
+            // tg() presses as `danis_latypov`: case-insensitive match.
+            let done = approve(&s, &st, &tg(7100)).unwrap();
+            assert_eq!(done["created"], true);
+            assert_eq!(done["invitationJoined"], true);
+            assert_eq!(done["invitationActivated"], true);
+            assert_eq!(done["account"]["state"], "active");
+            let uid = done["account"]["userId"].as_str().unwrap().to_string();
+            assert_eq!(state_of(&s, &uid), "active");
+            assert_eq!(role_in(&s, &wid, &uid).as_deref(), Some("manager"));
+            {
+                let c = s.conn.lock().unwrap();
+                let (by, at, created): (String, Option<i64>, i64) = c
+                .query_row(
+                    "SELECT accepted_by,accepted_at,created_membership FROM invitations WHERE invitation_id=?1",
+                    params![inv["invitationId"].as_str().unwrap()],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .unwrap();
+                assert_eq!(by, uid);
+                assert!(at.is_some());
+                assert_eq!(created, 1);
+                let label: String = c
+                    .query_row(
+                        "SELECT label FROM identities WHERE provider='telegram' AND subject='7100'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .unwrap();
+                assert_eq!(label, "@danis_latypov");
+                let audits: i64 = c
+                .query_row(
+                    "SELECT COUNT(*) FROM audit_events WHERE action IN ('invitation.accepted','access.activated') AND target_id IN (?1,?2)",
+                    params![uid, inv["invitationId"].as_str().unwrap()],
+                    |r| r.get(0),
+                )
+                .unwrap();
+                assert_eq!(audits, 2);
+            }
+            // The invitation is used up: another account with that username gets
+            // the ordinary waitlist.
+            let again = approve(&s, &start(&s, None), &tg(7101)).unwrap();
+            assert_eq!(again["account"]["state"], "waitlist");
+            assert!(again.get("invitationJoined").is_none());
+        });
+    }
+
+    #[test]
+    fn expired_or_foreign_username_invitations_change_nothing() {
+        crate::edition::with_edition(crate::edition::Edition::External, || {
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            let inv = s
+                .invite_telegram_from("boss", &wid, "danis_latypov", "member", None)
+                .unwrap();
+            s.conn
+                .lock()
+                .unwrap()
+                .execute(
+                    "UPDATE invitations SET expires_at=1 WHERE invitation_id=?1",
+                    params![inv["invitationId"].as_str().unwrap()],
+                )
+                .unwrap();
+            let expired = approve(&s, &start(&s, None), &tg(7200)).unwrap();
+            assert_eq!(expired["account"]["state"], "waitlist");
+            assert!(expired.get("invitationJoined").is_none());
+
+            s.invite_telegram_from("boss", &wid, "someone_else", "member", None)
+                .unwrap();
+            let other = approve(&s, &start(&s, None), &tg(7201)).unwrap();
+            assert_eq!(other["account"]["state"], "waitlist");
+            assert!(other.get("invitationJoined").is_none());
+            let uid = other["account"]["userId"].as_str().unwrap();
+            assert_eq!(role_in(&s, &wid, uid), None);
+        });
+    }
+
+    #[test]
+    fn a_known_telegram_account_joins_the_team_on_sign_in() {
+        crate::edition::with_edition(crate::edition::Edition::External, || {
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            let first = approve(&s, &start(&s, None), &tg(7300)).unwrap();
+            let uid = first["account"]["userId"].as_str().unwrap().to_string();
+            assert_eq!(state_of(&s, &uid), "waitlist");
+            s.invite_telegram_from("boss", &wid, "danis_latypov", "member", None)
+                .unwrap();
+            let done = approve(&s, &start(&s, None), &tg(7300)).unwrap();
+            assert_eq!(done["created"], false);
+            assert_eq!(done["invitationJoined"], true);
+            assert_eq!(role_in(&s, &wid, &uid).as_deref(), Some("member"));
+            assert_eq!(state_of(&s, &uid), "active");
+        });
+    }
+
+    #[test]
+    fn an_inactive_inviter_does_not_open_access() {
+        crate::edition::with_edition(crate::edition::Edition::External, || {
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            s.invite_telegram_from("boss", &wid, "danis_latypov", "member", None)
+                .unwrap();
+            s.suspend_access("boss", "tests", None).unwrap();
+            let done = approve(&s, &start(&s, None), &tg(7400)).unwrap();
+            assert_eq!(done["account"]["state"], "waitlist");
+            assert!(done.get("invitationJoined").is_none());
+        });
+    }
+
+    #[test]
+    fn invitation_never_lowers_a_role_and_respects_the_activation_cap() {
+        crate::edition::with_edition(crate::edition::Edition::External, || {
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            let first = approve(&s, &start(&s, None), &tg(7500)).unwrap();
+            let uid = first["account"]["userId"].as_str().unwrap().to_string();
+            s.conn
+                .lock()
+                .unwrap()
+                .execute(
+                    "INSERT INTO memberships(workspace_id,user_id,role,created_at) VALUES(?1,?2,'manager',1)",
+                    params![wid, uid],
+                )
+                .unwrap();
+            s.invite_telegram_from("boss", &wid, "danis_latypov", "member", None)
+                .unwrap();
+            approve(&s, &start(&s, None), &tg(7500)).unwrap();
+            assert_eq!(role_in(&s, &wid, &uid).as_deref(), Some("manager"));
+
+            // A cap of zero: joins the team, stays on the waitlist, audited.
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            s.invite_telegram_from("boss", &wid, "danis_latypov", "member", None)
+                .unwrap();
+            std::env::set_var("CC_REMOTE_INVITE_ACTIVATIONS_PER_MONTH", "0");
+            let done = approve(&s, &start(&s, None), &tg(7501));
+            std::env::remove_var("CC_REMOTE_INVITE_ACTIVATIONS_PER_MONTH");
+            let done = done.unwrap();
+            assert_eq!(done["invitationActivated"], false);
+            assert_eq!(done["account"]["state"], "waitlist");
+            let refused: i64 = s
+                .conn
+                .lock()
+                .unwrap()
+                .query_row(
+                    "SELECT COUNT(*) FROM audit_events WHERE action='access.activation_refused'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(refused, 1);
+        });
+    }
+
+    #[test]
+    fn internal_edition_ignores_username_invitations() {
+        crate::edition::with_edition(crate::edition::Edition::Internal, || {
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            s.invite_telegram_from("boss", &wid, "danis_latypov", "member", None)
+                .unwrap();
+            let done = approve(&s, &start(&s, None), &tg(7600)).unwrap();
+            assert_eq!(done["account"]["state"], "waitlist");
+            assert!(done.get("invitationJoined").is_none());
+        });
+    }
+
+    #[test]
+    fn an_owner_invited_to_their_own_team_still_uses_up_the_invitation() {
+        crate::edition::with_edition(crate::edition::Edition::External, || {
+            let s = WorkspaceStore::open_memory();
+            let wid = owner_with_team(&s);
+            let first = approve(&s, &start(&s, None), &tg(7700)).unwrap();
+            let uid = first["account"]["userId"].as_str().unwrap().to_string();
+            s.conn
+                .lock()
+                .unwrap()
+                .execute(
+                    "UPDATE memberships SET role='owner' WHERE workspace_id=?1 AND user_id=?2",
+                    params![wid, uid],
+                )
+                .map(|n| assert_eq!(n, 0))
+                .unwrap();
+            s.conn
+                .lock()
+                .unwrap()
+                .execute(
+                    "INSERT INTO memberships(workspace_id,user_id,role,created_at) VALUES(?1,?2,'owner',1)",
+                    params![wid, uid],
+                )
+                .unwrap();
+            let inv = s
+                .invite_telegram_from("boss", &wid, "danis_latypov", "member", None)
+                .unwrap();
+            approve(&s, &start(&s, None), &tg(7700)).unwrap();
+            assert_eq!(role_in(&s, &wid, &uid).as_deref(), Some("owner"));
+            let accepted: Option<String> = s
+                .conn
+                .lock()
+                .unwrap()
+                .query_row(
+                    "SELECT accepted_by FROM invitations WHERE invitation_id=?1",
+                    params![inv["invitationId"].as_str().unwrap()],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(accepted.as_deref(), Some(uid.as_str()));
+        });
     }
 }

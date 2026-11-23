@@ -260,6 +260,7 @@ test('routing hints stay clear next to the envelope, but the sealed copy wins on
 
 test('runtime.login.input code is content', () => {
   assert.deepEqual(RPC_SEALED_PARAMS['runtime.login.input'], ['code']);
+  assert.deepEqual(RPC_SEALED_PARAMS['runtime.codex.provider'], ['mode', 'apiKey', 'model', 'effort']);
 });
 
 test('rpc requests are bound to their method and clear params', () => {

@@ -412,6 +412,15 @@ pub(crate) fn opaque_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
+/// A Telegram username as people type it (`@name` or `name`), validated the
+/// way Telegram does (5-32 of `A-Za-z0-9_`) and lowercased for matching.
+pub(crate) fn normalize_telegram_username(raw: &str) -> Option<String> {
+    let name = raw.trim().trim_start_matches('@');
+    let ok = (5..=32).contains(&name.len())
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    ok.then(|| name.to_ascii_lowercase())
+}
+
 pub(crate) fn normalize_email(email: &str) -> String {
     email.trim().to_ascii_lowercase()
 }
@@ -691,6 +700,13 @@ impl WorkspaceStore {
         // rows from before the column and for invitations made without one.
         let _ = conn.execute(
             "ALTER TABLE invitations ADD COLUMN created_session TEXT",
+            [],
+        );
+        // An invitation addressed to a Telegram @username instead of an e-mail
+        // (lowercase, no `@`). Such a row keeps `email` = '' (the column is
+        // NOT NULL and an empty address never matches an account).
+        let _ = conn.execute(
+            "ALTER TABLE invitations ADD COLUMN telegram_username TEXT",
             [],
         );
         // Idempotent migration: the kanban `stage` column postdates `session_owners`.
@@ -1749,6 +1765,47 @@ impl WorkspaceStore {
         role: &str,
         session_hash: Option<&str>,
     ) -> Result<Value, String> {
+        self.invite_row(
+            actor,
+            workspace_id,
+            &normalize_email(email),
+            None,
+            role,
+            session_hash,
+        )
+    }
+
+    /// An invitation addressed to a Telegram `@username`: the person's first
+    /// Telegram sign-in on this hub joins the team (`telegram_login`). The
+    /// response carries no token — there is no link to hand out.
+    pub fn invite_telegram_from(
+        &self,
+        actor: &str,
+        workspace_id: &str,
+        username: &str,
+        role: &str,
+        session_hash: Option<&str>,
+    ) -> Result<Value, String> {
+        let name = normalize_telegram_username(username)
+            .ok_or("invalid Telegram username (5-32 letters, digits or _)")?;
+        let mut v = self.invite_row(actor, workspace_id, "", Some(&name), role, session_hash)?;
+        if let Some(map) = v.as_object_mut() {
+            map.remove("token");
+            map.remove("email");
+            map.insert("telegram".into(), Value::String(name));
+        }
+        Ok(v)
+    }
+
+    fn invite_row(
+        &self,
+        actor: &str,
+        workspace_id: &str,
+        normalized: &str,
+        telegram: Option<&str>,
+        role: &str,
+        session_hash: Option<&str>,
+    ) -> Result<Value, String> {
         if role != "manager" && role != "member" {
             return Err("invalid invitation role".into());
         }
@@ -1756,7 +1813,6 @@ impl WorkspaceStore {
         let id = Uuid::new_v4().to_string();
         let token = opaque_token();
         let now = now_ms();
-        let normalized = normalize_email(email);
         let conn = self
             .conn
             .lock()
@@ -1812,8 +1868,8 @@ impl WorkspaceStore {
         if (members + pending) as usize >= cap || pending >= MAX_PENDING_INVITATIONS {
             return Err(MEMBER_CAP_ERR.into());
         }
-        tx.execute("INSERT INTO invitations(invitation_id,workspace_id,email,role,token_hash,created_by,created_at,expires_at,created_session) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
-            params![id,workspace_id,normalized,role,hash_token(&token),actor,now,now+7*24*60*60*1000_i64,session_hash]).map_err(db_err)?;
+        tx.execute("INSERT INTO invitations(invitation_id,workspace_id,email,role,token_hash,created_by,created_at,expires_at,created_session,telegram_username) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            params![id,workspace_id,normalized,role,hash_token(&token),actor,now,now+7*24*60*60*1000_i64,session_hash,telegram]).map_err(db_err)?;
         insert_audit(
             &tx,
             workspace_id,
@@ -1821,7 +1877,10 @@ impl WorkspaceStore {
             "invitation.created",
             "invitation",
             &id,
-            &json!({"email":normalized,"role":role}),
+            &match telegram {
+                Some(t) => json!({"telegram":t,"role":role}),
+                None => json!({"email":normalized,"role":role}),
+            },
         )?;
         tx.commit().map_err(db_err)?;
         Ok(
@@ -1892,7 +1951,7 @@ impl WorkspaceStore {
             invitation.ok_or("invalid or expired invitation")?;
         // An invitation is addressed to an email; an account without one
         // (Telegram-only) cannot prove it is that address.
-        let Some(user_email) = user_email else {
+        let Some(user_email) = user_email.filter(|_| !email.is_empty()) else {
             return Err("invitation belongs to another email".into());
         };
         if normalize_email(&user_email) != normalize_email(&email) {

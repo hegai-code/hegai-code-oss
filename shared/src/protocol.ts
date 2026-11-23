@@ -149,6 +149,8 @@ export const MachineInfo = z.object({
   /** Agent can enforce requireGateway on internal new-session commands.
    * Absent/false means callers must refuse such jobs, not silently downgrade. */
   gatewaySessions: z.boolean().optional(),
+  /** Agent answers `runtime.codex.provider` (the «Шлюз | Своя подписка» switch). */
+  codexProviderSwitch: z.boolean().optional(),
   /** Skill slash-commands this machine can actually run — the directory names
    *  under `~/.claude/skills` that hold a SKILL.md. A session CATEGORY rewrites
    *  the first turn to `/<skill> …` (see categories.ts), so a client needs this

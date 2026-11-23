@@ -45,6 +45,7 @@ import { loadHistory, loadImage, loadSubagentHistory } from './history.js';
 import { loadCodexSubagentHistory } from './codex-subagents.js';
 import { deleteCodexSession, findCodexTranscript, loadCodexHistory, loadCodexImage } from './codex.js';
 import { listCodexModels } from './codex-run.js';
+import { setCodexProvider } from './codex-provider.js';
 import { listGoModels } from './opencode-go.js';
 import { stateDir } from './config.js';
 import { dropSessionTitle, setSessionTitle } from './session-titles.js';
@@ -766,6 +767,10 @@ async function dispatchRpcUnchecked(method: RpcMethod, params: Params): Promise<
     case 'runtime.login.cancel': {
       const a = RpcParams['runtime.login.cancel'].parse(params);
       return cancelLogin(a.loginId);
+    }
+    case 'runtime.codex.provider': {
+      const a = RpcParams['runtime.codex.provider'].parse(params);
+      return setCodexProvider(a.mode, a.apiKey, undefined, { model: a.model, effort: a.effort });
     }
     case 'runtime.job.status': {
       const a = RpcParams['runtime.job.status'].parse(params);

@@ -48,6 +48,11 @@ export function setRuntimeChangedHook(fn: () => void): void {
   onChanged = fn;
 }
 
+/** Something outside a job changed a runtime on disk (the Codex provider switch). */
+export function notifyRuntimeChanged(): void {
+  onChanged();
+}
+
 function publicView(j: Job): RuntimeJob {
   return {
     id: j.id,

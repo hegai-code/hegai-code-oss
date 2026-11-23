@@ -1,6 +1,6 @@
 {
   "name": "cc-remote-agent-deploy",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "private": true,
   "type": "module",
   "description": "Self-contained cc-remote agent for a remote machine. Run: node agent.mjs",

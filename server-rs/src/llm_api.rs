@@ -61,16 +61,23 @@ pub(crate) async fn api_llm_access(
             }
             let admin = st.platform_admins.contains(&user);
             match st.workspaces.ui_access(&user, None, admin) {
-                Ok(access) => (
-                    access
+                Ok(access) => {
+                    let email = access
                         .viewer
                         .get("email")
                         .and_then(Value::as_str)
                         .unwrap_or_default()
                         .trim()
-                        .to_ascii_lowercase(),
-                    plan,
-                ),
+                        .to_ascii_lowercase();
+                    // A Telegram-only member of a self-hosted hub has no
+                    // address; their seat is keyed by a synthetic one.
+                    let email = if email.is_empty() {
+                        st.workspaces.seat_key(&user).unwrap_or_default()
+                    } else {
+                        email
+                    };
+                    (email, plan)
+                }
                 Err(e) => return store_failure(e),
             }
         }
@@ -109,6 +116,9 @@ pub(crate) async fn api_llm_access(
         "apiKey": api_key,
         "baseUrl": st.llm_public_url,
         "models": models,
+        // What the installers write; the web's Codex switch passes them on.
+        "installerModel": installer_model(),
+        "installerEffort": installer_effort(),
         "limits": {
             "requests": pick("request_max_limit"),
             "requestsWindow": pick("request_reset_duration"),
@@ -153,7 +163,7 @@ pub(crate) async fn api_budget(State(st): State<AppState>, headers: HeaderMap) -
         .map(|a| a.plan)
         .unwrap_or_else(|_| "community".into());
     let empty = || Json(json!({"plan": plan, "limits": {}})).into_response();
-    let (Some(gw), Some(email)) = (st.llmgw.clone(), st.workspaces.user_email(&user)) else {
+    let (Some(gw), Some(email)) = (st.llmgw.clone(), st.workspaces.seat_key(&user)) else {
         return empty();
     };
     let seat = match gw.find_seat(&email).await {
@@ -344,6 +354,11 @@ async fn installer_gateway_key(st: &AppState, user: &str) -> Result<(String, Str
             .to_ascii_lowercase(),
         Err(e) => return Err(store_failure(e)),
     };
+    let email = if email.is_empty() {
+        st.workspaces.seat_key(user).unwrap_or_default()
+    } else {
+        email
+    };
     if email.is_empty() {
         return Err(api_error(
             StatusCode::FORBIDDEN,
@@ -478,7 +493,7 @@ pub(crate) async fn api_gateway_quota(
         None => match authenticated_user(&headers, &st) {
             Ok(user) => {
                 admin = st.platform_admins.contains(&user) || st.bootstrap_user_id == user;
-                st.workspaces.user_email(&user)
+                st.workspaces.seat_key(&user)
             }
             Err(e) => return e,
         },
@@ -597,6 +612,19 @@ fn read_all_pool_quotas(st: &AppState) -> Vec<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installer_defaults_are_valid_for_the_agent() {
+        let m = installer_model();
+        assert!(!m.is_empty() && m.len() <= 64);
+        assert!(m
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._:/-".contains(c)));
+        assert!(matches!(
+            installer_effort().as_str(),
+            "minimal" | "low" | "medium" | "high" | "xhigh"
+        ));
+    }
 
     #[test]
     fn crc32_matches_the_standard_check_vector() {

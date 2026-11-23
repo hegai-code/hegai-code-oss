@@ -260,6 +260,7 @@ const CHAT_ONLY_REFUSED = new Set<string>([
   'runtime.install',
   'runtime.login.start',
   'runtime.login.input',
+  'runtime.codex.provider',
 ]);
 
 export function refusedInChatOnly(method: string, p: AgentPolicy = policy()): boolean {

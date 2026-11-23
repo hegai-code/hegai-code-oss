@@ -432,6 +432,19 @@ pub(crate) async fn api_tg_login_confirm(
                     v["account"]["userId"].as_str().unwrap_or("(link proposal)"),
                     v["created"]
                 );
+                // Joined a team by a Telegram invitation: the same follow-ups
+                // as an accepted e-mail invitation.
+                if v["invitationJoined"] == true {
+                    if let Some(user_id) = v["account"]["userId"].as_str() {
+                        if v["invitationActivated"] == true {
+                            st.hub.send(HubCmd::RefreshWorkspaceState);
+                            crate::access_api::after_activate_hooks(&st, user_id);
+                        } else {
+                            crate::access_api::auto_seat_for_member(&st, user_id);
+                        }
+                        st.hub.send(HubCmd::RefreshWorkspaceState);
+                    }
+                }
             }
             Json(v).into_response()
         }

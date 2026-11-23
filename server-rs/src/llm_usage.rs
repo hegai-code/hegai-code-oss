@@ -172,6 +172,8 @@ fn owner_of(conn: &Connection, email: &str) -> String {
     .optional()
     .ok()
     .flatten()
+    // A seat of an account without an e-mail carries its synthetic key.
+    .or_else(|| crate::access::user_of_seat_key(conn, email))
     .unwrap_or_default()
 }
 

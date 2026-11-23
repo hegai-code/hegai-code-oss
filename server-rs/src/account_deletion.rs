@@ -476,7 +476,28 @@ impl WorkspaceStore {
             .map_err(db_err)?;
         tx.execute("DELETE FROM telegram_logins WHERE user_id=?1 OR link_user_id=?1 OR telegram_id IN (SELECT subject FROM identities WHERE provider='telegram' AND user_id=?1)", [user]).map_err(db_err)?;
         tx.execute("DELETE FROM access_preauth WHERE claimed_by=?1 OR lower(email)=(SELECT lower(email) FROM users WHERE user_id=?1)", [user]).map_err(db_err)?;
-        tx.execute("DELETE FROM invitations WHERE created_by=?1 OR accepted_by=?1 OR lower(email)=(SELECT lower(email) FROM users WHERE user_id=?1)", [user]).map_err(db_err)?;
+        // The person's Telegram handles (labels `@name`): invitations addressed
+        // to them go, and so does the handle in audit metadata.
+        let handles: Vec<String> = {
+            let mut stmt = tx
+                .prepare("SELECT lower(ltrim(label,'@')) FROM identities WHERE provider='telegram' AND user_id=?1 AND label LIKE '@%'")
+                .map_err(db_err)?;
+            let rows = stmt
+                .query_map([user], |r| r.get::<_, String>(0))
+                .map_err(db_err)?;
+            rows.filter_map(Result::ok).collect()
+        };
+        // Invitations the person accepted (before those rows are deleted).
+        tx.execute("UPDATE audit_events SET metadata_json=json_remove(metadata_json,'$.telegram') WHERE json_valid(metadata_json) AND target_kind='invitation' AND target_id IN (SELECT invitation_id FROM invitations WHERE accepted_by=?1)", [user]).map_err(db_err)?;
+        for handle in &handles {
+            tx.execute(
+                "DELETE FROM invitations WHERE telegram_username=?1",
+                [handle],
+            )
+            .map_err(db_err)?;
+            tx.execute("UPDATE audit_events SET metadata_json=json_remove(metadata_json,'$.telegram') WHERE json_valid(metadata_json) AND lower(json_extract(metadata_json,'$.telegram'))=?1", [handle]).map_err(db_err)?;
+        }
+        tx.execute("DELETE FROM invitations WHERE created_by=?1 OR accepted_by=?1 OR (email<>'' AND lower(email)=(SELECT lower(email) FROM users WHERE user_id=?1))", [user]).map_err(db_err)?;
         tx.execute("UPDATE audit_events SET metadata_json=json_remove(metadata_json,'$.email') WHERE json_valid(metadata_json) AND lower(json_extract(metadata_json,'$.email'))=(SELECT lower(email) FROM users WHERE user_id=?1)", [user]).map_err(db_err)?;
         tx.execute(
             "DELETE FROM manager_assignments WHERE manager_user_id=?1 OR target_id=?1",
@@ -530,7 +551,11 @@ impl WorkspaceStore {
             .optional()
             .map_err(db_err)?
             .flatten();
-        if let Some(email) = email.filter(|e| !e.is_empty()) {
+        // An account without an e-mail is keyed by its synthetic seat key.
+        let email = email
+            .filter(|e| !e.is_empty())
+            .unwrap_or_else(|| crate::access::synthetic_seat_key(user));
+        {
             let email = email.to_lowercase();
             tx.execute(
                 "INSERT INTO llm_usage_erased(email_sha256,erased_at) VALUES(?1,?2)
@@ -992,5 +1017,47 @@ mod tests {
         .unwrap();
         assert!(s.ensure_sandbox_erasure("u").unwrap());
         s.erase_account("u").unwrap();
+    }
+
+    /// An account without an e-mail (Telegram-only) is erased through its
+    /// synthetic seat key and its Telegram handle leaves the audit metadata.
+    #[test]
+    fn erasure_covers_the_synthetic_seat_key_and_the_telegram_handle() {
+        let s = WorkspaceStore::open_memory();
+        s.ensure_user("boss", "boss@example.test", None).unwrap();
+        s.with_conn_for_tests(|c| {
+            c.execute("INSERT INTO users(user_id,email,created_at) VALUES('tg-abc',NULL,0)", []).unwrap();
+            c.execute("INSERT INTO identities(provider,subject,user_id,created_at,label) VALUES('telegram','100','tg-abc',0,'@Dan_User')", []).unwrap();
+            c.execute("INSERT INTO invitations(invitation_id,workspace_id,email,role,token_hash,created_by,created_at,expires_at,telegram_username) VALUES('i1','personal:boss','','member','h1','boss',0,9999999999999,'dan_user')", []).unwrap();
+            // Another e-mail-less person's Telegram invitation must survive.
+            c.execute("INSERT INTO invitations(invitation_id,workspace_id,email,role,token_hash,created_by,created_at,expires_at,telegram_username) VALUES('i2','personal:boss','','member','h2','boss',0,9999999999999,'other_person')", []).unwrap();
+            c.execute("INSERT INTO audit_events(audit_event_id,workspace_id,actor_user_id,action,target_kind,target_id,metadata_json,created_at) VALUES('a1','personal:boss','boss','invitation.created','invitation','i1','{\"telegram\":\"dan_user\",\"role\":\"member\"}',0)", []).unwrap();
+            c.execute_batch(
+                "INSERT INTO llm_usage_daily(day,virtual_key_name,email,model,user_id) VALUES
+                   ('2026-10-01','hegai:tg-abc@users.invalid','tg-abc@users.invalid','m','tg-abc');",
+            )
+            .unwrap();
+            // Attribution resolves the synthetic key to the account.
+            assert_eq!(
+                crate::access::user_of_seat_key(c, "TG-ABC@users.invalid").as_deref(),
+                Some("tg-abc")
+            );
+        });
+        s.request_account_deletion("tg-abc", &json!([])).unwrap();
+        s.erase_account("tg-abc").unwrap();
+        s.with_conn_for_tests(|c| {
+            let count = |sql: &str| c.query_row(sql, [], |r| r.get::<_, i64>(0)).unwrap();
+            assert_eq!(count("SELECT count(*) FROM llm_usage_daily WHERE email LIKE 'tg-abc%'"), 0);
+            assert_eq!(
+                count(&format!(
+                    "SELECT count(*) FROM llm_usage_erased WHERE email_sha256='{}'",
+                    crate::llm_usage::erased_key("tg-abc@users.invalid")
+                )),
+                1
+            );
+            assert_eq!(count("SELECT count(*) FROM invitations WHERE telegram_username='dan_user'"), 0);
+            assert_eq!(count("SELECT count(*) FROM invitations WHERE telegram_username='other_person'"), 1);
+            assert_eq!(count("SELECT count(*) FROM audit_events WHERE audit_event_id='a1' AND json_extract(metadata_json,'$.telegram') IS NULL AND json_extract(metadata_json,'$.role')='member'"), 1);
+        });
     }
 }

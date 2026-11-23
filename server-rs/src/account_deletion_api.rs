@@ -127,7 +127,7 @@ async fn process_exclusive(st: &AppState, user: &str) -> Result<(), &'static str
     {
         return Ok(());
     }
-    if let (Some(gateway), Some(email)) = (&st.llmgw, st.workspaces.user_email(user)) {
+    if let (Some(gateway), Some(email)) = (&st.llmgw, st.workspaces.seat_key(user)) {
         if gateway
             .find_seat(&email)
             .await

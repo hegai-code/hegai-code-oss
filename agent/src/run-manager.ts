@@ -397,6 +397,23 @@ export class RunManager {
     this.gitSignals = options.gitSignals ?? new TurnGitSignals(this.send);
   }
 
+  /** A Codex run is mid-turn, waiting on a person or starting. Idle runs do not count. */
+  hasBusyCodexRun(): boolean {
+    if (this.pendingStarts.size) return true;
+    for (const entry of this.runs.values()) {
+      if (!(entry.run instanceof CodexSessionRun)) continue;
+      if (entry.state !== 'idle' || entry.pendingRequest || entry.background) return true;
+    }
+    return false;
+  }
+
+  /** Close idle Codex runs: the next message resumes them on the current config. */
+  closeIdleCodexRuns(): void {
+    for (const [runId, entry] of [...this.runs]) {
+      if (entry.run instanceof CodexSessionRun && entry.state === 'idle') this.end(runId, 'ended');
+    }
+  }
+
   get activeCount(): number {
     return this.runs.size;
   }

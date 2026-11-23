@@ -366,10 +366,46 @@ pub(crate) fn after_activate_hooks(st: &AppState, user_id: &str) {
     let Ok(access) = st.workspaces.access_state(user_id) else {
         return;
     };
-    if access.plan != "community" || !sandboxes_offered(st) {
+    if access.plan != "community" {
+        return;
+    }
+    auto_seat_for_member(st, user_id);
+    if !sandboxes_offered(st) {
         return;
     }
     enqueue_sandbox_job(st, user_id, "sandbox_create");
+    st.hub.send(HubCmd::RefreshWorkspaceState);
+}
+
+/// Whether new members get a gateway seat on their own: only a self-hosted hub
+/// that runs its own gateway. code.acme.test keeps «bring your own Codex».
+pub(crate) fn auto_seat_wanted(external: bool, gateway_configured: bool) -> bool {
+    external && gateway_configured
+}
+
+fn auto_seat_enabled(st: &AppState) -> bool {
+    auto_seat_wanted(crate::edition::is_external(), st.llmgw.is_some())
+}
+
+/// Request a seat for an active community member who has none yet (a team
+/// join on a self-hosted hub with a gateway). No-op elsewhere, and for a seat
+/// that already exists in any state — the reconciler and the admin retry own
+/// those.
+pub(crate) fn auto_seat_for_member(st: &AppState, user_id: &str) {
+    if !auto_seat_enabled(st) {
+        return;
+    }
+    let Ok(access) = st.workspaces.access_state(user_id) else {
+        return;
+    };
+    if access.state != "active" || access.plan != "community" || access.seat_status != "none" {
+        return;
+    }
+    if st.workspaces.seat_key(user_id).is_none() || !st.workspaces.is_team_member(user_id) {
+        return;
+    }
+    let _ = st.workspaces.reset_seat(user_id);
+    start_seat_provisioning(st, user_id);
     st.hub.send(HubCmd::RefreshWorkspaceState);
 }
 
@@ -400,7 +436,7 @@ pub(crate) fn after_suspend_hooks(st: &AppState, user_id: &str) {
         let _ = st.workspaces.set_seat_status(user_id, "inactive", None);
         return;
     };
-    let Some(email) = st.workspaces.user_email(user_id) else {
+    let Some(email) = st.workspaces.seat_key(user_id) else {
         return;
     };
     let st = st.clone();
@@ -467,7 +503,7 @@ pub(crate) fn start_seat_provisioning(st: &AppState, user_id: &str) {
     // Seats are named `hegai:<email>`: an account without an address
     // (Telegram-only) has none, and leaving it `pending` shows «ключ делается»
     // forever — the reconciler skips such rows by design.
-    if st.workspaces.user_email(user_id).is_none() {
+    if st.workspaces.seat_key(user_id).is_none() {
         let _ = st.workspaces.set_seat_status(user_id, "none", None);
         return;
     }
@@ -504,7 +540,7 @@ pub(crate) fn start_seat_provisioning(st: &AppState, user_id: &str) {
 /// spent, so the member's page keeps saying "the key is being made" for as
 /// long as that is true. Stops quietly if the user is suspended meanwhile.
 async fn seat_task(st: &AppState, gw: Arc<crate::llmgw::LlmGateway>, user_id: &str) {
-    let Some(email) = st.workspaces.user_email(user_id) else {
+    let Some(email) = st.workspaces.seat_key(user_id) else {
         return;
     };
     loop {
@@ -571,7 +607,10 @@ async fn seat_task(st: &AppState, gw: Arc<crate::llmgw::LlmGateway>, user_id: &s
 /// ready and still has attempts left (a hub restart mid-backoff, a gateway
 /// that was down at activation). Rows already being worked on are skipped.
 pub(crate) fn reconcile_seats(st: &AppState) {
-    let rows = match st.workspaces.seats_needing_work(SEAT_MAX_ATTEMPTS) {
+    let rows = match st
+        .workspaces
+        .seats_needing_work(SEAT_MAX_ATTEMPTS, auto_seat_enabled(st))
+    {
         Ok(rows) => rows,
         Err(e) => {
             eprintln!("[llmgw] reconciler: {e}");
@@ -603,7 +642,7 @@ pub(crate) async fn api_admin_verify_seat(
     let Some(gw) = st.llmgw.clone() else {
         return Json(json!({"ok": false, "error": "gateway not configured"})).into_response();
     };
-    let Some(email) = st.workspaces.user_email(&user_id) else {
+    let Some(email) = st.workspaces.seat_key(&user_id) else {
         return api_error(StatusCode::NOT_FOUND, "user not found");
     };
     let seat = match gw.find_seat(&email).await {
@@ -676,4 +715,19 @@ fn string_list(value: Option<&Value>) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::auto_seat_wanted;
+
+    /// Seats are minted on a team join only on a self-hosted hub that runs
+    /// its own gateway; code.acme.test (internal) keeps «bring your own».
+    #[test]
+    fn auto_seat_only_for_an_external_hub_with_a_gateway() {
+        assert!(auto_seat_wanted(true, true));
+        assert!(!auto_seat_wanted(false, true), "internal edition");
+        assert!(!auto_seat_wanted(true, false), "no gateway configured");
+        assert!(!auto_seat_wanted(false, false));
+    }
 }

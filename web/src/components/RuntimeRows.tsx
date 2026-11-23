@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RuntimeJob, RuntimeStatus } from '@cc-remote/shared';
 import type { CentralState } from '../useCentral.js';
-import { claudeChip, claudeOff, codexChip, type RuntimeChip } from './runtimeChips.js';
+import { claudeChip, claudeOff, codexChip, codexSwitchError, showCodexSwitch, type RuntimeChip } from './runtimeChips.js';
 
 /**
  * One machine's two runtimes, each a row that is either a fact («Claude · Max
@@ -134,6 +134,60 @@ export function RuntimeRows({
     }
   };
 
+  // «Шлюз | Своя подписка» for Codex. The key is fetched at the moment of the
+  // switch and goes straight into the RPC; it is never kept in state.
+  const [gw, setGw] = useState<{ ok: boolean } | undefined>();
+  const [switching, setSwitching] = useState(false);
+  const switchOk = showCodexSwitch({
+    supported: machine?.machine.codexProviderSwitch,
+    online,
+    canControl: machine?.canControl !== false,
+    chatOnly: machine?.machine.policy?.chatOnly === true,
+    codexPresent: runtimes?.codex?.present,
+  });
+  useEffect(() => {
+    if (!switchOk) return;
+    let live = true;
+    fetch('/api/llm-access', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((a: { hasAccess?: boolean; apiKey?: string }) => live && setGw({ ok: a.hasAccess === true && !!a.apiKey }))
+      .catch(() => live && setGw({ ok: false }));
+    return () => {
+      live = false;
+    };
+  }, [switchOk]);
+
+  const switchProvider = async (mode: 'gateway' | 'own') => {
+    setSwitching(true);
+    setErrors((e) => ({ ...e, codex: undefined }));
+    try {
+      let apiKey: string | undefined;
+      let model: string | undefined;
+      let effort: string | undefined;
+      if (mode === 'gateway') {
+        const r = await fetch('/api/llm-access', { credentials: 'same-origin' });
+        if (!r.ok) throw new Error('Не удалось получить ключ шлюза');
+        const a = (await r.json()) as { hasAccess?: boolean; apiKey?: string; installerModel?: string; installerEffort?: string };
+        if (!a.hasAccess || !a.apiKey) throw new Error('У вас нет ключа шлюза');
+        apiKey = a.apiKey;
+        model = a.installerModel;
+        effort = a.installerEffort;
+      }
+      const res = await central.rpc<{ ok: boolean; error?: string }>(machineId, 'runtime.codex.provider', {
+        mode,
+        ...(apiKey ? { apiKey } : {}),
+        ...(model ? { model } : {}),
+        ...(effort ? { effort } : {}),
+      });
+      if (!res.ok) throw new Error(codexSwitchError(res.error));
+      baseline.current.codex = checkedAtOf(runtimes, 'codex');
+    } catch (err) {
+      setErrors((e) => ({ ...e, codex: (err as Error).message }));
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   const sendCode = async (runtime: Runtime) => {
     const j = jobs[runtime];
     const code = (codes[runtime] ?? '').trim();
@@ -198,6 +252,27 @@ export function RuntimeRows({
               {chip ? <span className={`rt-status ${chip.tone}`} title={chip.detail ?? chip.hint}>{chip.tone === 'attn' && <span className="rt-mark" />}{statusText(chip)}</span> : <span className="rt-status muted">нет данных</span>}
             </div>
             <div className="rt-actions">
+              {runtime === 'codex' && switchOk && canAct && job?.state !== 'running' && (
+                <span className="agent-pick" role="group" aria-label="Откуда Codex берёт модель">
+                  <button
+                    type="button"
+                    className={`agent-opt${runtimes.codex?.providerName === 'hegai' ? ' active' : ''}`}
+                    disabled={switching || gw?.ok !== true || (!!runtimes.codex?.providerName && runtimes.codex.providerName !== 'hegai')}
+                    title={gw?.ok === false ? 'Для вашего аккаунта нет ключа шлюза' : undefined}
+                    onClick={() => void switchProvider('gateway')}
+                  >
+                    Шлюз
+                  </button>
+                  <button
+                    type="button"
+                    className={`agent-opt${runtimes.codex?.providerName !== 'hegai' ? ' active' : ''}`}
+                    disabled={switching || runtimes.codex?.providerName !== 'hegai'}
+                    onClick={() => void switchProvider('own')}
+                  >
+                    Своя подписка
+                  </button>
+                </span>
+              )}
               {!canAct ? null : job?.state === 'running' ? (
                 <>
                   {job.url && /^https:\/\//i.test(job.url) && (

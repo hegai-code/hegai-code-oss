@@ -2063,6 +2063,11 @@ function errMessage(value: unknown): string {
  */
 let codexModels: ModelInfoLite[] | undefined;
 
+/** Forget the cached list: the provider changed, so the catalog may differ. */
+export function resetCodexModels(): void {
+  codexModels = undefined;
+}
+
 export async function listCodexModels(timeoutMs = 20_000): Promise<ModelInfoLite[]> {
   if (codexModels) return codexModels;
   try {

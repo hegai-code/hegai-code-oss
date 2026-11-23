@@ -337,6 +337,16 @@ export const RpcParams = {
   'runtime.login.cancel': z.object({ loginId: z.string() }),
   /** Where an install or login job stands. `id` is a `jobId` or a `loginId`. */
   'runtime.job.status': z.object({ id: z.string() }),
+  /** Point this machine's Codex at the Hegai gateway (`gateway`, with the
+   *  person's `sk-bf-` key; the base URL is the agent's own trusted one and is
+   *  never taken from here) or back to its own ChatGPT login (`own`). */
+  'runtime.codex.provider': z.object({
+    mode: z.enum(['gateway', 'own']),
+    apiKey: z.string().max(300).optional(),
+    /** Gateway default model / reasoning effort (the hub's installer values). */
+    model: z.string().max(64).optional(),
+    effort: z.string().max(16).optional(),
+  }),
 } as const;
 
 export type RpcMethod = keyof typeof RpcParams;
@@ -918,6 +928,12 @@ export const RpcResultSchemas = {
   'runtime.login.input': OkResultSchema,
   'runtime.login.cancel': OkResultSchema,
   'runtime.job.status': RuntimeJobSchema,
+  'runtime.codex.provider': z.object({
+    ok: z.boolean(),
+    provider: z.enum(['gateway', 'own']).optional(),
+    /** 'busy' | 'no_gateway' | 'bad_key' | 'custom_provider' | 'bad_model' | 'write_failed' */
+    error: z.string().optional(),
+  }),
 } satisfies Record<RpcMethod, z.ZodType>;
 
 export type RuntimeJob = z.infer<typeof RuntimeJobSchema>;
