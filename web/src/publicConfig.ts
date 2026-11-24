@@ -59,3 +59,14 @@ export function desktopAppsOffered(config: PublicConfig | null | undefined): boo
 export function isExternal(config: PublicConfig | null | undefined): boolean {
   return config?.edition === 'external';
 }
+
+/** The sidebar's wordmark, «hegai.code», for this hub's product name
+ *  (`CC_REMOTE_BRAND_NAME`): «Anomaly Code» → `{ head: 'anomaly', tail: 'code' }`,
+ *  «AI Surfers Code» → `aisurfers.code`. A name that does not end in «Code» is
+ *  shown as it is, with no tail. No config yet, or none at all, is ours. */
+export function brandWordmark(brandName: string | null | undefined): { head: string; tail?: string } {
+  const name = (brandName ?? '').trim() || 'Hegai Code';
+  const m = /^(.*?\S)[\s.]+code$/i.exec(name);
+  if (!m) return { head: name };
+  return { head: m[1].toLowerCase().replace(/\s+/g, ''), tail: 'code' };
+}

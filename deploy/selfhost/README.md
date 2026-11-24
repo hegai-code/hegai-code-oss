@@ -23,6 +23,12 @@ git clone <репозиторий> hegai-code && cd hegai-code/deploy/selfhost
 sudo ./install.sh code.example.com owner@example.com
 ```
 
+Название в интерфейсе (лого в боковой панели, вкладка, экран входа) установщик
+берёт из домена: `code.anomaly.ru` → «Anomaly Code», лого «anomaly.code» — и в
+терминале спрашивает, оставить ли (Enter — да). Своё — третьим аргументом:
+`sudo ./install.sh code.example.com owner@example.com "Example Code"`. Поменять
+потом — `CC_REMOTE_BRAND_NAME` в `.env` и `docker compose up -d`.
+
 `install.sh` делает всё по порядку и безопасно перезапускается: `init.sh`
 (`.env` с секретами), `docker compose up -d --build` (первая сборка — 10–20
 минут), `connect-host.sh` (этот сервер подключается сам, без кодов) и в конце

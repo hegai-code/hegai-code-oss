@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # Hegai Code на своём сервере — одной командой, от root:
 #
-#   sudo ./install.sh code.example.com owner@example.com
+#   sudo ./install.sh code.example.com owner@example.com ["Example Code"]
+#
+# Третий аргумент — название в интерфейсе (лого «example.code»); без него —
+# из домена, в терминале с вопросом «оставить?».
 #
 # 1. .env с секретами (init.sh; существующий .env не трогается);
 # 2. hub и Caddy в Docker (docker compose up -d --build, первый раз 10–20 минут);

@@ -34,3 +34,16 @@ test('only an answered external config switches the UI; no answer is the interna
   assert.equal(isExternal(PublicConfig.parse({ ...base, edition: 'internal' })), false);
   assert.equal(isExternal(PublicConfig.parse(base)), true);
 });
+
+test('the sidebar wordmark follows the hub brand name', async () => {
+  const { brandWordmark } = await import('../src/publicConfig.js');
+  assert.deepEqual(brandWordmark(undefined), { head: 'hegai', tail: 'code' });
+  assert.deepEqual(brandWordmark(null), { head: 'hegai', tail: 'code' });
+  assert.deepEqual(brandWordmark('  '), { head: 'hegai', tail: 'code' });
+  assert.deepEqual(brandWordmark('Hegai Code'), { head: 'hegai', tail: 'code' });
+  assert.deepEqual(brandWordmark('Anomaly Code'), { head: 'anomaly', tail: 'code' });
+  assert.deepEqual(brandWordmark('clientco.code'), { head: 'clientco', tail: 'code' });
+  assert.deepEqual(brandWordmark('AI Surfers Code'), { head: 'aisurfers', tail: 'code' });
+  assert.deepEqual(brandWordmark('Acme'), { head: 'Acme' });
+  assert.deepEqual(brandWordmark('Code'), { head: 'Code' });
+});

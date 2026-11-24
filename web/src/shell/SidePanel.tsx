@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type CSSProperties } from 'react';
 import { ArrowSquareOut, Bell, NotePencil, Search, X } from '../icons.js';
 import { ScopeSwitch } from './ScopeSwitch.js';
 import { OWN_WINDOW_FLAG, linkProps, pathFor } from '../router.js';
+import { brandWordmark } from '../publicConfig.js';
 import { ownWindowsSafe } from './useSessionMenu.js';
 import { PhotoOr } from '../components/Avatar.js';
 import type { CentralState } from '../useCentral.js';
@@ -54,6 +55,7 @@ export function SidePanel({
   unread = 0,
   notifOpen = false,
   onBell,
+  brandName,
 }: {
   central: CentralState;
   machines: CentralState['machines'];
@@ -90,7 +92,11 @@ export function SidePanel({
   onAddColumn?: ((machineId: string, sessionId: string) => void) | null;
   /** The account row at the bottom — see `PanelFoot`. */
   foot?: PanelFootProps;
+  /** This hub's product name (`/api/public-config`), drawn as the wordmark —
+   *  «Anomaly Code» reads «anomaly.code». Absent is ours, «hegai.code». */
+  brandName?: string;
 }) {
+  const wordmark = brandWordmark(brandName);
   const [query, setQuery] = useState('');
   const [searching, setSearching] = useState(false);
   // App hands a fresh `onNewSession` every render; the list below is memoised,
@@ -163,10 +169,14 @@ export function SidePanel({
           </label>
         ) : (
           <>
-            <a className="side-brand" {...linkProps({ kind: 'new' })} aria-label="Hegai Code, на главную">
-              <b>hegai</b>
-              <span className="side-brand-dot">.</span>
-              <span className="side-brand-code">code</span>
+            <a className="side-brand" {...linkProps({ kind: 'new' })} aria-label={`${brandName ?? 'Hegai Code'}, на главную`}>
+              <b>{wordmark.head}</b>
+              {wordmark.tail && (
+                <>
+                  <span className="side-brand-dot">.</span>
+                  <span className="side-brand-code">{wordmark.tail}</span>
+                </>
+              )}
             </a>
             <span className="spacer" />
             {onBell && (

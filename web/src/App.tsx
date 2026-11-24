@@ -1337,6 +1337,7 @@ function ControlPlaneApp() {
             onDrillChange={setProjDrilled}
             onSessionMenu={sessionMenu.open}
             viewerId={viewer?.userId}
+            brandName={publicConfig?.brandName}
             othersWork={othersWork}
             unread={c.unread}
             notifOpen={notifOpen}

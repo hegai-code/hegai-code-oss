@@ -36,7 +36,11 @@ if (new URLSearchParams(location.search).get('layout') === '1') {
 warmMarkdownWhenIdle();
 // Which edition this hub is and which ways in it offers: asked once, now, so the
 // sign-in screen already knows by the time `/api/me` says «signed out».
-void loadPublicConfig();
+// The tab is named after this hub's product (index.html says «Hegai Code») —
+// on every route, the sign-in and setup pages included.
+void loadPublicConfig().then((config) => {
+  if (config?.brandName) document.title = config.brandName;
+});
 
 /**
  * How much screen lies BELOW the viewport — normally nothing.

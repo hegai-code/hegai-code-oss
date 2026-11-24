@@ -67,14 +67,17 @@
 .sidepanel { background: var(--tint); }
 .side-top { display: flex; align-items: center; gap: 2px; margin: 10px 8px 8px 10px; min-width: 0; }
 /* «hegai.code» at the head of the panel — the iPhone drawer's wordmark
-   (`HegaiWordmark`): the name bold, the dot in colour, «code» quieter. */
+   (`HegaiWordmark`): the name bold, the dot in colour, «code» quieter. The
+   name is the hub's brand (`brandWordmark`), so a long one gives way with an
+   ellipsis before it pushes the bell and the search out of the panel. */
 .side-brand {
-  flex: 0 0 auto; display: flex; align-items: baseline; padding: 0 10px 0 4px; box-sizing: border-box;
+  flex: 0 1 auto; min-width: 0; display: flex; align-items: baseline; padding: 0 10px 0 4px; box-sizing: border-box;
   font: 400 var(--size-screen)/1.1 var(--title); letter-spacing: -0.5px;
   color: var(--text-muted); text-decoration: none;
 }
-.side-brand b { font-weight: 700; color: var(--text); }
-.side-brand-dot { font-weight: 700; color: var(--send); }
+.side-brand b { font-weight: 700; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-brand-dot { font-weight: 700; color: var(--send); flex: none; }
+.side-brand-code { flex: none; }
 .side-brand:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; border-radius: var(--radius-sm); }
 /* The head's two icons (bell, search) — ChatGPT's 32px quiet buttons. */
 .side-head-icon { width: 32px; height: 32px; flex: 0 0 auto; }
