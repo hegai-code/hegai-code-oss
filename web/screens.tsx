@@ -62,6 +62,7 @@ import { StartScreen } from './src/components/StartScreen.js';
 import { SideSheet } from './src/components/SideSheet.js';
 import { ChangesPanel } from './src/components/review/ChangesPanel.js';
 import { FileList } from './src/components/files/FileList.js';
+import { SaveStatusBar } from './src/components/files/SaveStatusBar.js';
 import { FileGrid } from './src/components/files/FileGrid.js';
 import { TeamAccess } from './src/TeamAccess.js';
 import { Board } from './src/components/board/Board.js';
@@ -863,8 +864,27 @@ const previewPeek: PeekFile = Object.assign(
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
     return { blob: new Blob([bytes], { type: 'image/png' }), truncated: false };
   },
-  { scope: 'fixture' },
+  { scope: 'fixture', window: () => async () => { throw new Error('fixture'); } },
 );
+
+const FILES_TEXT = [
+  'Трейлер собран: `output/trailer-final/anomalia-story.mp4`, отчёт лежит в output/report.pdf, а архив output/broken.zip не скачивается (сбой сокета в фикстуре).',
+].join('\n');
+const FILES_HISTORY: HistoryMessage[] = [
+  { type: 'user', uuid: 'v-u', ts: T0, blocks: [{ kind: 'text', text: 'собери трейлер и отчёт' }] },
+  { type: 'assistant', uuid: 'v-a', ts: T0 + 40_000, blocks: [{ kind: 'text', text: FILES_TEXT }] },
+];
+const FIXTURE_FILE_BYTES = 1500;
+const filesPeek: PeekFile = Object.assign(previewPeek, {
+  window: (path: string) => async (offset: number, length: number) => {
+    // The probe asks for one byte; a real download asks for a whole window.
+    if (/broken/.test(path) && length > 1) throw new Error('socket closed');
+    const bytes = Math.max(0, Math.min(length, FIXTURE_FILE_BYTES - offset));
+    return {
+      path, offset, data: btoa('x'.repeat(bytes)), bytes, size: FIXTURE_FILE_BYTES, mtime: 1, eof: offset + bytes >= FIXTURE_FILE_BYTES,
+    };
+  },
+});
 
 const ENRICHED = (
   <EnrichStrip
@@ -1591,6 +1611,78 @@ function SettingsFrame({ tab, children }: { tab: SettingsTab; children: React.Re
   Element.prototype.setAttribute = function (name: string, value: string) {
     return attr.call(this, name, name === 'src' && value === '/app/qr.svg' ? qr : value);
   };
+}
+
+function filesScreen(bar: React.ReactNode): React.ReactElement {
+  return (
+
+    <div className="files">
+      <div className="files-bar">
+        <nav className="fcrumbs">
+          <a className="fcrumb" href="#">Все машины</a>
+          <span className="fcrumb-sep">/</span>
+          <a className="fcrumb" href="#">claudehegai</a>
+          <span className="fcrumb-sep">/</span>
+          <a className="fcrumb" href="#">web</a>
+          <span className="fcrumb-sep">/</span>
+          <a className="fcrumb" href="#">src</a>
+        </nav>
+      </div>
+      {bar}
+      <div className="files-panes">
+        <nav className="ftree">
+          {['claudehegai', 'agent', 'server-rs', 'web', 'shared'].map((n, i) => (
+            <div key={n} className={`ftree-row${i === 3 ? ' active' : ''}`} style={{ paddingLeft: i === 0 ? 8 : 20 }}>
+              <span className="tw">{i === 0 || i === 3 ? '▾' : '▸'}</span>
+              <span className="ftree-name">{n}</span>
+            </div>
+          ))}
+        </nav>
+        <main className="files-main">
+          <FileList
+            entries={FILE_ENTRIES}
+            truncated
+            total={41522}
+            selected={new Set(['lib.ts'])}
+            active={5}
+            sort={{ key: 'name', dir: 1 }}
+            renaming={null}
+            canWrite
+            onSort={() => {}}
+            onOpen={() => {}}
+            onSelect={() => {}}
+            onActivate={() => {}}
+            onKeyNav={() => {}}
+            onDragFiles={(e) => [e.name]}
+            onMoveInto={() => {}}
+            onDropUpload={() => {}}
+            onRenameCommit={() => {}}
+            onRenameCancel={() => {}}
+            onSpring={() => {}}
+            actions={[
+              { label: 'Скачать', run: () => {} },
+              { label: 'Переименовать', run: () => {} },
+              { label: 'Удалить', run: () => {}, danger: true },
+            ]}
+            emptyHint="Перетащите файлы сюда"
+          />
+          <div className="files-up">
+            <div className="files-up-row sending">
+              <span className="files-up-name">logo@2x.png</span>
+              <span className="files-up-size">1.2 MB</span>
+              <span className="barrow-track"><span className="files-up-fill" style={{ width: '62%' }} /></span>
+            </div>
+            <div className="files-up-row failed">
+              <span className="files-up-name">архив проекта.zip</span>
+              <span className="files-up-size">240 MB</span>
+              <span className="files-up-err">слишком большой — используйте git или scp</span>
+              <button type="button" className="ghost">Повторить</button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
 }
 
 const SCREENS: Record<string, () => React.ReactElement> = {
@@ -2322,6 +2414,23 @@ const SCREENS: Record<string, () => React.ReactElement> = {
       </div>
     </FilePeekContext.Provider>
   ),
+  fileChips: () => (
+    <FilePeekContext.Provider value={filesPeek}>
+      <div className="chat">
+        <div className="log">
+          <div className="log-inner">
+            {groupHistory(FILES_HISTORY).map((it) =>
+              it.kind === 'msg' ? (
+                <MessageView key={it.id} msg={it.msg} cont={it.cont} showStamp={it.showStamp} runBefore={it.runBefore} runAfter={it.runAfter} />
+              ) : (
+                <ToolRunRow key={it.id} blocks={it.blocks} />
+              ),
+            )}
+          </div>
+        </div>
+      </div>
+    </FilePeekContext.Provider>
+  ),
   enrich: () => (
     // A stub for the session's fetch: one tiny inline PNG, so the attachment
     // path renders end to end here without a hub, a machine or a transcript.
@@ -2335,73 +2444,10 @@ const SCREENS: Record<string, () => React.ReactElement> = {
    * states — a truncated directory, a failed upload — are the ones a real
    * machine will not produce on demand.
    */
-  files: () => (
-    <div className="files">
-      <div className="files-bar">
-        <nav className="fcrumbs">
-          <a className="fcrumb" href="#">Все машины</a>
-          <span className="fcrumb-sep">/</span>
-          <a className="fcrumb" href="#">claudehegai</a>
-          <span className="fcrumb-sep">/</span>
-          <a className="fcrumb" href="#">web</a>
-          <span className="fcrumb-sep">/</span>
-          <a className="fcrumb" href="#">src</a>
-        </nav>
-      </div>
-      <div className="files-panes">
-        <nav className="ftree">
-          {['claudehegai', 'agent', 'server-rs', 'web', 'shared'].map((n, i) => (
-            <div key={n} className={`ftree-row${i === 3 ? ' active' : ''}`} style={{ paddingLeft: i === 0 ? 8 : 20 }}>
-              <span className="tw">{i === 0 || i === 3 ? '▾' : '▸'}</span>
-              <span className="ftree-name">{n}</span>
-            </div>
-          ))}
-        </nav>
-        <main className="files-main">
-          <FileList
-            entries={FILE_ENTRIES}
-            truncated
-            total={41522}
-            selected={new Set(['lib.ts'])}
-            active={5}
-            sort={{ key: 'name', dir: 1 }}
-            renaming={null}
-            canWrite
-            onSort={() => {}}
-            onOpen={() => {}}
-            onSelect={() => {}}
-            onActivate={() => {}}
-            onKeyNav={() => {}}
-            onDragFiles={(e) => [e.name]}
-            onMoveInto={() => {}}
-            onDropUpload={() => {}}
-            onRenameCommit={() => {}}
-            onRenameCancel={() => {}}
-            onSpring={() => {}}
-            actions={[
-              { label: 'Скачать', run: () => {} },
-              { label: 'Переименовать', run: () => {} },
-              { label: 'Удалить', run: () => {}, danger: true },
-            ]}
-            emptyHint="Перетащите файлы сюда"
-          />
-          <div className="files-up">
-            <div className="files-up-row sending">
-              <span className="files-up-name">logo@2x.png</span>
-              <span className="files-up-size">1.2 MB</span>
-              <span className="barrow-track"><span className="files-up-fill" style={{ width: '62%' }} /></span>
-            </div>
-            <div className="files-up-row failed">
-              <span className="files-up-name">архив проекта.zip</span>
-              <span className="files-up-size">240 MB</span>
-              <span className="files-up-err">слишком большой — используйте git или scp</span>
-              <button type="button" className="ghost">Повторить</button>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  ),
+  files: () => filesScreen(null),
+  filesDownloading: () => filesScreen(<SaveStatusBar state={{ phase: 'loading', name: 'anomalia-story.mp4', pct: 45 }} onSave={() => {}} onDismiss={() => {}} />),
+  filesReady: () => filesScreen(<SaveStatusBar state={{ phase: 'ready', name: 'anomalia-story.mp4', blob: new Blob() }} onSave={() => {}} onDismiss={() => {}} />),
+  filesError: () => filesScreen(<SaveStatusBar state={{ phase: 'error', name: 'anomalia-story.mp4', message: 'socket closed' }} onSave={() => {}} onDismiss={() => {}} />),
   /** The icon view — Finder's default, and the reason a folder of photos reads
    *  as photos rather than as rows of paths. */
   'files-grid': () => (

@@ -1642,11 +1642,38 @@ fn a_client_attaching_mid_turn_is_shown_the_turn_so_far() {
     };
 
     hub.on_agent_msg(AGENT_CONN, stream("tool_use", "Read README.md"));
+    hub.on_ui_msg(
+        UI_CONN,
+        json!({"type":"input","runId":run_id,"text":"и ещё вот это"}),
+    );
     hub.on_agent_msg(AGENT_CONN, stream("assistant", "первый кусок"));
     drain(&mut ui_rx); // the client that started the run already saw both
 
     hub.on_ui_msg(UI_CONN, json!({"type":"subscribe","runId":run_id}));
-    let replayed: Vec<String> = drain(&mut ui_rx)
+    let frames = drain(&mut ui_rx);
+    // The ack says how many replay frames follow — the turn's stream and the
+    // person's words in it — and they follow back to back: a phone holds the
+    // replay off screen until exactly that many arrived.
+    let opened = frames
+        .iter()
+        .position(|m| m["type"] == "opened")
+        .expect("subscribe is acked");
+    let is_replay = |m: &Value| m["type"] == "stream" || m["type"] == "user_turn";
+    let first = frames.iter().position(is_replay).expect("a backlog");
+    let count = frames[first..].iter().take_while(|m| is_replay(m)).count();
+    assert!(
+        frames[opened + 1..first].iter().all(|m| !is_replay(m)),
+        "only settings sit between the ack and the backlog"
+    );
+    assert!(
+        frames[first..first + count]
+            .iter()
+            .any(|m| m["type"] == "user_turn"),
+        "the person's message mid-turn is part of the backlog"
+    );
+    assert_eq!(frames[opened]["backlog"], json!(count));
+    assert_eq!(count, 3);
+    let replayed: Vec<String> = frames
         .into_iter()
         .filter(|m| m["type"] == "stream")
         .map(|m| m["event"]["text"].as_str().unwrap_or_default().to_string())
@@ -1656,6 +1683,20 @@ fn a_client_attaching_mid_turn_is_shown_the_turn_so_far() {
         vec!["Read README.md".to_string(), "первый кусок".to_string()],
         "a late subscriber must receive the turn's frames, in order",
     );
+
+    // A backgrounded window that still takes acks gets the ack but not the
+    // backlog (its gate drops it) — so the ack must not promise any.
+    hub.on_ui_msg(UI_CONN, json!({"type":"pause","acks":true}));
+    hub.on_ui_msg(UI_CONN, json!({"type":"subscribe","runId":run_id}));
+    let paused = drain(&mut ui_rx);
+    let ack = paused
+        .iter()
+        .find(|m| m["type"] == "opened")
+        .expect("acked while paused");
+    assert_eq!(ack["backlog"], json!(0));
+    assert!(!paused.iter().any(|m| m["type"] == "stream"));
+    hub.on_ui_msg(UI_CONN, json!({"type":"resume"}));
+    drain(&mut ui_rx);
 
     // Once the turn lands the transcript is the record — replaying it again
     // would double what the client reads from disk.

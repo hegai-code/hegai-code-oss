@@ -37,6 +37,7 @@ export function FilePreview({
   readImage,
   onClose,
   onDownload,
+  downloading,
   sendSlot,
   compact,
   ready,
@@ -50,6 +51,8 @@ export function FilePreview({
   readImage: (rel: string) => Promise<string>;
   onClose: () => void;
   onDownload: () => void;
+  /** A download is already running — the button waits, the status line says why. */
+  downloading?: boolean;
   /** The «в сессию» control. Passed in rather than built here so the preview
    *  stays a viewer and does not need to know about machines or sessions. */
   sendSlot?: ReactNode;
@@ -150,7 +153,7 @@ export function FilePreview({
       </header>
 
       <div className="files-prev-actions">
-        <button type="button" className="ghost" onClick={onDownload}>
+        <button type="button" className="ghost" disabled={downloading} onClick={onDownload}>
           <DownloadIcon size={14} /> Скачать
         </button>
         {sendSlot}
@@ -178,7 +181,7 @@ export function FilePreview({
             {body.truncated ? (
               <div className="files-trunc">
                 Показаны первые 512 КБ
-                <button type="button" className="ghost" onClick={onDownload}>
+                <button type="button" className="ghost" disabled={downloading} onClick={onDownload}>
                   Скачать целиком
                 </button>
               </div>

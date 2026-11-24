@@ -57,7 +57,9 @@ public enum HubMessage: Decodable, Sendable {
     /// Answer to `enrich_request`. `ok:false` carries `error` and no enrichment;
     /// "enrichment not configured" is terminal — the client stops asking.
     case enrichResult(requestId: String, ok: Bool, enrichment: Enrichment?, error: String?)
-    case opened(runId: String, machineId: String, sessionId: String)
+    /// `backlog`: on a subscribe ack, how many `stream` frames of the turn
+    /// follow back to back (server-rs/src/hub.rs); nil from older hubs.
+    case opened(runId: String, machineId: String, sessionId: String, backlog: Int?)
     case sessionStarted(runId: String, sessionId: String)
     case stream(runId: String, sessionId: String, event: StreamEvent)
     case userTurn(runId: String, sessionId: String?, turnId: String, text: String,
@@ -101,6 +103,7 @@ public enum HubMessage: Decodable, Sendable {
         case totalTokens, maxTokens, percentage, autoCompactThreshold, autoCompactEnabled
         case model, activeModel, effort, ultracode
         case turnId, text, truncated, images, files, reads, at, completions
+        case backlog
     }
 
     public init(from decoder: Decoder) throws {
@@ -169,7 +172,8 @@ public enum HubMessage: Decodable, Sendable {
                 error: try? c.decode(String.self, forKey: .error)
             )
         case "opened":
-            self = .opened(runId: s(.runId), machineId: s(.machineId), sessionId: s(.sessionId))
+            self = .opened(runId: s(.runId), machineId: s(.machineId), sessionId: s(.sessionId),
+                           backlog: try? c.decodeIfPresent(Int.self, forKey: .backlog))
         case "session_started":
             self = .sessionStarted(runId: s(.runId), sessionId: s(.sessionId))
         case "stream":

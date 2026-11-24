@@ -92,3 +92,25 @@ test('bridging needs a whole rooted word and exactly one space', () => {
   assert.deepEqual(findPreviewPaths('`//host/a b.png`'), []);
   assert.deepEqual(findPreviewPaths('Скрин C:\\Users\\John Doe\\shot.png'), ['C:\\Users\\John Doe\\shot.png']);
 });
+
+test('findFilePaths: videos, pdfs and archives with a slash; pictures are previews', async () => {
+  const { findFilePaths, isVideoPath } = await import('../src/render/filePaths.js');
+  const t = 'Готово: output/trailer-final/anomalia-story.mp4, отчёт `/srv/x/out/report.pdf` и скрин shots/a.png. Ещё README.md и notes.txt';
+  assert.deepEqual(findFilePaths(t), ['output/trailer-final/anomalia-story.mp4', '/srv/x/out/report.pdf']);
+  assert.deepEqual(findPreviewPaths(t), ['shots/a.png']);
+  assert.equal(isVideoPath('a/b.MP4'), true);
+  assert.equal(isVideoPath('a/b.pdf'), false);
+});
+
+test('findFilePaths: urls and bare names are not workspace files', async () => {
+  const { findFilePaths } = await import('../src/render/filePaths.js');
+  assert.deepEqual(findFilePaths('см. https://x.com/a/b.mp4 и video.mp4'), []);
+});
+
+test('isMissingFileError: only a missing file or directory hides the chip', async () => {
+  const { isMissingFileError } = await import('../src/render/filePaths.js');
+  assert.equal(isMissingFileError(new Error("ENOENT: no such file or directory, open 'x'")), true);
+  assert.equal(isMissingFileError(new Error('path is a directory')), true);
+  assert.equal(isMissingFileError(new Error('socket closed')), false);
+  assert.equal(isMissingFileError(new Error('timeout')), false);
+});

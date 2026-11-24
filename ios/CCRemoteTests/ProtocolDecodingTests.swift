@@ -115,8 +115,12 @@ final class ProtocolDecodingTests: XCTestCase {
 
     func testOpened() throws {
         let json = #"{"type":"opened","runId":"r","machineId":"m","sessionId":"s"}"#
-        guard case let .opened(runId, _, _) = try decode(json) else { return XCTFail() }
+        guard case let .opened(runId, _, _, backlog) = try decode(json) else { return XCTFail() }
         XCTAssertEqual(runId, "r")
+        XCTAssertNil(backlog)
+        let counted = #"{"type":"opened","runId":"r","machineId":"m","sessionId":"s","backlog":3}"#
+        guard case let .opened(_, _, _, count) = try decode(counted) else { return XCTFail() }
+        XCTAssertEqual(count, 3)
     }
 
     func testStreamPartial() throws {

@@ -374,4 +374,70 @@ final class ClientLifecycleTests: XCTestCase {
         await fulfillment(of: [liveUpdate], timeout: 1)
         XCTAssertEqual(h.client.lines.last?.text, "Read 6")
     }
+
+    /// A long turn's backlog is up to 400 frames / 256 KB (server-rs/src/hub.rs).
+    /// On a phone it does not land in one burst: the radio trickles it, and the
+    /// main actor is busy laying out the history that is opening at the same
+    /// time. Frames that arrive later than `replayMaxHold`, or after a pause
+    /// longer than `replayQuietGap`, must still join the one write — otherwise
+    /// the rest of the turn is "retyped" frame by frame and every frame redraws
+    /// the whole transcript (23.11.2026: «печатает много текста, подвисает»).
+    func testSlowTurnReplayIsStillPublishedInOneStep() async throws {
+        let h = ClientHarness()
+        defer { h.clean() }
+        await h.connect()
+        let socket = h.sockets[0]
+        socket.feed(#"{"type":"snapshot","machines":[{"machine":{"machineId":"m","name":"M","os":"mac","agentVersion":"1"},"online":true,"lastSeen":1,"sessions":[{"sessionId":"s","title":"S","cwd":"/p","lastModified":1}]}],"activeRuns":[{"runId":"r","machineId":"m","sessionId":"s","state":"working","since":1}]}"#)
+        for _ in 0..<100 where h.client.activeRuns.isEmpty { await h.settle() }
+        h.client.focusSession(machineId: "m", sessionId: "s")
+        await h.settle()
+        var writes = 0
+        func observe() {
+            withObservationTracking { _ = h.client.lines } onChange: {
+                Task { @MainActor in writes += 1; observe() }
+            }
+        }
+        observe()
+        let frames = 12
+        // The hub counts the person's `user_turn` in its window too.
+        socket.feed(#"{"type":"opened","runId":"r","machineId":"m","sessionId":"s","backlog":\#(frames + 1)}"#)
+        socket.feed(#"{"type":"run_settings","runId":"r","sessionId":"s","model":"opus"}"#)
+        socket.feed(#"{"type":"user_turn","runId":"r","sessionId":"s","turnId":"t1","text":"Посмотри","ts":1}"#)
+        let stream = { (event: String) in #"{"type":"stream","runId":"r","sessionId":"s","event":"# + event + "}" }
+        for n in 1...frames {
+            socket.feed(stream(#"{"kind":"tool_use","text":"Read \#(n)"}"#))
+            await h.settle()
+            // One radio stall past the quiet gap, the rest a steady trickle
+            // that outlasts the hold: 1.0 s in all.
+            try await Task.sleep(for: .seconds(n == 3 ? CentralClient.replayQuietGap * 2 : 0.07))
+            await h.settle()
+        }
+        try await Task.sleep(for: .seconds(CentralClient.replayQuietGap * 2))
+        await h.settle()
+        XCTAssertEqual(h.client.lines.map(\.text), ["Посмотри"] + (1...frames).map { "Read \($0)" })
+        XCTAssertEqual(writes, 1, "the backlog reached the screen in \(writes) writes")
+    }
+
+    /// A counted backlog with a frame that never comes (undecodable, or sealed
+    /// and unreadable) must not hold the turn off screen for good.
+    func testCountedReplayMissingAFrameIsPublishedAfterAStall() async throws {
+        let h = ClientHarness()
+        defer { h.clean() }
+        await h.connect()
+        let socket = h.sockets[0]
+        socket.feed(#"{"type":"snapshot","machines":[{"machine":{"machineId":"m","name":"M","os":"mac","agentVersion":"1"},"online":true,"lastSeen":1,"sessions":[{"sessionId":"s","title":"S","cwd":"/p","lastModified":1}]}],"activeRuns":[{"runId":"r","machineId":"m","sessionId":"s","state":"working","since":1}]}"#)
+        for _ in 0..<100 where h.client.activeRuns.isEmpty { await h.settle() }
+        h.client.focusSession(machineId: "m", sessionId: "s")
+        await h.settle()
+        socket.feed(#"{"type":"opened","runId":"r","machineId":"m","sessionId":"s","backlog":3}"#)
+        let stream = { (event: String) in #"{"type":"stream","runId":"r","sessionId":"s","event":"# + event + "}" }
+        socket.feed(stream(#"{"kind":"tool_use","text":"Read 1"}"#))
+        socket.feed(stream(#"{"kind":"tool_use","text":"Read 2"}"#))
+        try await Task.sleep(for: .seconds(CentralClient.replayMaxHold + 0.2))
+        await h.settle()
+        XCTAssertEqual(h.client.lines.count, 0, "published before the stall gap")
+        try await Task.sleep(for: .seconds(CentralClient.replayStallGap))
+        await h.settle()
+        XCTAssertEqual(h.client.lines.map(\.text), ["Read 1", "Read 2"])
+    }
 }

@@ -96,12 +96,27 @@ public final class CentralClient {
     /// ⚙ counter climbed again from 1, and the constant height changes left the
     /// session open mid-scroll instead of at the bottom. It is published in one
     /// write at the first quiet gap, or after `replayMaxHold` at the latest.
+    ///
+    /// A hub that says how many frames follow (`opened.backlog`) is waited out
+    /// to the last one instead: a long turn's backlog is up to 256 KB, and over
+    /// a radio — with the main actor busy laying out the history opening at the
+    /// same time — it outran both timers, so everything after them was again
+    /// written frame by frame (23.11.2026).
     private struct ReplayStage {
         let runId: String
         var lines: [TranscriptLine]
         var echoes: [TranscriptLine]
         var pendingEchoIDs: Set<Int>
         let started: Date
+        /// Replay frames the hub announced (`stream` and `user_turn`); nil
+        /// from a hub that does not count.
+        var expected: Int? = nil
+        /// Replay frames of this run handled since the stage opened.
+        var received = 0
+        /// When the last of them came. The stall is measured from here, not
+        /// from the last frame of any kind: a terminal, a mirror or the fleet
+        /// keep the socket busy and would push a stall back for good.
+        var lastProgress = Date()
     }
     @ObservationIgnored private var replayStage: ReplayStage?
     /// The live lines of sessions left in the middle of a turn, by
@@ -123,6 +138,9 @@ public final class CentralClient {
     @ObservationIgnored private var replayCommit: Task<Void, Never>?
     static let replayQuietGap: TimeInterval = 0.08
     static let replayMaxHold: TimeInterval = 0.5
+    /// With a counted backlog: no frame for this long means one was lost on
+    /// the way (undecodable, or sealed and unreadable) — publish what came.
+    static let replayStallGap: TimeInterval = 1.5
     public private(set) var active: ActiveRun? {
         didSet {
             if let change = modelChange,
@@ -1799,8 +1817,14 @@ public final class CentralClient {
     private func scheduleReplayCommit() {
         replayCommit?.cancel()
         guard let stage = replayStage else { return }
-        let left = Self.replayMaxHold - Date().timeIntervalSince(stage.started)
-        let delay = max(0, min(Self.replayQuietGap, left))
+        let delay: TimeInterval
+        if let expected = stage.expected {
+            delay = stage.received >= expected ? 0
+                : max(0, Self.replayStallGap - Date().timeIntervalSince(stage.lastProgress))
+        } else {
+            let left = Self.replayMaxHold - Date().timeIntervalSince(stage.started)
+            delay = max(0, min(Self.replayQuietGap, left))
+        }
         replayCommit = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled else { return }
@@ -1857,6 +1881,17 @@ public final class CentralClient {
         // `run_mode` / `run_settings` come between `opened` and the backlog
         // (server-rs/src/hub.rs) and never touch `lines`, so they do not end it.
         if let stage = replayStage, !keepsReplayStage(msg, stage) { commitReplay() }
+        // What the hub counted in `opened.backlog`: its replay window holds the
+        // turn's stream frames and the person's `user_turn`s.
+        let replayRun: String? = switch msg {
+        case let .stream(runId, _, _): runId
+        case let .userTurn(runId, _, _, _, _, _, _, _): runId
+        default: nil
+        }
+        if let run = replayRun, run == replayStage?.runId {
+            replayStage!.received += 1
+            replayStage!.lastProgress = Date()
+        }
         switch msg {
         case let .snapshot(machines, activeRuns, roadmap, viewer):
             if let viewer {
@@ -2026,7 +2061,7 @@ public final class CentralClient {
                 if runtimes.claudeOff { $0.usage = nil }
             }
 
-        case let .opened(runId, machineId, sessionId):
+        case let .opened(runId, machineId, sessionId, backlog):
             // The answer to an open must name the machine this phone asked; one that
             // names another is the hub's doing. Only matters (and is only dropped)
             // when a private machine is involved.
@@ -2061,7 +2096,8 @@ public final class CentralClient {
                     // whole replay replaces them in one step.
                     replayStage = ReplayStage(runId: runId, lines: [],
                                               echoes: lines.filter { $0.kind == .user },
-                                              pendingEchoIDs: Set(Self.keepUnansweredTail(lines).map(\.id)), started: Date())
+                                              pendingEchoIDs: Set(Self.keepUnansweredTail(lines).map(\.id)), started: Date(),
+                                              expected: backlog)
                     scheduleReplayCommit()
                 }
             } else {

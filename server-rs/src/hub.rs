@@ -4846,6 +4846,9 @@ impl Hub {
                     .get(&run_id)
                     .map(|run| self.tool_approval_ttl_ms(&run.machine_id))
                     .unwrap_or(TOOL_APPROVAL_TTL_MS_DEFAULT);
+                // A paused conn's gate drops the backlog (`send_to`), so the ack
+                // must not announce frames that will never come.
+                let backlog_gated = self.pause_gate_blocks(conn, "stream");
                 if let Some(run) = self.runs.get_mut(&run_id) {
                     run.browsers.insert(conn);
                     // An approval the agent has already timed out is not a prompt
@@ -4894,6 +4897,7 @@ impl Hub {
                     // showing work in progress rather than nothing. Empty once the
                     // turn ends — from then on the transcript on disk is the record.
                     let backlog: Vec<Value> = run.replay.iter().cloned().collect();
+                    let backlog_len = if backlog_gated { 0 } else { backlog.len() };
                     // What the run is actually set to. The agent announces these
                     // once, when the runtime tells it, so without the replay a
                     // client that joins later shows its own composer defaults for
@@ -4918,9 +4922,17 @@ impl Hub {
                             "event": {"kind": "status", "code": "compact_started", "text": "compacting context… (queued behind the current turn)"},
                         })
                     });
+                    // `backlog` = how many replay frames (`stream` and
+                    // `user_turn`) follow the settings, back to back on this
+                    // socket; none for a paused conn, whose gate drops them. A phone stages the
+                    // replay off screen and publishes it in one write; knowing the
+                    // count it no longer has to guess the end from a timer, which a
+                    // 256 KB backlog over a radio outran — the rest of the turn then
+                    // landed frame by frame, "retyped" and froze the screen
+                    // (23.11.2026). Optional: older clients ignore it.
                     self.send_to(
                         conn,
-                        &json!({"type":"opened","runId":run_id,"machineId":m,"sessionId":s}),
+                        &json!({"type":"opened","runId":run_id,"machineId":m,"sessionId":s,"backlog":backlog_len}),
                     );
                     for frame in settings {
                         self.send_to(conn, &frame);

@@ -92,7 +92,7 @@ export interface FilesApi {
   reload: () => void;
   list: (rel: string) => Promise<FsListResult>;
   read: (rel: string) => Promise<{ content: string; truncated: boolean }>;
-  download: (rel: string, name: string) => Promise<void>;
+  download: (rel: string, onProgress?: (loaded: number, total: number) => void) => Promise<Blob>;
   readObjectUrl: (rel: string, maxBytes: number) => Promise<string>;
   mkdir: (rel: string) => Promise<void>;
   rename: (from: string, to: string) => Promise<void>;
@@ -211,24 +211,20 @@ export function useFiles(
 
   /** One file as a Blob — the loop and its guards live in `pullBytes`. */
   const fetchBytes = useCallback(
-    (target: string, maxBytes: number): Promise<Blob> =>
+    (target: string, maxBytes: number, onProgress?: (loaded: number, total: number) => void): Promise<Blob> =>
       pullBytes(
         (offset, length) => call<FsDownloadResult>('fs.download', { path: target, offset, length }),
         maxBytes,
+        onProgress,
       ),
     [call],
   );
 
+  /** The file's bytes, with progress. Saving is the caller's job: it happens
+   *  from a user gesture (`saveFile.ts`), which this await has long outlived. */
   const download = useCallback(
-    async (target: string, name: string) => {
-      const blob = await fetchBytes(target, MAX_DOWNLOAD_BYTES);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(url);
-    },
+    (target: string, onProgress?: (loaded: number, total: number) => void): Promise<Blob> =>
+      fetchBytes(target, MAX_DOWNLOAD_BYTES, onProgress),
     [fetchBytes],
   );
 

@@ -1212,6 +1212,9 @@ const Opened = z.object({
   runId: z.string(),
   machineId: z.string(),
   sessionId: z.string(),
+  /** On a subscribe ack: how many replay frames (`stream`, `user_turn`) of
+   *  the turn follow back to back. iOS stages the replay until it has them all. */
+  backlog: z.number().int().nonnegative().optional(),
 });
 
 // A new_session run's real session id, once the SDK mints it (browser replaces

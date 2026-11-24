@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowSquareOut, DownloadIcon, ImageIcon } from '../icons.js';
+import { anchorDownload, saveBlob } from '../saveFile.js';
 import { dataUrlToBlob } from './imageGen.js';
 
 /** Fetch one attachment's bytes by the `ref` its history block carried.
@@ -126,7 +127,19 @@ export function peekImage(fetchAttachment: FetchAttachment | null | undefined, r
  * The picture is the dialog, with two actions beside it: open it in a tab of
  * its own (where the browser's own zoom works) and save it. Esc and a click
  * outside still close it. */
-export function ImageLightbox({ url, name, onClose }: { url: string; name?: string; onClose: () => void }) {
+export function ImageLightbox({
+  url,
+  name,
+  blob,
+  onClose,
+}: {
+  url: string;
+  name?: string;
+  /** The picture's bytes when the caller has them: saving then shares or
+   *  downloads a real Blob instead of re-deriving one from the URL. */
+  blob?: Blob;
+  onClose: () => void;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -149,14 +162,16 @@ export function ImageLightbox({ url, name, onClose }: { url: string; name?: stri
     if (u) window.open(u, '_blank', 'noopener');
   };
   const save = () => {
+    const b = blob ?? (url.startsWith('data:') ? dataUrlToBlob(url) : null);
+    if (b) {
+      void saveBlob(b, name || 'image.png');
+      return;
+    }
     const u = blobUrl();
     if (!u) return;
-    const a = document.createElement('a');
-    a.href = u;
-    a.download = name || 'image.png';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    // Synchronous inside the tap, so a share sheet is allowed; `blobUrl`
+    // already revokes late.
+    anchorDownload(u, name || 'image.png');
   };
 
   return createPortal(

@@ -3,11 +3,13 @@ import { createPortal } from 'react-dom';
 import { FS_PEEK_MAX_BYTES, type FsDownloadResult } from '@cc-remote/shared';
 import { pullBytes, pullHead } from '../components/files/pullBytes.js';
 import { SideSheet } from '../components/SideSheet.js';
-import { FileImage, FileMd } from '../icons.js';
+import { DownloadIcon, FileIcon, FileImage, FileMd } from '../icons.js';
 import type { useCentral } from '../useCentral.js';
 import { ImageLightbox } from './Attachment.js';
 import { Md } from './Blocks.js';
-import { fileName, findPreviewPaths, isAbsolutePath, isMarkdownPath } from './filePaths.js';
+import { mimeForName, withMime } from '../saveFile.js';
+import { useFileSave, saveStatusText } from '../useFileSave.js';
+import { fileName, findFilePaths, findPreviewPaths, isAbsolutePath, isMissingFileError, isMarkdownPath, isVideoPath } from './filePaths.js';
 
 /**
  * Previews of the files an answer names — a screenshot's path on its last line,
@@ -29,6 +31,9 @@ export type PeekFile = ((
   /** Whose files these are — machine and folder. A relative path means nothing
    *  without it, so the shared cache is keyed by it. */
   scope: string;
+  /** `fs.download` windows for any file inside the folder — the chat's file
+   *  chips (video, pdf…) use it; `fs.peek` refuses those extensions. */
+  window: (path: string) => (offset: number, length: number) => Promise<FsDownloadResult>;
 };
 
 export const FilePeekContext = createContext<PeekFile | null>(null);
@@ -43,9 +48,22 @@ export function makeFilePeek(rpc: ReturnType<typeof useCentral>['rpc'], machineI
       clip
         ? pullHead(read(path), maxBytes)
         : pullBytes(read(path), maxBytes).then((blob) => ({ blob, truncated: false })),
-    { scope: `${machineId}\u0000${cwd}` },
+    {
+      scope: `${machineId}\u0000${cwd}`,
+      window: (path: string) => (offset: number, length: number) =>
+        rpc<FsDownloadResult>(machineId, 'fs.download', { cwd, path, offset, length }, true),
+    },
   );
 }
+
+/** File chips under one answer at most. */
+const MAX_FILE_LINKS = 6;
+/** The largest file the chat saves or plays — what `fs.download` allows in the
+ *  file panel. */
+const LINK_MAX_BYTES = 64 * 1024 * 1024;
+/** A video is played in the transcript only up to this size: it is held in
+ *  memory as a Blob, and a phone tab does not survive much more. */
+const VIDEO_PLAY_MAX_BYTES = 48 * 1024 * 1024;
 
 /** Markdown read in the sheet: the head of the file, no more. */
 const MD_CAP_BYTES = 512 * 1024;
@@ -160,11 +178,15 @@ function useObjectUrl(blob: Blob | null): string | null {
 export const FilePreviews = memo(function FilePreviews({ text }: { text: string }) {
   const peek = useContext(FilePeekContext);
   const paths = useMemo(() => (peek ? findPreviewPaths(text) : []), [peek, text]);
-  if (!peek || paths.length === 0) return null;
+  const files = useMemo(() => (peek ? findFilePaths(text).slice(0, MAX_FILE_LINKS) : []), [peek, text]);
+  if (!peek || (paths.length === 0 && files.length === 0)) return null;
   return (
     <div className="fp-strip">
       {paths.map((p) => (
         <FilePreview key={`${peek.scope}\u0000${p}`} peek={peek} path={p} />
+      ))}
+      {files.map((p) => (
+        <FileLink key={`${peek.scope}\u0000${p}`} peek={peek} path={p} />
       ))}
     </div>
   );
@@ -287,7 +309,7 @@ function FilePreview({ peek, path }: { peek: PeekFile; path: string }) {
   return (
     <div className={md ? 'fp-item' : 'fp-item img'} ref={holder}>
       {body}
-      {open && !md && url && <ImageLightbox url={url} name={name} onClose={() => setOpen(false)} />}
+      {open && !md && url && <ImageLightbox url={url} name={name} blob={blob ?? undefined} onClose={() => setOpen(false)} />}
       {open && md && state.kind === 'ready' && (
         <MdSheet path={path} name={name} loaded={state.loaded} onClose={() => setOpen(false)} />
       )}
@@ -317,5 +339,134 @@ function MdSheet({ path, name, loaded, onClose }: { path: string; name: string; 
       )}
     </SideSheet>,
     document.body,
+  );
+}
+
+/** Reads the first byte only: proves the file exists and gives its size. */
+async function probeFile(peek: PeekFile, path: string): Promise<number> {
+  const w = await peek.window(path)(0, 1);
+  return w.size;
+}
+
+function sizeLabel(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} МБ`;
+  return `${Math.max(1, Math.round(n / 1024))} КБ`;
+}
+
+/**
+ * A chip for a workspace file an answer names that is not a picture or a note:
+ * shown only when the file really exists (a one-byte `fs.download` window), and
+ * only once scrolled near. A tap fetches and saves it (on a phone: fetch, then
+ * «Сохранить» from a fresh tap). A video can also be shown in place on demand —
+ * never fetched on its own.
+ */
+function FileLink({ peek, path }: { peek: PeekFile; path: string }) {
+  const name = fileName(path);
+  const video = isVideoPath(path);
+  const [size, setSize] = useState<number | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoErr, setVideoErr] = useState<string | null>(null);
+  const holder = useRef<HTMLDivElement | null>(null);
+  const save = useFileSave();
+  /** The video already fetched to play: saving it must not fetch again. */
+  const videoBlob = useRef<Blob | null>(null);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setSize(null);
+    setHidden(false);
+    const el = holder.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        io.disconnect();
+        inSlot(() => probeFile(peek, path)).then(
+          (n) => live.current && setSize(n),
+          // A dropped socket keeps the chip: it asks again on the tap.
+          (e: unknown) => live.current && (isMissingFileError(e) ? setHidden(true) : setSize(-1)),
+        );
+      },
+      { rootMargin: '600px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [peek, path]);
+
+  useEffect(() => () => void (videoUrl && URL.revokeObjectURL(videoUrl)), [videoUrl]);
+
+  const unknownSize = size === -1;
+  const tooBig = size !== null && size > LINK_MAX_BYTES;
+  const state = save.state;
+  const showVideo = () => {
+    setVideoBusy(true);
+    setVideoErr(null);
+    inSlot(() => pullBytes(peek.window(path), VIDEO_PLAY_MAX_BYTES))
+      .then((raw) => {
+        if (!live.current) return;
+        const b = new Blob([raw], { type: mimeForName(path) });
+        videoBlob.current = b;
+        setVideoUrl(URL.createObjectURL(b));
+      })
+      .catch((e: unknown) => live.current && setVideoErr(e instanceof Error ? e.message : String(e)))
+      .finally(() => live.current && setVideoBusy(false));
+  };
+
+  return (
+    <div className="fp-item fp-file" ref={holder}>
+      {size !== null && !hidden && (
+        <>
+          <div className="fp-file-row">
+            <button
+              type="button"
+              className="fp-chip"
+              title={tooBig ? `${path}\nфайл слишком большой для браузера — скопируйте путь` : path}
+              disabled={tooBig || state?.phase === 'loading'}
+              onClick={() =>
+                void save.start(name, (onProgress) =>
+                  videoBlob.current
+                    ? Promise.resolve(videoBlob.current)
+                    : inSlot(() => pullBytes(peek.window(path), LINK_MAX_BYTES, onProgress)).then((b) => withMime(b, name)),
+                )
+              }
+            >
+              {video ? <DownloadIcon size={14} aria-hidden /> : <FileIcon size={14} aria-hidden />}
+              <span className="fp-name">{name}</span>
+              {!unknownSize && <span className="fp-size">{sizeLabel(size)}</span>}
+            </button>
+            {video && !videoUrl && (unknownSize || size <= VIDEO_PLAY_MAX_BYTES) && (
+              <button type="button" className="fp-chip" disabled={videoBusy} onClick={showVideo}>
+                {videoBusy ? 'Загружаю…' : 'Показать'}
+              </button>
+            )}
+          </div>
+          {state && (
+            <div className={state.phase === 'error' ? 'fp-file-note err' : 'fp-file-note'} role="status">
+              <span>{saveStatusText(state)}</span>
+              {state.phase === 'ready' && (
+                <button type="button" className="btn primary" onClick={() => save.save(state)}>
+                  Сохранить
+                </button>
+              )}
+              {state.phase !== 'loading' && (
+                <button type="button" className="iconbtn" onClick={save.dismiss} aria-label="Скрыть">
+                  ×
+                </button>
+              )}
+            </div>
+          )}
+          {videoErr && <div className="fp-file-note err" role="status">Не удалось показать видео: {videoErr}</div>}
+          {videoUrl && <video className="fp-video" src={videoUrl} controls playsInline preload="metadata" />}
+        </>
+      )}
+    </div>
   );
 }

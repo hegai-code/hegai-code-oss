@@ -330,3 +330,6 @@
   .fgrid-art { height: 52px; }
   .fgrid-thumb { max-height: 52px; }
 }
+
+.files-dl { display: flex; align-items: center; gap: 8px; }
+.files-dl > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }

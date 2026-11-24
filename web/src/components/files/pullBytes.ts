@@ -23,6 +23,7 @@ async function pull(
   read: ReadWindow,
   maxBytes: number,
   clip: boolean,
+  onProgress?: (loaded: number, total: number) => void,
 ): Promise<{ blob: Blob; truncated: boolean }> {
   const parts: Uint8Array[] = [];
   let offset = 0;
@@ -43,6 +44,7 @@ async function pull(
     for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
     parts.push(bytes);
     offset += w.bytes;
+    onProgress?.(offset, w.size);
     if (w.eof) break;
     if (clip && offset >= maxBytes) {
       truncated = true;
@@ -54,8 +56,12 @@ async function pull(
 }
 
 /** The whole file as a Blob; refuses one over `maxBytes`. */
-export async function pullBytes(read: ReadWindow, maxBytes: number): Promise<Blob> {
-  return (await pull(read, maxBytes, false)).blob;
+export async function pullBytes(
+  read: ReadWindow,
+  maxBytes: number,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<Blob> {
+  return (await pull(read, maxBytes, false, onProgress)).blob;
 }
 
 /** The first `maxBytes` of the file, and whether there was more. */

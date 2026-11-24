@@ -26,6 +26,8 @@ import { SendToSession } from './SendToSession.js';
 import { joinRel, parentRel, segments } from './paths.js';
 import { storageGet, storageSet } from '../../storage.js';
 import { askConfirm, askText } from '../../dialogs.js';
+import { SaveStatusBar } from './SaveStatusBar.js';
+import { useFileSave } from '../../useFileSave.js';
 
 type Central = ReturnType<typeof useCentral>;
 
@@ -79,6 +81,9 @@ export function Files({
   const [dropDir, setDropDir] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const fileSave = useFileSave();
+  const saveState = fileSave.state;
+  const downloading = saveState?.phase === 'loading';
   const pickRef = useRef<HTMLInputElement>(null);
   const restored = useRef(false);
 
@@ -253,12 +258,24 @@ export function Files({
     }
   }, []);
 
+  const { start: startSave } = fileSave;
+  const downloadingRef = useRef(false);
+  downloadingRef.current = downloading;
+  const startDownload = useCallback(
+    (target: string, name: string) => {
+      if (downloadingRef.current) return Promise.resolve();
+      setBusy(null);
+      return startSave(name, (onProgress) => api.download(target, onProgress));
+    },
+    [api, startSave],
+  );
+
   const actions: RowAction[] = useMemo(() => {
     const out: RowAction[] = [
       {
         label: 'Скачать',
-        when: (e) => e.kind === 'file' && (e.size ?? 0) <= MAX_DOWNLOAD_BYTES,
-        run: (e) => void run(() => api.download(joinRel(rel, e.name), e.name)),
+        when: (e) => e.kind === 'file' && (e.size ?? 0) <= MAX_DOWNLOAD_BYTES && !downloading,
+        run: (e) => void startDownload(joinRel(rel, e.name), e.name),
       },
     ];
     if (!writable) return out;
@@ -291,7 +308,7 @@ export function Files({
       },
     );
     return out;
-  }, [api, rel, run, writable]);
+  }, [api, rel, run, startDownload, downloading, writable]);
 
   /**
    * Move by drag — the gesture that makes this a file manager rather than a
@@ -577,6 +594,13 @@ export function Files({
           </button>
         </div>
       ) : null}
+      {saveState ? (
+        <SaveStatusBar
+          state={saveState}
+          onSave={() => saveState.phase === 'ready' && fileSave.save(saveState)}
+          onDismiss={fileSave.dismiss}
+        />
+      ) : null}
       {!online ? (
         <div className="files-note files-offline">Машина офлайн — показано последнее состояние</div>
       ) : null}
@@ -700,7 +724,8 @@ export function Files({
             read={api.read}
             readImage={readImage}
             onClose={() => go({ p: rel || undefined })}
-            onDownload={() => void run(() => api.download(joinRel(rel, openEntry.name), openEntry.name))}
+            downloading={downloading}
+            onDownload={() => void startDownload(joinRel(rel, openEntry.name), openEntry.name)}
             sendSlot={
               <SendToSession
                 machine={machine}

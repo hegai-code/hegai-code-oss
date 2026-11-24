@@ -11,15 +11,24 @@ const URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"'`)\]]*/gi;
 // One path segment. Unicode letters on purpose: `отчёт/итог.md` is an ordinary
 // path. Spaces are handled by the two rules in `findPreviewPaths`, not here.
 const SEG = String.raw`[\p{L}\p{N}_.@+~%=#-]+`;
-const EXT = FS_PEEK_EXTENSIONS.join('|');
+
+/** Files a chat chip offers to open or save (never previewed inline except
+ *  video, on demand). Disjoint from `FS_PEEK_EXTENSIONS`. */
+export const FILE_LINK_EXTENSIONS = [
+  'mp4', 'mov', 'webm', 'm4v', 'mkv', 'mp3', 'wav', 'm4a', 'ogg', 'flac',
+  'pdf', 'zip', 'tar', 'gz', 'tgz', '7z', 'csv', 'tsv', 'json', 'txt', 'log',
+  'docx', 'xlsx', 'pptx', 'doc', 'xls', 'ppt', 'html', 'svg', 'psd', 'key',
+] as const;
+export const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'm4v'] as const;
 
 // [drive or root] segment (separator segment)* .ext — and not the middle of a
 // longer word or path (the lookbehind), nor a longer extension (the lookahead:
 // `a.png.bak`, `a.pngx`, `a.png/b`).
-const PATH_RE = new RegExp(
-  String.raw`(?<![\p{L}\p{N}_.~@%=#+/\\-])((?:[A-Za-z]:[\\/]|/)?${SEG}(?:[\\/]${SEG})*\.(?:${EXT}))(?![\p{L}\p{N}_/\\-]|\.[\p{L}\p{N}])`,
-  'giu',
-);
+const pathRe = (ext: string) =>
+  new RegExp(
+    String.raw`(?<![\p{L}\p{N}_.~@%=#+/\\-])((?:[A-Za-z]:[\\/]|/)?${SEG}(?:[\\/]${SEG})*\.(?:${ext}))(?![\p{L}\p{N}_/\\-]|\.[\p{L}\p{N}])`,
+    'giu',
+  );
 
 /**
  * Delimited spans whose WHOLE content may be a path with spaces: a code span
@@ -29,11 +38,19 @@ const PATH_RE = new RegExp(
  */
 const DELIMITED_RE = /`([^`\n]+)`|\]\(<([^>\n]+)>\)|"([^"\n]+)"|«([^»\n]+)»/g;
 
-/** A whole string that is one path to a preview file (spaces allowed). */
-const WHOLE_RE = new RegExp(
-  String.raw`^(?:[A-Za-z]:[\\/]|/|\.{0,2}/)?[^\s<>"'\x60|*?](?:[^<>"\x60|*?\n]*[^\s<>"'\x60|*?])?\.(?:${EXT})$`,
-  'iu',
-);
+/** A whole string that is one path to a file with one of the extensions (spaces allowed). */
+const wholeRe = (ext: string) =>
+  new RegExp(
+    String.raw`^(?:[A-Za-z]:[\\/]|/|\.{0,2}/)?[^\s<>"'\x60|*?](?:[^<>"\x60|*?\n]*[^\s<>"'\x60|*?])?\.(?:${ext})$`,
+    'iu',
+  );
+
+interface Matcher {
+  path: RegExp;
+  whole: RegExp;
+}
+const PEEK: Matcher = { path: pathRe(FS_PEEK_EXTENSIONS.join('|')), whole: wholeRe(FS_PEEK_EXTENSIONS.join('|')) };
+const LINK: Matcher = { path: pathRe(FILE_LINK_EXTENSIONS.join('|')), whole: wholeRe(FILE_LINK_EXTENSIONS.join('|')) };
 
 /**
  * Paths of images and markdown files an answer names, in order of appearance,
@@ -48,6 +65,21 @@ const WHOLE_RE = new RegExp(
  * `dir/a.png`); longer runs of words are ambiguous with prose and stay unparsed.
  */
 export function findPreviewPaths(text: string): string[] {
+  return findPaths(text, PEEK);
+}
+
+/** Paths of other workspace files an answer names (video, pdf, archives…), for
+ *  a chip that opens or saves them. Same rules as `findPreviewPaths`. */
+export function findFilePaths(text: string): string[] {
+  return findPaths(text, LINK);
+}
+
+/** Whether the path is a video the browser can play. */
+export function isVideoPath(path: string): boolean {
+  return new RegExp(String.raw`\.(?:${VIDEO_EXTENSIONS.join('|')})$`, 'i').test(path);
+}
+
+function findPaths(text: string, m: Matcher): string[] {
   const found: { at: number; path: string }[] = [];
   const plain = text.replace(URL_RE, (u) => ' '.repeat(u.length));
   // 1. Delimited spans, blanked out afterwards so pass 2 cannot re-read a piece.
@@ -57,16 +89,16 @@ export function findPreviewPaths(text: string): string[] {
     // A relative span must reach a separator before its first space, or it is
     // a sentence that ends in a path («смотри /tmp/x.png»), not one path.
     const relativeSentence = !isAbsolutePath(inner) && inner.indexOf(' ') < inner.search(/[\\/]/);
-    if (inner.includes(' ') && !relativeSentence && accept(inner)) {
+    if (inner.includes(' ') && !relativeSentence && accept(inner, m)) {
       found.push({ at, path: inner });
       return ' '.repeat(whole.length);
     }
     return whole; // no space inside: pass 2 reads it like any other text
   });
   // 2. Plain text.
-  for (const m of rest.matchAll(PATH_RE)) {
-    let p = m[1]!;
-    let at = m.index!;
+  for (const hit of rest.matchAll(m.path)) {
+    let p = hit[1]!;
+    let at = hit.index!;
     if (!isAbsolutePath(p)) {
       // A WORD that starts rooted (`web/dist` is not one), then exactly one
       // space — the same test as `bridges` in PreviewPaths.swift / .kt.
@@ -78,7 +110,7 @@ export function findPreviewPaths(text: string): string[] {
         at = bridged.index;
       }
     }
-    if (accept(p)) found.push({ at, path: p });
+    if (accept(p, m)) found.push({ at, path: p });
   }
   found.sort((a, b) => a.at - b.at);
   const out: string[] = [];
@@ -90,8 +122,8 @@ export function findPreviewPaths(text: string): string[] {
   return out;
 }
 
-function accept(p: string): boolean {
-  if (!WHOLE_RE.test(p)) return false;
+function accept(p: string, m: Matcher): boolean {
+  if (!m.whole.test(p)) return false;
   const rooted = isAbsolutePath(p);
   if (p.startsWith('//')) return false; // a network share, not this machine
   // A bare name has no separator at all.
@@ -114,4 +146,11 @@ export function isAbsolutePath(path: string): boolean {
 /** The last path segment. */
 export function fileName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
+}
+
+/** An error that says the file is not there (or is not a file), as opposed to a
+ *  dropped socket: only the first hides the chip. */
+export function isMissingFileError(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e);
+  return /ENOENT|not found|no such file|is a directory|EISDIR|escapes working directory/i.test(m);
 }
