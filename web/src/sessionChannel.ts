@@ -68,14 +68,31 @@ export interface ChannelPort {
   id: string;
   /** A frame about runs. `opened` returns whether this view claims it. */
   frame: (msg: CentralToBrowser) => boolean;
-  /** A (re)connected socket: the hub remembers no subscription from before. */
-  socketOpened: () => void;
+  /** A (re)connected socket: the hub remembers no subscription from before.
+   *  `lost`: the previous one died without closing (socketWatch.ts), so what was
+   *  written into it last may have gone nowhere. */
+  socketOpened: (lost?: boolean) => void;
   socketClosed: () => void;
   /** Back from a hushed background tab: frames were dropped, not queued. */
   woke: () => void;
   /** The run this view follows, if any. */
   runId: () => string | undefined;
   activity: (runs: ActiveRunInfo[]) => void;
+}
+
+/** How long a view waits, on the socket that replaced a dead one, for the replay
+ *  or the activity board to confirm what it had sent. */
+const LOST_SETTLE_MS = 6_000;
+
+/** The optimistic echoes of texts that came back, taken off the end. */
+function dropEchoes(lines: TranscriptLine[], texts: string[]): TranscriptLine[] {
+  let out = lines;
+  for (const text of [...texts].reverse()) {
+    const last = out[out.length - 1];
+    // An attachment-only message shows a placeholder in place of its empty text.
+    if (last?.kind === 'user' && (last.text === text || (!text.trim() && last.carried))) out = out.slice(0, -1);
+  }
+  return out;
 }
 
 export type TurnPhase = 'unknown' | 'working' | 'ended' | 'settled';
@@ -482,8 +499,10 @@ export function useSessionChannel(link: HubLink): SessionChannel {
         // tracked via `activity` (board / badges), not interleaved here.
         if (msg.runId !== activeRef.current?.runId || isReplayForAnother(msg, id)) return false;
         setRunConfirmed(true);
-        // The run is talking, so whatever we last handed it was received.
-        unsent.current.delivered();
+        // The run is talking, so whatever we last handed it was received. Not
+        // proof after a dead socket: a replay and a run that was already busy
+        // talk without having heard us (`settleLost` decides by the run's record).
+        if (!awaitingLost.current) unsent.current.delivered();
         if (msg.event.code === 'turn_settled') {
           setTurnPhase('settled');
           return false;
@@ -570,6 +589,7 @@ export function useSessionChannel(link: HubLink): SessionChannel {
         // one that must see a turn another screen just sent. Only our own
         // replay may MOVE a line kept across the reconnect (`carried`).
         if (msg.runId !== activeRef.current?.runId) return false;
+        unsent.current.echoed(msg.text, msg.truncated);
         setLines((prev) => foldUserTurn(prev, msg, nextId, Date.now, !isReplayForAnother(msg, id)));
         return false;
       case 'tool_resolved':
@@ -694,6 +714,7 @@ export function useSessionChannel(link: HubLink): SessionChannel {
         subscribe(msg.runId);
         if (send({ type: 'input', runId: msg.runId, text: refused.text, images: refused.images, files: refused.files })) {
           unsent.current.sent(refused.text);
+          inputBefore.current = holder.taskStartedAt;
           setBusy(true);
           setTurnPhase('working');
           return;
@@ -747,12 +768,9 @@ export function useSessionChannel(link: HubLink): SessionChannel {
     // where it can be sent again.
     const back = unsent.current.recover(msg.code, msg.message);
     const owner = activeRef.current;
-    if (back && owner) {
-      setRecoveredText({ machineId: owner.machineId, sessionId: owner.sessionId, text: back });
-      setLines((prev) => {
-        const last = prev[prev.length - 1];
-        return last?.kind === 'user' && last.text === back ? prev.slice(0, -1) : prev;
-      });
+    if (back.length && owner) {
+      setRecoveredText({ machineId: owner.machineId, sessionId: owner.sessionId, text: back.filter((t) => t.trim()).join('\n\n') });
+      setLines((prev) => dropEchoes(prev, back));
     }
     link.flashError(msg.message);
     setRefusal((n) => n + 1);
@@ -766,23 +784,70 @@ export function useSessionChannel(link: HubLink): SessionChannel {
     if (attached) subscribe(attached);
   };
 
+  // The socket died without closing, and nothing on the new one has confirmed
+  // what this view wrote into the old one. The hub will never refuse a frame it
+  // never saw, so the view says it itself, unless the run's own record shows it
+  // took an input since. Only a possibility, hence the words.
+  const settleLost = () => {
+    awaitingLost.current = false;
+    const a = activeRef.current;
+    if (!a) return;
+    const run = link
+      .activeRuns()
+      .find((r) => (a.runId ? r.runId === a.runId : r.machineId === a.machineId && r.sessionId === a.sessionId));
+    // Moves with every input the agent accepts, whatever the run is doing. An
+    // agent that does not report it leaves «busy» as the only sign.
+    if (run && a.runId) {
+      const busyNow = run.state === 'working' || run.state === 'needs_attention';
+      if (run.taskStartedAt === undefined) {
+        if (busyNow) unsent.current.delivered();
+      } else if (run.taskStartedAt !== inputBefore.current) unsent.current.tookOne();
+    }
+    // The resume did start: the board has its run and this view is joining it.
+    if (run && !a.runId) lastOpen.current = null;
+    if (lastOpen.current || unsent.current.pending()) {
+      onError({
+        type: 'error',
+        code: 'connection_lost',
+        message: 'Связь прерывалась, сообщение могло не дойти. Оно снова в поле ввода.',
+      });
+    } else if (!a.runId && !a.sessionId) {
+      // A new chat has no composer of its own to give the text back to.
+      link.flashError('Связь прерывалась, новый чат мог не запуститься. Если его нет в списке, скопируйте текст и начните ещё раз.', 12_000);
+    }
+  };
+
   // The port the connection talks to. Built once; every method reads refs, so
   // it never needs rebuilding — the latest render's closures are behind them.
-  const impl = useRef({ frame, onError, resubscribe });
-  impl.current = { frame, onError, resubscribe };
+  const impl = useRef({ frame, onError, resubscribe, settleLost });
+  impl.current = { frame, onError, resubscribe, settleLost };
+  /** The followed run's `taskStartedAt` when the last text was handed to it. */
+  const inputBefore = useRef<number | undefined>(undefined);
+  /** A dead socket was replaced and what it swallowed is not settled yet. */
+  const awaitingLost = useRef(false);
+  const lostTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopLostTimer = () => {
+    if (lostTimer.current) clearTimeout(lostTimer.current);
+    lostTimer.current = null;
+  };
   const port = useMemo<ChannelPort>(
     () => ({
       id,
       frame: (msg) => impl.current.frame(msg),
-      socketOpened: () => {
+      socketOpened: (lost) => {
         // Drop transcript lines from before the disconnect: the hub does NOT
         // replay output missed while offline, so a surviving streaming tail
         // would glue onto the resumed stream with the gap silently missing.
         // …except what you just sent (see `keepUnansweredTail`).
         setLines(keepUnansweredTail);
         impl.current.resubscribe();
+        stopLostTimer();
+        if (lost) awaitingLost.current = true;
+        if (awaitingLost.current) lostTimer.current = setTimeout(() => impl.current.settleLost(), LOST_SETTLE_MS);
       },
       socketClosed: () => {
+        // The question stays open across another drop (`awaitingLost`).
+        stopLostTimer();
         // Preserve the run identity: the hub owns the run lifecycle and the
         // socket is only a replaceable subscriber. The reconnect re-attaches.
         attachedRunRef.current = null;
@@ -829,6 +894,7 @@ export function useSessionChannel(link: HubLink): SessionChannel {
     const off = link.register(port);
     return () => {
       off();
+      stopLostTimer();
       // A closed pane stops following its run — unless another view on this
       // socket still does, which `release` decides.
       const runId = activeRef.current?.runId;
@@ -948,6 +1014,7 @@ export function useSessionChannel(link: HubLink): SessionChannel {
       setToolReq(null);
       // The safety net belongs to the session the text was typed in.
       unsent.current.left();
+      awaitingLost.current = false;
       const runs = link.activeRuns();
       const run = runs.find((r) => r.machineId === machineId && r.sessionId === sessionId);
       // Our own new_session run that the hub's list still carries under the
@@ -990,13 +1057,16 @@ export function useSessionChannel(link: HubLink): SessionChannel {
       if (!a?.runId || (!text.trim() && !images?.length && !files?.length)) return false;
       if (!send({ type: 'input', runId: a.runId, text, images, files })) return false;
       // Held until the hub either accepts it or tells us the run is gone.
+      if (!unsent.current.pending()) {
+        inputBefore.current = link.activeRuns().find((r) => r.runId === a.runId)?.taskStartedAt;
+      }
       unsent.current.sent(text);
       addLine('user', text || attachmentPlaceholder(images, files), { images, files });
       setBusy(true);
       setTurnPhase('working');
       return true;
     },
-    [send, addLine],
+    [send, addLine, link],
   );
 
   const clearRecovered = useCallback(() => setRecoveredText(null), []);

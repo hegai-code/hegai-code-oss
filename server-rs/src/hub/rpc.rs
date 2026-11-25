@@ -11,6 +11,12 @@ pub(super) const HISTORY_AGENT_DEADLINE_MS: u64 = 6_000;
 /// check itself — this bounds the hub's outbound queue in BYTES, which the frame
 /// counter cannot do now that a single frame can be a 700KB download window.
 const MAX_PENDING_RPC_PER_CONN: usize = 32;
+/// The one folder a control-share member may write into besides `fs.mkdir`'s
+/// direct child: where chat attachments over the inline limit land. Mirrors
+/// `CHAT_UPLOAD_DIR` in web/src/chatUpload.ts.
+const CHAT_UPLOAD_DIR: &str = ".hegai-uploads";
+/// Open chat uploads one member connection may hold.
+const MAX_MEMBER_UPLOADS_PER_CONN: usize = 16;
 
 /// Shorten one oversized transcript payload, naming what it holds back.
 ///
@@ -268,11 +274,12 @@ impl Hub {
             // capability a non-owner gets, and it is bounded twice: only these
             // three methods, and only inside the share's roots.
             //
-            // Nothing that writes is here but one single-folder `fs.mkdir`
-            // (below). `fs.write`, `fs.rename`,
-            // `fs.trash` and the whole `fs.upload.*` family stay behind
-            // `can_control`, because the roots of a share sit inside the device
-            // owner's home and a write there is a write as them.
+            // Nothing that writes is here but one single-folder `fs.mkdir` and
+            // the chat-attachment upload into `.hegai-uploads` at a shared root
+            // (both below). `fs.write`, `fs.rename`, `fs.trash` and every other
+            // use of `fs.upload.*` stay behind `can_control`, because the roots
+            // of a share sit inside the device owner's home and a write there
+            // is a write as them.
             let reads_files = matches!(method, "fs.list" | "fs.read" | "fs.download" | "fs.peek");
             // The folder the call really touches is where `path` lands: an
             // absolute `path` is taken as it is (the agent resolves it so), a
@@ -309,18 +316,17 @@ impl Hub {
             // deeper or not-yet-existing cwd could create parents, and a
             // symlink inside the share could lead out of it. The cwd must BE a
             // shared root; the folder is then a direct child, made non-recursively.
-            let at_shared_root = || {
-                cwd.is_some_and(|dir| {
-                    self.ui_access
-                        .get(&conn)
-                        .and_then(|a| self.workspaces.machine_access(a, &machine_id).ok())
-                        .is_some_and(|ma| {
-                            let dir = normalize_root(dir);
-                            !ma.path_closed_for_work(&dir)
-                                && ma.start_roots.iter().any(|r| normalize_root(r) == dir)
-                        })
-                })
+            let shared_root = |dir: &str| {
+                self.ui_access
+                    .get(&conn)
+                    .and_then(|a| self.workspaces.machine_access(a, &machine_id).ok())
+                    .is_some_and(|ma| {
+                        let dir = normalize_root(dir);
+                        !ma.path_closed_for_work(&dir)
+                            && ma.start_roots.iter().any(|r| normalize_root(r) == dir)
+                    })
             };
+            let at_shared_root = || cwd.is_some_and(shared_root);
             // Renaming is gated on the SAME question as driving the session
             // (`ui_can_drive_run`: your own, or a teammate's you can see), not on
             // owning it. Requiring ownership made the permissions incoherent: a
@@ -339,6 +345,44 @@ impl Hub {
             // (Not given the caller's `cwd`: that is their claim, not the hub's
             // record of where the session lives.)
             let works_here = self.ui_can_work_in(conn, &machine_id, session_id, None);
+            // chunk/commit/abort have no cwd: the upload must be one THIS
+            // connection's member began on this machine (`track_member_upload`).
+            let owns_upload = || {
+                let upload_id = params
+                    .and_then(|fields| fields.get("uploadId"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                self.member_uploads
+                    .get(&(machine_id.clone(), upload_id.to_string()))
+                    .is_some_and(|u| {
+                        u.conn == conn
+                            && Some(u.user_id.as_str()) == viewer_id.as_deref()
+                            // The share it was begun in may be gone while another
+                            // keeps `can_start` alive; only tidying up is left then.
+                            && (method == "fs.upload.abort" || shared_root(&u.cwd))
+                    })
+            };
+            let may_begin_upload = || {
+                let field = |key: &str| {
+                    params
+                        .and_then(|fields| fields.get(key))
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                };
+                at_shared_root()
+                    && field("dir") == CHAT_UPLOAD_DIR
+                    && params
+                        .and_then(|fields| fields.get("overwrite"))
+                        .and_then(Value::as_bool)
+                        != Some(true)
+                    && plain_file_name(field("name"))
+                    && self
+                        .member_uploads
+                        .values()
+                        .filter(|u| u.conn == conn)
+                        .count()
+                        < MAX_MEMBER_UPLOADS_PER_CONN
+            };
             let allowed = can_start
                 && match method {
                     "session.rename" | "run.stopSubagent" | "session.delete" => works_here,
@@ -376,6 +420,8 @@ impl Hub {
                             .unwrap_or("");
                         if !at_shared_root() {
                             false
+                        } else if name == CHAT_UPLOAD_DIR {
+                            true
                         } else if let Err(why) = single_folder_name(name) {
                             self.rpc_error(conn, &request_id, why);
                             return;
@@ -383,6 +429,8 @@ impl Hub {
                             true
                         }
                     }
+                    "fs.upload.begin" => may_begin_upload(),
+                    "fs.upload.chunk" | "fs.upload.commit" | "fs.upload.abort" => owns_upload(),
                     _ if reads_files => within_shared_root(),
                     _ => false,
                 };
@@ -552,6 +600,26 @@ impl Hub {
         // (`ReplicaStore::snapshot_sessions`); taken back if the agent refuses
         // (`rpc_response` in hub.rs) or drops. Only for a session the hub
         // knows, so a made-up id writes nothing.
+        // What a member's upload call must leave behind for its answer.
+        let member_upload = !can_control && method == "fs.upload.begin";
+        let upload_id = (!can_control
+            && matches!(
+                method,
+                "fs.upload.chunk" | "fs.upload.commit" | "fs.upload.abort"
+            ))
+        .then(|| {
+            params
+                .and_then(|fields| fields.get("uploadId"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        });
+        // The commit names no folder; the audit row gets the one it began in.
+        let upload_cwd = upload_id.as_ref().and_then(|id| {
+            self.member_uploads
+                .get(&(machine_id.clone(), id.clone()))
+                .map(|u| u.cwd.clone())
+        });
         let deleting = (method == "session.delete"
             && self.store.has_session(&machine_id, session_id)
             && self
@@ -591,9 +659,11 @@ impl Hub {
                         crate::workspace::requested_path(cwd.unwrap_or(""), rel)
                     },
                 ),
-                cwd: cwd.map(str::to_string),
+                cwd: cwd.map(str::to_string).or(upload_cwd),
                 history: history_fallback,
                 deleting,
+                member_upload,
+                upload_id,
             },
         );
         if has_fallback {
@@ -639,6 +709,52 @@ impl Hub {
                 "params":forwarded_params,
             }),
         );
+    }
+
+    /// Keeps `member_uploads` in step with the agent's answers: a member's
+    /// begin is remembered, a commit or abort ends the record (a failed commit
+    /// leaves the upload open on the agent, so its record stays).
+    pub(super) fn track_member_upload(&mut self, pending: &PendingRpc, response: &Value) {
+        let ok = response.field_bool("ok") == Some(true);
+        match pending.method.as_str() {
+            "fs.upload.begin" if pending.member_upload && ok => {
+                let Some(upload_id) = response
+                    .get("result")
+                    .and_then(|r| r.get("uploadId"))
+                    .and_then(Value::as_str)
+                else {
+                    return;
+                };
+                let Some(user_id) = self.ui_access.get(&pending.conn).map(|a| a.user_id.clone())
+                else {
+                    return;
+                };
+                let held = self
+                    .member_uploads
+                    .values()
+                    .filter(|u| u.conn == pending.conn)
+                    .count();
+                if held >= MAX_MEMBER_UPLOADS_PER_CONN {
+                    return;
+                }
+                self.member_uploads.insert(
+                    (pending.machine_id.clone(), upload_id.to_string()),
+                    MemberUpload {
+                        conn: pending.conn,
+                        user_id,
+                        cwd: pending.cwd.clone().unwrap_or_default(),
+                    },
+                );
+            }
+            "fs.upload.commit" | "fs.upload.abort" => {
+                let done = ok || pending.method == "fs.upload.abort";
+                if let (true, Some(id)) = (done, pending.upload_id.as_ref()) {
+                    self.member_uploads
+                        .remove(&(pending.machine_id.clone(), id.clone()));
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The agent has had `HISTORY_AGENT_DEADLINE_MS` to answer a transcript
@@ -719,6 +835,18 @@ impl Hub {
             }),
         );
     }
+}
+
+/// A file name for a member's chat upload: one plain name, as the agent's
+/// `validName` reads it (which stays the authority).
+fn plain_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && name.len() <= 255
+        && !name
+            .chars()
+            .any(|c| c == '/' || c == '\\' || c.is_control())
 }
 
 /// A name for ONE new folder created by a non-controlling member: no path

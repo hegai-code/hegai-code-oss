@@ -281,6 +281,12 @@
 /* A file has no thumbnail, so the chip leans on its name and weight instead.
    The size is data — mono, like every other number in this product. */
 .attach-chip.file .attach-name { color: var(--text); }
+.attach-chip.failed { border-color: var(--red); }
+.attach-chip.failed .attach-size { color: var(--negative); }
+.attach-retry {
+  background: none; border: none; color: var(--brand); cursor: pointer; padding: 2px 4px;
+  font-size: var(--size-micro); flex: 0 0 auto;
+}
 .attach-size {
   font-family: var(--mono); font-size: var(--size-micro); color: var(--text-faint);
   flex: 0 0 auto; font-variant-numeric: tabular-nums;

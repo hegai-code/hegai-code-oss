@@ -23,6 +23,7 @@ import { polishContext } from '../polish.js';
 import { linkProps, navigate } from '../router.js';
 import { FIRST_PROMPT, NewProjectPanel, type CreatedProject } from './NewProjectPanel.js';
 import { NewFolderPanel, shareRootFor } from './NewFolderPanel.js';
+import { chatUploader, type LargeUploader } from '../chatUpload.js';
 import { TakeYourCode } from './TakeYourCode.js';
 import { StartRunPicker } from './StartRunPicker.js';
 import { goModelOrDefault, modelsForSide, useModelList } from './run-settings.js';
@@ -31,7 +32,7 @@ import { claudeOff, codexOnGateway, pickRuntime, runtimeGate, runtimeHint } from
 import { RuntimeGate } from './RuntimeGate.js';
 import { useHiddenMachines, useHiddenProjects } from '../appHooks.js';
 import { storageGet, storageRemove, storageSet } from '../storage.js';
-import { askConfirm } from '../dialogs.js';
+import { askConfirm, showNotice } from '../dialogs.js';
 
 /** Draft key prefix for the start screen, keyed by project. `SendToSession`
  *  writes here when it hands paths to a not-yet-existing session. */
@@ -228,7 +229,9 @@ export function StartScreen({
     setPop('take');
     history.replaceState(null, '', location.pathname + location.search);
   }, []);
-  const picker = useImageAttachment();
+  // Where big attachments go, set once the selected project is known (below).
+  const uploaderRef = useRef<LargeUploader | undefined>(undefined);
+  const picker = useImageAttachment(() => uploaderRef.current);
   const taRef = useAutoGrowTextarea(draft, 0.3);
   /** The selected project's label, for `/polish` — the selection is computed
    *  further down, and the recorder reads its cleaner through a ref anyway. */
@@ -674,6 +677,12 @@ export function StartScreen({
         )
       : undefined;
   const canMakeFolder = !!project && !!folderRoot;
+  // Big files go into the project's folder; for a member that is the shared
+  // root the hub accepts writes at (their project may sit below it).
+  uploaderRef.current =
+    project && selectedMachine?.online === true
+      ? chatUploader(central.rpc, project.machineId, folderRoot ?? project.cwd)
+      : undefined;
   // Anywhere at all to start — the same test as App's `canStartAnywhere`.
   const startable = central.machines.some((m) => m.canControl === true || m.canStart === true);
   const sandbox = who?.access?.sandbox;
@@ -784,6 +793,11 @@ export function StartScreen({
    *  ended with the send button arrives long after that button was pressed. */
   const submitText = (text: string) => {
     if ((!text.trim() && !picker.hasAttachments) || !project) return;
+    const waiting = picker.largeBlock();
+    if (waiting) {
+      void showNotice(waiting);
+      return;
+    }
     if (openCodeWaiting) {
       setNote(OPENCODE_LOADING_NOTE);
       return;
@@ -833,7 +847,7 @@ export function StartScreen({
     const started = onNewSession(
       project.machineId,
       cwd,
-      text.trim(),
+      picker.withLargeFiles(text.trim()),
       picker.toImages(),
       project.label,
       category,

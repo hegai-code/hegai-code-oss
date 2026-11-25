@@ -1071,39 +1071,55 @@ export function dropEchoedUserLine(
  * Hence an object with the whole lifecycle in one place, testable on its own.
  */
 export interface UnsentGuard {
-  /** Text just handed to a run. Replaces anything held. */
+  /** Text just handed to a run; joins anything still held. */
   sent(text: string): void;
   /** The run produced output, so it is alive and received what we gave it. */
   delivered(): void;
+  /** Our own turn came back from the hub: the run got it. `truncated`: `text` is
+   *  the head of a longer message. */
+  echoed(text: string, truncated?: boolean): void;
+  /** The run took ONE input since: the oldest held, as they are delivered in order. */
+  tookOne(): void;
+  /** Something is held that nothing has confirmed yet. */
+  pending(): boolean;
   /** Focus moved to another session; the net belongs to the one it was typed in. */
   left(): void;
-  /** The hub refused with this code — the text to put back, or null. */
-  recover(code: string | undefined, message: string): string | null;
+  /** The hub refused with this code — the texts to put back, oldest first. */
+  recover(code: string | undefined, message: string): string[];
 }
 
 /** Codes that mean «nothing was delivered». The sentence match keeps a hub that
  *  predates the codes working. */
 export function nothingWasDelivered(code: string | undefined, message: string): boolean {
-  return code === 'run_gone' || code === 'machine_offline' || /run not found/i.test(message);
+  return code === 'connection_lost' || code === 'run_gone' || code === 'machine_offline' || /run not found/i.test(message);
 }
 
 export function createUnsentGuard(): UnsentGuard {
-  let held: string | null = null;
+  let held: string[] = [];
   return {
     sent(text) {
-      held = text;
+      held.push(text);
     },
     delivered() {
-      held = null;
+      held = [];
     },
+    echoed(text, truncated) {
+      const t = text.trim();
+      const at = held.findIndex((h) => (truncated ? h.trim().startsWith(t) : h.trim() === t));
+      if (at >= 0) held.splice(at, 1);
+    },
+    tookOne() {
+      held.shift();
+    },
+    pending: () => held.length > 0,
     left() {
-      held = null;
+      held = [];
     },
     recover(code, message) {
-      if (!nothingWasDelivered(code, message)) return null;
-      const text = held;
-      held = null;
-      return text;
+      if (!nothingWasDelivered(code, message)) return [];
+      const texts = held;
+      held = [];
+      return texts;
     },
   };
 }

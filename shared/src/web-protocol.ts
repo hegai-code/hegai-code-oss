@@ -820,8 +820,14 @@ const RegisterPush = z.object({
 const UnregisterPush = z.object({ type: z.literal('unregister_push'), deviceToken: z.string(), platform: z.enum(['ios', 'android']).optional() });
 
 // Keepalive: an idle browser link gets reaped by NAT / load-balancer idle
-// timeouts; the UI pings every 25s to keep the path warm. The hub ignores it.
+// timeouts; the UI pings every 25s to keep the path warm. A client that named
+// `pong` in `hello.caps` is answered with `pong` (see `Pong`); for any other the
+// hub says nothing.
 const Ping = z.object({ type: z.literal('ping') });
+
+/** The `hello.caps` entry that makes the hub answer `ping` with `pong`. Opt-in:
+ *  a client that does not know the frame would fail to decode it. */
+export const CAP_PONG = 'pong';
 
 // Backgrounded client hush: `pause` stops ALL hub->this-socket traffic (a
 // suspended app cannot drain its socket, and a full outbound queue got the peer
@@ -868,7 +874,7 @@ const Hello = z.object({
    * would quietly show a frozen session list forever.
    *
    * `statsOnDemand` = "send me `machine_stats` only while I say so with
-   * `stats_interest`" (see `StatsInterest`).
+   * `stats_interest`" (see `StatsInterest`). `pong` = "answer my `ping`".
    */
   caps: z.array(z.string().max(40)).max(16).optional(),
 });
@@ -1478,7 +1484,13 @@ const EnrichResult = z.object({
   error: z.string().optional(),
 });
 
+/** Answer to `ping`, so a client that cannot see WebSocket-level pings (a
+ *  browser page) can tell a quiet socket from a dead one. Swallowed by `pause`
+ *  like everything else: a hushed client must not expect it. */
+const Pong = z.object({ type: z.literal('pong') });
+
 export const CentralToBrowser = z.discriminatedUnion('type', [
+  Pong,
   SessionReadsMsg,
   SessionCompletionsMsg,
   EnrichResult,

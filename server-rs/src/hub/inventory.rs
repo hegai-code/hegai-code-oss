@@ -171,6 +171,10 @@ pub(super) const CAP_SESSION_DELTA: &str = "sessionDelta";
 /// in shared/src/web-protocol.ts.
 pub(super) const CAP_STATS_ON_DEMAND: &str = "statsOnDemand";
 
+/// The `hello.caps` entry a client sends to have its `ping` answered with
+/// `pong`. Mirror of `CAP_PONG` in shared/src/web-protocol.ts.
+pub(super) const CAP_PONG: &str = "pong";
+
 /// The finer of the two: `session_updates`, carrying only the sessions that
 /// changed rather than the machine's whole list. Separate from
 /// `CAP_SESSION_DELTA` because clients already in the field understand the

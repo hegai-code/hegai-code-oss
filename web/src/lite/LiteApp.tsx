@@ -4,7 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { FileInput, ImageInput, SessionSummary, ViewerContext } from '@cc-remote/shared';
 import { useCentral, type StartSettings } from '../useCentral.js';
 import { useTheme } from '../useTheme.js';
-import { SeatContext, useBudget, useOwnedProjects, type Seat } from '../appHooks.js';
+import { SeatContext, ShareRootsContext, useBudget, useOwnedProjects, type Seat } from '../appHooks.js';
 import { githubStartHref, googleStartHref, indexRuns, sessionKey, type ExtraTarget } from '../lib.js';
 import { ApiError, teamApi } from '../teamApi.js';
 import { LocalCache } from '../localCache.js';
@@ -495,6 +495,7 @@ function Shell() {
   const inTask = route.kind === 'session';
   return (
     <SeatContext.Provider value={seat}>
+    <ShareRootsContext.Provider value={shared}>
       <div className="app lt-app">
         <TelegramSignedInBanner userId={identity?.userId} />
         {!inTask && <header className="lt-top">
@@ -524,6 +525,7 @@ function Shell() {
         <main className="lt-main">{body()}</main>
         <ModalHost central={c} suppressToolReq={!askHere} />
       </div>
+    </ShareRootsContext.Provider>
     </SeatContext.Provider>
   );
 }

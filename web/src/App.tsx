@@ -4,7 +4,7 @@ import { useCentral, type StartSettings } from './useCentral.js';
 import { isGoModel } from './components/run-settings.js';
 import { useTheme } from './useTheme.js';
 import { storageGet, storageRemove, storageSet } from './storage.js';
-import { usePersistentSidebar, useFavorites, useSessionActions, useOwnedProjects, useBudget, SeatContext, type Seat } from './appHooks.js';
+import { usePersistentSidebar, useFavorites, useSessionActions, useOwnedProjects, useBudget, SeatContext, ShareRootsContext, type Seat } from './appHooks.js';
 import { hasOthersWork, indexRuns, sessionKey, projectTargets, type ExtraTarget } from './lib.js';
 import { setScopeAvailable } from './components/MineOnly.js';
 import { StartScreen } from './components/StartScreen.js';
@@ -1303,6 +1303,7 @@ function ControlPlaneApp() {
 
   return (
     <SeatContext.Provider value={seat}>
+    <ShareRootsContext.Provider value={startTargets}>
     <div className="app" ref={appRoot} style={drawer.style} data-dragging={drawer.dragging ? '1' : undefined}>
       <TelegramSignedInBanner userId={identity?.userId} />
       {/* ABOVE the panel, not beside it — the bar spans the window.
@@ -1494,6 +1495,7 @@ function ControlPlaneApp() {
           while the person moves between sessions under it. */}
       <BrowserSheetHost />
     </div>
+    </ShareRootsContext.Provider>
     </SeatContext.Provider>
   );
 }

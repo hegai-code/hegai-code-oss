@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, Eye } from '../icons.js';
 import type { Enrichment, HistoryMessage, ImageInput, FileInput, SessionSummary } from '@cc-remote/shared';
+import { chatUploader } from '../chatUpload.js';
+import { useUploadRoot } from '../uploadRoot.js';
+import { showNotice } from '../dialogs.js';
 import { AttachButton, AttachPreview, useImageAttachment, useAutoGrowTextarea, enterShouldSend, useComposerHeight } from '../composer.js';
 import type { useCentral } from '../useCentral.js';
 import type { MirrorHandle } from '../useCentral.js';
@@ -48,7 +51,8 @@ export function Mirror({
   // «+» as the chat. It was text-only, so the one place where you are most
   // likely to be handed a screenshot — watching a session someone else is
   // driving — was the one place you could not attach it.
-  const picker = useImageAttachment();
+  const uploadRoot = useUploadRoot(central, machineId, session.cwd);
+  const picker = useImageAttachment(() => (uploadRoot ? chatUploader(central.rpc, machineId, uploadRoot) : undefined));
   // Grows with its content, like the chat composer. It never did, and until
   // Enter sent unconditionally that cost nothing — there was no way to put a
   // second line in it. Now that Enter inserts a newline on a phone, a box
@@ -151,11 +155,16 @@ export function Mirror({
 
   const submit = () => {
     if ((!draft.trim() && !picker.hasAttachments) || sent) return;
+    const waiting = picker.largeBlock();
+    if (waiting) {
+      void showNotice(waiting);
+      return;
+    }
     // Clearing and latching BEFORE knowing the frame went out lost the message
     // whenever the socket had just closed: the error toast appeared, the text
     // was gone, and the composer stayed stuck on "Taking over…" for the life of
     // the mount. Keep the draft unless the hub actually got it.
-    if (!onSend(draft.trim(), picker.toImages(), picker.toFiles())) return;
+    if (!onSend(picker.withLargeFiles(draft.trim()), picker.toImages(), picker.toFiles())) return;
     setDraft('');
     picker.clearAll();
     setSent(true);

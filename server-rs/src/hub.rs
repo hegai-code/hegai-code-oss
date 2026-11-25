@@ -882,6 +882,17 @@ struct PendingRpc {
     /// A `session.delete` already recorded in `user_deleted_sessions`, to be
     /// taken back if the agent refuses or drops.
     deleting: Option<String>,
+    /// A member's `fs.upload.begin`: the answer's `uploadId` is remembered.
+    member_upload: bool,
+    /// The upload a member's chunk/commit/abort names, forgotten on its answer.
+    upload_id: Option<String>,
+}
+
+/// Who began a member's chat-attachment upload, and where.
+struct MemberUpload {
+    conn: ConnId,
+    user_id: String,
+    cwd: String,
 }
 
 /// The replica read that stands in for an agent that is too slow to answer a
@@ -1240,6 +1251,11 @@ struct Hub {
     /// hit per session. Filled from session owners at startup + on session_started.
     user_display: HashMap<String, Value>,
     pending_rpc: HashMap<String, PendingRpc>, // requestId -> who asked, where, what
+    /// Chat-attachment uploads a control-share member has open on a machine:
+    /// (machine, uploadId) -> who began it. `fs.upload.chunk|commit|abort` carry
+    /// no cwd, so for a non-owner this record is the only proof the upload is
+    /// theirs. Dropped on commit/abort, when the connection or machine goes.
+    member_uploads: HashMap<(String, String), MemberUpload>,
     /// `fs.mkdir` asked for by the service API (`service_api.rs`): requestId ->
     /// (machine, answer). Not a browser request, so it has no `conn` to reply to.
     service_rpc: HashMap<String, (String, tokio::sync::oneshot::Sender<bool>)>,
@@ -1532,6 +1548,7 @@ impl Hub {
             erased_sessions: workspaces.erased_session_keys().ok(),
             user_display,
             pending_rpc: HashMap::new(),
+            member_uploads: HashMap::new(),
             service_rpc: HashMap::new(),
             terminals: HashMap::new(),
             mirrors: HashMap::new(),
@@ -2920,7 +2937,14 @@ impl Hub {
         if !payload
             && matches!(
                 p.method.as_str(),
-                "session.rename" | "run.stopSubagent" | "session.delete" | "fs.mkdir"
+                "session.rename"
+                    | "run.stopSubagent"
+                    | "session.delete"
+                    | "fs.mkdir"
+                    | "fs.upload.begin"
+                    | "fs.upload.chunk"
+                    | "fs.upload.commit"
+                    | "fs.upload.abort"
             )
         {
             return true;
@@ -3708,6 +3732,7 @@ impl Hub {
                         return;
                     }
                     if let Some(pending) = self.pending_rpc.remove(req_id) {
+                        self.track_member_upload(&pending, &v);
                         self.audit_project_rpc(&pending, &v);
                         if v.get("ok").and_then(Value::as_bool) != Some(true) {
                             self.undo_pending_delete(&pending);
@@ -5006,12 +5031,19 @@ impl Hub {
             // Backgrounded client: stop all outbound traffic to this conn (see
             // `ui_paused`). `resume` lifts the gate and answers with a fresh
             // snapshot so the client re-syncs without reconnecting.
-            // Keepalive. The hub answers nothing — the frame exists so NAT and
-            // load balancers see traffic — but it is named here on purpose:
-            // `every_browser_message_type_is_routed_by_on_ui_msg` treats a
-            // client message with no arm as a message the hub drops by
-            // accident, which is exactly what happened to `compact`.
-            "ping" => {}
+            // Keepalive: NAT and load balancers see traffic. A client that asked
+            // for it (`pong` in `hello.caps`) is answered, because a browser page
+            // has no other way to tell a quiet socket from one that died without
+            // closing (a laptop that slept or switched networks).
+            "ping" => {
+                if self
+                    .ui_caps
+                    .get(&conn)
+                    .is_some_and(|caps| caps.contains(CAP_PONG))
+                {
+                    self.send_to(conn, &json!({"type":"pong"}));
+                }
+            }
             "pause" => {
                 if self.ui_clients.contains(&conn) {
                     self.ui_paused.insert(conn);
@@ -7118,6 +7150,28 @@ impl Hub {
             // terminal run_status, a yield, or an agent disconnect.
             detach_browser_from_runs(&mut self.runs, conn);
             self.pending_rpc.retain(|_, p| p.conn != conn);
+            // Nobody else can finish these: free the agent's upload slots now
+            // rather than at its ten-minute sweep. The answers match no request
+            // and are dropped.
+            let orphaned: Vec<(String, String)> = self
+                .member_uploads
+                .iter()
+                .filter(|(_, u)| u.conn == conn)
+                .map(|(key, _)| key.clone())
+                .collect();
+            for key in orphaned {
+                self.member_uploads.remove(&key);
+                let (machine_id, upload_id) = key;
+                self.send_to_agent(
+                    &machine_id,
+                    &json!({
+                        "type": "rpc_request",
+                        "requestId": format!("orphan-{upload_id}"),
+                        "method": "fs.upload.abort",
+                        "params": {"uploadId": upload_id},
+                    }),
+                );
+            }
             let owned_terms: Vec<String> = self
                 .terminals
                 .iter()
@@ -7558,6 +7612,8 @@ impl Hub {
                 self.send_to(browser, &json!({"type":"mirror_exit","mirrorId":mirror_id}));
             }
         }
+        // A restarted agent has no open uploads left to continue.
+        self.member_uploads.retain(|(m, _), _| m != machine_id);
         // Dropping the sender tells the HTTP caller there will be no answer.
         self.service_rpc.retain(|_, (m, _)| m != machine_id);
         let dead_rpcs: Vec<String> = self

@@ -268,7 +268,13 @@ notes:
   `recursive:false`, so no parents are made and an existing entry is an error; a single
   name: ≤64 chars, no `/` `\` `:`, no leading dot; `single_folder_name` in
   [server-rs/src/hub/rpc.rs](server-rs/src/hub/rpc.rs)) — the start screen's
-  «Новая папка». Deleting a session stays with its owner. It writes
+  «Новая папка». The same member may also upload a chat attachment over the
+  inline limit: `fs.mkdir` of `.hegai-uploads` at the root, then `fs.upload.begin`
+  (cwd = the root, `dir` exactly `.hegai-uploads`, no `overwrite`) and
+  chunk/commit/abort only for an upload this connection began on this machine
+  (`member_uploads`, at most 16 per connection, dropped on disconnect). The web
+  puts a `.gitignore` (`*`) in that folder first
+  ([web/src/chatUpload.ts](web/src/chatUpload.ts)). Deleting a session stays with its owner. It writes
   `file.uploaded|renamed|trashed` and `dir.created` to the audit log, and bounds
   in-flight RPCs per connection so a 700KB window cannot be queued without limit.
 - `git.status` / `git.branches` / `git.checkout` / `git.commit` / `git.stage` / `git.unstage`

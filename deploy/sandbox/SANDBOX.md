@@ -188,3 +188,26 @@ and only when that sandbox has no busy/waiting Claude child and no Codex rollout
 written in the last 10 minutes. A busy sandbox waits for a later tick. Log:
 `/var/log/sb-agent-autoupdate.log`. The sandbox agent's own self-update is off
 by design (it cannot write the shared release) and says so once at start.
+
+## Личная песочница сотрудника (с 24.11.2026, первая — `sb-yulia`)
+
+Хаб песочницы больше не раздаёт (`CC_REMOTE_SANDBOX_ERASURE_ONLY=1`), поэтому сотруднику
+её заводят руками через `provisioner.mjs local`. Код регистрации участнику выпускать не
+нужно: root вставляет строку в `enrollments` хаба (`purpose='sandbox'`, `code_hash` =
+sha256 кода, срок 15 мин, `user_id` сотрудника), так что машина сразу принадлежит ему и
+видна только ему. В `job.json` — ключ шлюза (`gateway`), как у devbox.
+
+Сверху штатной песочницы (`sb-*` не видит локальных портов чужих сервисов, только 22/80/443 наружу):
+- **админка платформы от имени сотрудника** — `~/.config/hegai/admin-token` (кука `auth-token`,
+  14 дней). Выписывает `/usr/local/sbin/hegai-employee-admin-token <unix>` (ssh prod → jose,
+  проверяет, что пользователь — активный админ), user_id — `/etc/hegai-employee-admin/<unix>`,
+  перевыпуск — `hegai-employee-admin-token@<unix>.timer` (пн). Отзыв: выключить таймер и
+  удалить файл; мгновенно — снять роль админа на платформе. Клиент — `~/.local/bin/hegai-admin`
+  (ставит `Origin: https://admin.example.com`, иначе CSRF-гейт отбивает POST);
+- **прод-база на чтение** — `~/.local/bin/prod-db`: свой `ssh -L 127.0.0.1:25432` к
+  `devbox_tunnel@prod` (ключ `hegai_db_ro`, роль `devbox_ro`), туннель общего devbox на :15432
+  из `sandboxes.slice` недоступен by design;
+- **git** — свой пользователь Forgejo (`yulia`, write на нужные репо, токен в
+  `~/.config/forgejo/token`), выкатка платформы всё равно только кнопкой Владельца;
+- правила агента — `~/.codex/AGENTS.md` и `~/.claude/CLAUDE.md` песочницы.
+

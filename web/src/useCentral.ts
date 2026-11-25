@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Subagent } from '@cc-remote/shared';
+import { createSocketWatch, PING_EVERY_MS, type SocketWatch } from './socketWatch.js';
 import { transcribeProject, type PolishResult } from './polish.js';
 import {
+  CAP_PONG,
   CAP_STATS_ON_DEMAND,
   decodeCentralToBrowser,
   type ActiveRunInfo,
@@ -661,6 +663,8 @@ export function useCentral(
   const [resumeEpoch, setResumeEpoch] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
+  /** Tells a dead socket from a quiet one; lives as long as the connection loop. */
+  const watchRef = useRef<SocketWatch | null>(null);
   /** Has this page ever had an open socket? Separates "still starting" from
    *  "lost the connection" — see the note in `send`. */
   const everOpenRef = useRef(false);
@@ -826,6 +830,14 @@ export function useCentral(
     }
   };
 
+  /** What the person just asked for should not wait for the next keepalive to
+   *  find out that nobody is listening. */
+  const probeFor = (msg: BrowserToCentral) => {
+    if (msg.type === 'input' || msg.type === 'open' || msg.type === 'new_session' || msg.type === 'takeover') {
+      watchRef.current?.probe();
+    }
+  };
+
   const send = useCallback(
     (msg: BrowserToCentral, quiet = false, machineHint?: string): boolean => {
       const ws = wsRef.current;
@@ -871,8 +883,10 @@ export function useCentral(
                   e2eeKeys,
                   machinesRef.current.find((x) => x.machine.machineId === target)?.machine.e2eEpoch,
                 );
-                if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(sealed));
-                else sendFailed(msg, 'Связь с хабом потеряна — сообщение не отправлено.');
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify(sealed));
+                  probeFor(msg);
+                } else sendFailed(msg, 'Связь с хабом потеряна — сообщение не отправлено.');
               } catch {
                 sendFailed(msg, 'Не удалось зашифровать сообщение — оно не отправлено.');
               }
@@ -885,12 +899,15 @@ export function useCentral(
         if (sealing.current > 0) {
           // Behind a message still being sealed: keep the order.
           sealChain.current = sealChain.current.then(() => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-            else sendFailed(msg, 'Связь с хабом потеряна — сообщение не отправлено.');
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(msg));
+              probeFor(msg);
+            } else sendFailed(msg, 'Связь с хабом потеряна — сообщение не отправлено.');
           });
           return true;
         }
         ws.send(JSON.stringify(msg));
+        probeFor(msg);
         return true;
       }
       // Before the socket has EVER opened we are not disconnected, we are
@@ -1134,6 +1151,60 @@ export function useCentral(
     // Did THIS socket ever reach `onopen`, and how many in a row have not.
     let opened = false;
     let handshakeFails = 0;
+    // The previous socket was abandoned (`watch`): what we wrote into it last
+    // may never have arrived, and no refusal will ever say so.
+    let lost = false;
+
+    /** Both ends of a socket: closed by the browser, or given up on by us. */
+    const dropped = () => {
+      watch.closed();
+      wsRef.current = null;
+      holders.current.clear();
+      // The hub dropped its side of the gate with the connection.
+      paused = false;
+      setStatus('closed');
+      if (!opened) {
+        handshakeFails += 1;
+        // One failed upgrade is a hub restarting — it happens several times on
+        // a busy deploy day and the reconnect banner is the right answer. Two
+        // in a row is worth asking about: a session the hub no longer accepts
+        // fails here forever, and this loop used to be the only thing that
+        // happened next, leaving an empty screen that read as a hung hub.
+        if (handshakeFails >= 2) onHandshakeFailing.current?.();
+      }
+      scheduleReconnect();
+    };
+
+    /** Let go of a socket that will not tell us it is dead. */
+    const detach = (s: WebSocket) => {
+      s.onopen = null;
+      s.onclose = null;
+      s.onerror = null;
+      s.onmessage = null;
+      try {
+        s.close();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const watch = createSocketWatch({
+      ping: () => {
+        const s = wsRef.current;
+        if (!s || s.readyState !== WebSocket.OPEN) return false;
+        s.send(JSON.stringify({ type: 'ping' }));
+        return true;
+      },
+      buffered: () => wsRef.current?.bufferedAmount ?? 0,
+      dead: () => {
+        if (stopped || !ws) return;
+        console.warn('[central] the hub socket went silent — reconnecting');
+        lost = lost || opened;
+        detach(ws);
+        dropped();
+      },
+    });
+    watchRef.current = watch;
 
     const connect = () => {
       if (stopped) return;
@@ -1147,6 +1218,7 @@ export function useCentral(
       ws = new WebSocket(url);
       wsRef.current = ws;
       opened = false;
+      watch.connecting();
 
       ws.onopen = () => {
         retry = 0;
@@ -1175,7 +1247,7 @@ export function useCentral(
             JSON.stringify({
               type: 'hello',
               client: 'web',
-              caps: ['sessionDelta', 'sessionPatch', CAP_STATS_ON_DEMAND],
+              caps: ['sessionDelta', 'sessionPatch', CAP_STATS_ON_DEMAND, CAP_PONG],
             }),
           );
           // The hub forgets the interest with the old socket: say it again if a
@@ -1194,24 +1266,18 @@ export function useCentral(
         // reconnected socket is a new subscriber either way. Each view also
         // drops its gapped streaming tail here (see `keepUnansweredTail`).
         holders.current.clear();
-        for (const port of ports.current.values()) port.socketOpened();
+        for (const port of ports.current.values()) port.socketOpened(lost);
+        lost = false;
+        // Asked of every new socket: the first answer is what tells this page
+        // its hub answers at all. A hushed socket hears nothing until `resume`.
+        if (paused) watch.closed();
+        else watch.opened();
       };
       ws.onclose = () => {
-        wsRef.current = null;
-        holders.current.clear();
-        // The hub dropped its side of the gate with the connection.
-        paused = false;
-        setStatus('closed');
-        if (!opened) {
-          handshakeFails += 1;
-          // One failed upgrade is a hub restarting — it happens several times on
-          // a busy deploy day and the reconnect banner is the right answer. Two
-          // in a row is worth asking about: a session the hub no longer accepts
-          // fails here forever, and this loop used to be the only thing that
-          // happened next, leaving an empty screen that read as a hung hub.
-          if (handshakeFails >= 2) onHandshakeFailing.current?.();
-        }
-        scheduleReconnect();
+        // Closed with a question still open: the path was already gone, and the
+        // browser merely found out before the watch did.
+        if (opened && watch.asking()) lost = true;
+        dropped();
       };
       ws.onerror = () => {
         try {
@@ -1225,8 +1291,11 @@ export function useCentral(
         try {
           msg = decodeCentralToBrowser(ev.data as string);
         } catch {
+          watch.inbound(false);
           return;
         }
+        watch.inbound(msg.type === 'pong');
+        if (msg.type === 'pong') return;
         // A machine whose key this browser holds speaks to it only sealed. Clear
         // assistant text, tool prompts or user turns for such a run are the hub's
         // own invention (it cannot read the real ones): dropped, never shown.
@@ -1583,6 +1652,7 @@ export function useCentral(
       const s = wsRef.current;
       if (paused || (!frozen && !freezes()) || !s || s.readyState !== WebSocket.OPEN) return;
       paused = true;
+      watch.hold();
       pausedLive = [...ports.current.values()].some((p) => !!p.runId()) || mirrorSubs.current.size > 0;
       try {
         // `acks`: keep the answers to our own requests coming (hub
@@ -1614,13 +1684,16 @@ export function useCentral(
           clearTimeout(timer);
           retry = 0;
           connect();
-        }
+        } else watch.probe();
         return;
       }
       paused = false;
       const s = wsRef.current;
       if (s && s.readyState === WebSocket.OPEN) {
         s.send(JSON.stringify({ type: 'resume' }));
+        // A phone or laptop coming back is where a socket is most often dead
+        // without having closed.
+        watch.probe();
         // Frames queued during a freeze are handled only now, after this
         // wake: a view PLACED on a run while we were quiet (the hub lets
         // `opened` / `session_started` through our pause) is caught up when the
@@ -1655,26 +1728,40 @@ export function useCentral(
     window.addEventListener('resume', onWake);
     // Waking from bfcache does not always fire visibilitychange.
     window.addEventListener('pageshow', onWake);
+    // A new network (Wi-Fi, VPN) is the other moment.
+    const onNetwork = () => {
+      if (!paused) watch.probe();
+    };
+    window.addEventListener('online', onNetwork);
 
     connect();
     // Keep the /ui socket warm. Once agents stop flapping the hub broadcasts
     // far less, so an idle browser link would otherwise get reaped by a NAT /
     // load-balancer on the path (same idle-timeout that flapped the agents).
-    // A raw ping every 25s resets those timers; the hub ignores unknown types.
+    // A ping every 25s resets those timers — and, unless the page is hushed, the
+    // `pong` it draws is what shows the socket is still alive (socketWatch.ts).
     // A hushed socket still gets these: the gate is on hub->client traffic, and
     // the path in between still has to be kept from being reaped.
     const keepalive = setInterval(() => {
+      // A hushed page asked the hub for silence, so it only keeps the path warm.
+      if (!paused) {
+        watch.probe();
+        return;
+      }
       const s = wsRef.current;
       if (s && s.readyState === WebSocket.OPEN) s.send(JSON.stringify({ type: 'ping' }));
-    }, 25_000);
+    }, PING_EVERY_MS);
     return () => {
       stopped = true;
       clearTimeout(timer);
+      watch.closed();
+      if (watchRef.current === watch) watchRef.current = null;
       clearInterval(keepalive);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('freeze', onFreeze);
       window.removeEventListener('resume', onWake);
       window.removeEventListener('pageshow', onWake);
+      window.removeEventListener('online', onNetwork);
       if (ws) {
         holders.current.clear();
         ws.onclose = null;

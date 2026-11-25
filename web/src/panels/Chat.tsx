@@ -32,6 +32,9 @@ import { RunPicker } from '../components/RunPicker.js';
 import { EFFORT_LABEL, MODEL_PLACEHOLDER, deriveRunPick, isGoModel, modelsForSide, useModelList } from '../components/run-settings.js';
 import { offeredModes } from '../components/PermissionModePicker.js';
 import { LocalCache, transcriptKey } from '../localCache.js';
+import { chatUploader, withUploadedFiles } from '../chatUpload.js';
+import { useUploadRoot } from '../uploadRoot.js';
+import { showNotice } from '../dialogs.js';
 import { useImageAttachment, useAutoGrowTextarea, AttachPreview, AttachButton, VoiceButton, DictationStrip, DictationSwitch, DraftStore, enterShouldSend, useComposerHeight } from '../composer.js';
 import { polishContext, transcribeHints } from '../polish.js';
 import { agentName, viewerName } from '../lib.js';
@@ -220,7 +223,10 @@ export function Chat({
    *  already in the transcript cannot clear the state the instant it is set. */
   const linesAtCompact = useRef<Set<number> | null>(null);
   const unengage = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const picker = useImageAttachment();
+  // Files past the inline limit go up to the session's folder (the hub lets a
+  // control-share member do that only at the share's root).
+  const uploadRoot = useUploadRoot(central, machineId, session.cwd);
+  const picker = useImageAttachment(() => (uploadRoot ? chatUploader(central.rpc, machineId, uploadRoot) : undefined));
   // Dictation is cleaned up against THIS conversation: its project, its title
   // and the words its last turns used are what whisper most often mishears.
   const polishHistory = history.length ? history : cachedHist;
@@ -260,6 +266,8 @@ export function Chat({
     polish: polishDictation,
     notifyError: central.notifyError,
   });
+  /** What the last send took out of the composer. */
+  const lastClearedRef = useRef<{ text: string; at: number; images: typeof picker.images; files: typeof picker.files; large: typeof picker.large } | null>(null);
   // A message the hub could not deliver comes back into the box rather than
   // being lost. Appended, not assigned: by the time the refusal lands the person
   // may already be typing the next thing, and overwriting that would be a second
@@ -272,6 +280,11 @@ export function Chat({
     if (back.machineId !== machineId || back.sessionId !== session.sessionId) return;
     const unsent = back.text;
     setDraft((d) => (d ? (d.includes(unsent) ? d : `${unsent}\n${d}`) : unsent));
+    // …and what was attached to the last of them. The large ones are named in
+    // the text itself (`withUploadedFiles`) and already on the machine.
+    const last = lastClearedRef.current;
+    lastClearedRef.current = null;
+    if (last && unsent.includes(last.text.trim())) picker.restore(last.images, last.files, []);
     central.clearRecovered();
   }, [central.recoveredText, central.clearRecovered, machineId, session.sessionId]);
 
@@ -730,6 +743,7 @@ export function Chat({
   /** Same idea for non-image attachments: a refused resume must not quietly
    *  swallow the files someone dropped in with the message. */
   const pendingFiles = useRef<typeof picker.files>([]);
+  const pendingLarge = useRef<typeof picker.large>([]);
 
   // One send path for the composer AND the quick-reply buttons — both are the
   // same act, answering the session. Live-attached run: an `input` frame is
@@ -742,10 +756,18 @@ export function Chat({
     staged: typeof picker.images = [],
     files?: ReturnType<typeof picker.toFiles>,
     stagedFiles: typeof picker.files = [],
+    stagedLarge: typeof picker.large = [],
   ): boolean => {
+    // Uploaded files are named at the END of what goes out; `text` stays what
+    // the person typed, so a refused send can put exactly that back.
+    const wire = withUploadedFiles(
+      text,
+      stagedLarge.flatMap((c) => (c.path ? [c.path] : [])),
+    );
     if (isActive) {
-      if (!central.sendInput(text, images, files)) return false;
-      lastSentRef.current = text.trim() || null;
+      if (!central.sendInput(wire, images, files)) return false;
+      // The transcript will hold what went out, the uploads' block included.
+      lastSentRef.current = wire.trim() || null;
     } else {
       // The pick made while detached rides the resume: the agent opens the
       // session on it before the first turn, and `run_settings` then retires
@@ -754,10 +776,11 @@ export function Chat({
         model: modelPick || undefined,
         effort: effortPick && effortPick !== 'ultracode' ? (effortPick as EffortLevel) : undefined,
       };
-      if (!central.open(machineId, session.sessionId, text, images, files, startup)) return false;
+      if (!central.open(machineId, session.sessionId, wire, images, files, startup)) return false;
       pendingResume.current = text;
       pendingImages.current = staged;
       pendingFiles.current = stagedFiles;
+      pendingLarge.current = stagedLarge;
     }
     return true;
   };
@@ -767,21 +790,25 @@ export function Chat({
    *  is in `draft` by then is whatever React last committed. */
   const submitText = (text: string) => {
     if (!machineOnline || takingOver || gated || (!text.trim() && !picker.hasAttachments)) return;
-    if (!sendText(text, picker.toImages(), picker.images, picker.toFiles(), picker.files)) return;
-    lastClearedRef.current = { text, at: Date.now(), images: picker.images, files: picker.files };
+    const waiting = picker.largeBlock();
+    if (waiting) {
+      void showNotice(waiting);
+      return;
+    }
+    if (!sendText(text, picker.toImages(), picker.images, picker.toFiles(), picker.files, picker.large)) return;
+    lastClearedRef.current = { text, at: Date.now(), images: picker.images, files: picker.files, large: picker.large };
     setDraft('');
     picker.clearAll();
   };
   // A sealed send is asynchronous: `send` says true before the message is
   // encrypted and transmitted. When that later fails, the text goes back.
-  const lastClearedRef = useRef<{ text: string; at: number; images: typeof picker.images; files: typeof picker.files } | null>(null);
   useEffect(() => {
     const onFailed = () => {
       const last = lastClearedRef.current;
       lastClearedRef.current = null;
       if (last && Date.now() - last.at < 15_000) {
         setDraft((d) => d || last.text);
-        picker.restore(last.images, last.files);
+        picker.restore(last.images, last.files, last.large);
       }
     };
     window.addEventListener('cc-send-failed', onFailed);
@@ -808,6 +835,7 @@ export function Chat({
     pendingResume.current = null;
     pendingImages.current = [];
     pendingFiles.current = [];
+    pendingLarge.current = [];
   }, [central.runConfirmed]);
 
   // The resume was refused. Put the text back so the user can retry instead of
@@ -824,12 +852,15 @@ export function Chat({
     if (!central.refusal || unsent === null) return;
     const images = pendingImages.current;
     const files = pendingFiles.current;
+    const large = pendingLarge.current;
     pendingResume.current = null;
     pendingImages.current = [];
     pendingFiles.current = [];
+    pendingLarge.current = [];
     setDraft((d) => (d ? d : unsent));
     if (images.length) picker.restoreImages(images);
     if (files.length) picker.restoreFiles(files);
+    if (large.length) picker.restore([], [], large);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- picker identity churns per render; the refusal edge is the trigger
   }, [central.refusal]);
 

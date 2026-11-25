@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ChangeEvent, type ClipboardEvent, type DragEvent, type RefObject } from 'react';
 import type { FileInput, ImageInput } from '@cc-remote/shared';
-import { MAX_FILES_PER_MESSAGE, MAX_IMAGES_PER_MESSAGE } from '@cc-remote/shared';
+import { FS_MAX_UPLOAD_BYTES, MAX_FILES_PER_MESSAGE, MAX_IMAGES_PER_MESSAGE } from '@cc-remote/shared';
 import {
   fileToImageInput,
   fileToFileInput,
@@ -10,6 +10,7 @@ import {
   imagesB64Len,
   MAX_FILE_BYTES,
   MAX_ATTACH_B64_TOTAL,
+  newId,
   type FileAttachment,
   type ImageAttachment,
 } from './lib.js';
@@ -18,6 +19,7 @@ import { Plus, MicIcon, SquareIcon, X } from './icons.js';
 import { dictationVisible, POLISH_FAILED_NOTE, swapDictation, type DictationPair } from './polish.js';
 import { storageGet, storageRemove, storageSet } from './storage.js';
 import { showNotice } from './dialogs.js';
+import { withUploadedFiles, type LargeUploader } from './chatUpload.js';
 
 /** The hub's own `sanitize_files` bound, from the one shared source of these
  *  numbers (`shared/src/limits.ts`) — staging more would only have them
@@ -31,26 +33,94 @@ const MAX_FILES = MAX_FILES_PER_MESSAGE;
  *  step. */
 const MAX_IMAGES = MAX_IMAGES_PER_MESSAGE;
 
+/** A file too big to ride the message: uploaded to the machine as soon as it is
+ *  picked, and named in the message by its path on disk. */
+export interface LargeAttachment {
+  id: string;
+  name: string;
+  size: number;
+  sent: number;
+  status: 'sending' | 'done' | 'failed';
+  /** Absolute path on the machine, once uploaded. */
+  path?: string;
+  error?: string;
+  /** Kept so «Повторить» does not make the person find the file again. */
+  file: File;
+  /** The machine + folder it went to; a send aimed elsewhere is refused. */
+  target: string;
+}
+
 /** Staged attachments shared by the chat + start-screen composers: pick, paste
  *  or drop them, preview them, clear them, and turn them into the wire
- *  `ImageInput[]` / `FileInput[]`. */
-export function useImageAttachment() {
+ *  `ImageInput[]` / `FileInput[]`. With a `uploader`, a file past the inline
+ *  limits is uploaded to the machine instead of refused. */
+export function useImageAttachment(getUploader?: () => LargeUploader | undefined) {
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [files, setFiles] = useState<FileAttachment[]>([]);
+  const [large, setLarge] = useState<LargeAttachment[]>([]);
+  // Asked when a file arrives or is sent, not on render: the screen that owns
+  // the picker may only learn its machine and folder further down.
+  const uploaderRef = useRef(getUploader);
+  uploaderRef.current = getUploader;
+  /** One controller per upload in flight, so ✕ and a send can stop it. */
+  const uploadCtl = useRef(new Map<string, AbortController>());
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   /** Mirror of what is staged, readable synchronously inside `accept`. It awaits
    *  between files, so React state is a batch behind while a drop is landing. */
-  const stagedRef = useRef<{ images: ImageAttachment[]; files: FileAttachment[] }>({
+  const stagedRef = useRef<{ images: ImageAttachment[]; files: FileAttachment[]; large: LargeAttachment[] }>({
     images: [],
     files: [],
+    large: [],
   });
   useEffect(() => {
-    stagedRef.current = { images, files };
-  }, [images, files]);
+    stagedRef.current = { images, files, large };
+  }, [images, files, large]);
   /** Bumped every time the composer is emptied by a send. A file read that
    *  started before the bump belongs to the message that already left. */
   const epochRef = useRef(0);
+
+  const runLarge = useCallback((chip: LargeAttachment) => {
+    const up = uploaderRef.current?.();
+    const patch = (p: Partial<LargeAttachment>) =>
+      setLarge((prev) => prev.map((c) => (c.id === chip.id ? { ...c, ...p } : c)));
+    if (!up) {
+      patch({ status: 'failed', error: 'Загрузка здесь недоступна' });
+      return;
+    }
+    const ctl = new AbortController();
+    uploadCtl.current.set(chip.id, ctl);
+    patch({ status: 'sending', sent: 0, error: undefined, target: up.target });
+    up.upload(chip.file, { signal: ctl.signal, onProgress: (sent) => patch({ sent }) })
+      .then((path) => patch({ status: 'done', path, sent: chip.size }))
+      .catch((err: unknown) => {
+        // Removed or cleared: nobody is waiting for the answer any more.
+        if (!ctl.signal.aborted) patch({ status: 'failed', error: (err as Error).message });
+      })
+      .finally(() => uploadCtl.current.delete(chip.id));
+  }, []);
+  const startLarge = useCallback(
+    (picked: File[]) => {
+      const chips: LargeAttachment[] = picked.map((file) => ({
+        id: newId('big-'),
+        name: file.name || 'файл',
+        size: file.size,
+        sent: 0,
+        status: 'sending',
+        file,
+        target: uploaderRef.current?.()?.target ?? '',
+      }));
+      setLarge((prev) => [...prev, ...chips]);
+      for (const chip of chips) runLarge(chip);
+    },
+    [runLarge],
+  );
+  const stopAllLarge = useCallback(() => {
+    for (const ctl of uploadCtl.current.values()) ctl.abort();
+    uploadCtl.current.clear();
+  }, []);
+  // Leaving the screen ends what is still travelling.
+  useEffect(() => stopAllLarge, [stopAllLarge]);
 
   /**
    * Take whatever was picked, pasted or dropped.
@@ -74,6 +144,7 @@ export function useImageAttachment() {
     // epoch; a batch from a previous one is discarded rather than committed.
     const epoch = epochRef.current;
     const tooBig: string[] = [];
+    const tooHuge: string[] = [];
     const noRoom: string[] = [];
     const tooMany: string[] = [];
     // What is already staged, plus what this batch has added so far. `staged`
@@ -86,9 +157,22 @@ export function useImageAttachment() {
     let used = imagesB64Len(staged.images);
     for (const a of staged.files) used += a.data.length;
     let imageCount = staged.images.length;
-    let fileCount = staged.files.length;
+    // The upload path shares the per-message file cap with inline files.
+    let fileCount = staged.files.length + staged.large.length;
     const addedImages: ImageAttachment[] = [];
     const addedFiles: FileAttachment[] = [];
+    const addedLarge: File[] = [];
+    // Past the inline limits a file goes up to the machine, when this composer
+    // knows which one; otherwise it is refused as before.
+    const goLarge = (f: File, fallback: string[]): void => {
+      if (!uploaderRef.current?.()) fallback.push(label(f));
+      else if (f.size > FS_MAX_UPLOAD_BYTES) tooHuge.push(label(f));
+      else if (fileCount >= MAX_FILES) tooMany.push(label(f));
+      else {
+        fileCount++;
+        addedLarge.push(f);
+      }
+    };
     for (const f of incoming) {
       const img = await fileToImageInput(f);
       if (img) {
@@ -98,7 +182,7 @@ export function useImageAttachment() {
         }
         const len = imageB64Len(img);
         if (used + len > MAX_ATTACH_B64_TOTAL) {
-          noRoom.push(label(f));
+          goLarge(f, noRoom);
           continue;
         }
         used += len;
@@ -111,7 +195,7 @@ export function useImageAttachment() {
       // being dropped by the hub in flight.
       const att = await fileToFileInput(f);
       if (!att) {
-        tooBig.push(label(f));
+        goLarge(f, tooBig);
         continue;
       }
       if (fileCount >= MAX_FILES) {
@@ -119,7 +203,8 @@ export function useImageAttachment() {
         continue;
       }
       if (used + att.data.length > MAX_ATTACH_B64_TOTAL) {
-        noRoom.push(label(f));
+        // Counted already as an inline file; it goes up instead.
+        goLarge(f, noRoom);
         continue;
       }
       used += att.data.length;
@@ -134,9 +219,13 @@ export function useImageAttachment() {
     // drop was still being read must stay removed, not come back with the batch.
     if (addedImages.length) setImages((prev) => [...prev, ...addedImages].slice(0, MAX_IMAGES));
     if (addedFiles.length) setFiles((prev) => [...prev, ...addedFiles].slice(0, MAX_FILES));
+    if (addedLarge.length) startLarge(addedLarge);
     const problems: string[] = [];
     if (tooBig.length) {
       problems.push(`Слишком большой файл (предел ${fileSizeLabel(MAX_FILE_BYTES)}): ${tooBig.join(', ')}`);
+    }
+    if (tooHuge.length) {
+      problems.push(`Слишком большой файл (предел 100 МБ): ${tooHuge.join(', ')}`);
     }
     if (tooMany.length) {
       problems.push(
@@ -150,7 +239,7 @@ export function useImageAttachment() {
     }
     // One dialog for the whole drop: thirty files must not mean thirty alerts.
     if (problems.length) void showNotice(problems.join('\n\n'));
-  }, []);
+  }, [startLarge]);
 
   const onFileInput = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
@@ -202,14 +291,46 @@ export function useImageAttachment() {
     // Everything staged left with the message. Anything still being read is no
     // longer ours — see the epoch note in `accept`.
     epochRef.current += 1;
+    stopAllLarge();
     setImages([]);
     setFiles([]);
-  }, []);
+    setLarge([]);
+  }, [stopAllLarge]);
   /** Put back what a send took when the send never left (sealing failed). */
-  const restore = useCallback((imgs: ImageAttachment[], fls: FileAttachment[]) => {
+  const restore = useCallback((imgs: ImageAttachment[], fls: FileAttachment[], lrg: LargeAttachment[] = []) => {
     setImages((prev) => (prev.length ? prev : imgs));
     setFiles((prev) => (prev.length ? prev : fls));
+    setLarge((prev) => (prev.length ? prev : lrg));
   }, []);
+  const removeLarge = useCallback((id: string) => {
+    uploadCtl.current.get(id)?.abort();
+    uploadCtl.current.delete(id);
+    setLarge((prev) => prev.filter((c) => c.id !== id));
+  }, []);
+  const retryLarge = useCallback(
+    (id: string) => {
+      const chip = stagedRef.current.large.find((c) => c.id === id);
+      if (chip && chip.status === 'failed') runLarge(chip);
+    },
+    [runLarge],
+  );
+  /** Why a send must wait or be redone, or null when the big files are ready. */
+  const largeBlock = useCallback((): string | null => {
+    if (large.some((c) => c.status === 'sending')) return 'Файл ещё загружается';
+    if (large.some((c) => c.status === 'failed')) {
+      return 'Файл не загрузился: повторите или уберите его из сообщения';
+    }
+    const here = uploaderRef.current?.()?.target ?? '';
+    if (large.some((c) => c.target !== here)) {
+      return 'Файл загружен на другую машину, прикрепите заново';
+    }
+    return null;
+  }, [large]);
+  /** The text with the uploaded files' paths appended, as it goes on the wire. */
+  const withLargeFiles = useCallback(
+    (text: string) => withUploadedFiles(text, large.flatMap((c) => (c.path ? [c.path] : []))),
+    [large],
+  );
   const removeImage = useCallback(
     (index: number) => setImages((prev) => prev.filter((_, i) => i !== index)),
     [],
@@ -237,8 +358,9 @@ export function useImageAttachment() {
   return {
     images,
     files,
+    large,
     /** Anything at all staged — the one question every send path asks. */
-    hasAttachments: images.length > 0 || files.length > 0,
+    hasAttachments: images.length > 0 || files.length > 0 || large.length > 0,
     dragging,
     fileRef,
     onFileInput,
@@ -250,6 +372,10 @@ export function useImageAttachment() {
     restore,
     removeImage,
     removeFile,
+    removeLarge,
+    retryLarge,
+    largeBlock,
+    withLargeFiles,
     restoreImages,
     restoreFiles,
     open,
@@ -447,6 +573,32 @@ export function AttachPreview({ picker }: { picker: ImagePicker }) {
           <button
             className="attach-x"
             onClick={() => picker.removeFile(i)}
+            aria-label={`Убрать ${f.name}`}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      ))}
+      {/* Past the inline limit the file is already travelling to the machine:
+          the size slot shows how far, and a failure can be repeated. */}
+      {picker.large.map((f) => (
+        <div className={`attach-chip file${f.status === 'failed' ? ' failed' : ''}`} key={f.id} title={f.error}>
+          <span className="attach-name">{f.name}</span>
+          <span className="attach-size">
+            {f.status === 'sending'
+              ? `${Math.min(99, Math.floor((f.sent / Math.max(1, f.size)) * 100))}%`
+              : f.status === 'failed'
+                ? 'ошибка'
+                : fileSizeLabel(f.size)}
+          </span>
+          {f.status === 'failed' && (
+            <button className="attach-retry" onClick={() => picker.retryLarge(f.id)}>
+              Повторить
+            </button>
+          )}
+          <button
+            className="attach-x"
+            onClick={() => picker.removeLarge(f.id)}
             aria-label={`Убрать ${f.name}`}
           >
             <X size={12} />

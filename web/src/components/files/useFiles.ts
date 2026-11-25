@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type {
-  FsDownloadResult,
-  FsListResult,
-  FsUploadBeginResult,
-} from '@cc-remote/shared';
-import { FS_CHUNK_BYTES, FS_MAX_UPLOAD_BYTES } from '@cc-remote/shared';
+import type { FsDownloadResult, FsListResult } from '@cc-remote/shared';
+import { FS_MAX_UPLOAD_BYTES } from '@cc-remote/shared';
 import { newId } from '../../lib.js';
 import { pullBytes } from './pullBytes.js';
+import { uploadBlob } from '../../uploadBlob.js';
 import type { useCentral } from '../../useCentral.js';
 
 type Central = ReturnType<typeof useCentral>;
@@ -267,25 +264,13 @@ export function useFiles(
       const set = (patch: Partial<UploadRow>): void =>
         setUploads((prev) => prev.map((u) => (u.id === row.id ? { ...u, ...patch } : u)));
       set({ status: 'sending', sent: 0, error: undefined });
-      let uploadId: string | undefined;
       try {
-        const begun = await call<FsUploadBeginResult>('fs.upload.begin', {
+        await uploadBlob(call, {
           dir: row.dir,
           name: row.name,
-          size: row.size,
+          blob: row.file,
+          onProgress: (sent) => set({ sent }),
         });
-        uploadId = begun.uploadId;
-        let offset = 0;
-        while (offset < row.size) {
-          const slice = row.file.slice(offset, Math.min(offset + FS_CHUNK_BYTES, row.size));
-          const buf = new Uint8Array(await slice.arrayBuffer());
-          let binary = '';
-          for (let i = 0; i < buf.length; i += 1) binary += String.fromCharCode(buf[i]!);
-          await call('fs.upload.chunk', { uploadId, offset, data: btoa(binary) });
-          offset += buf.length;
-          set({ sent: offset });
-        }
-        await call('fs.upload.commit', { uploadId });
         set({ status: 'done', sent: row.size });
         reload();
       } catch (err) {
@@ -293,7 +278,6 @@ export function useFiles(
         // person find it again — the same idea as the composer putting a refused
         // attachment back.
         set({ status: 'failed', error: (err as Error).message });
-        if (uploadId) await call('fs.upload.abort', { uploadId }).catch(() => {});
       }
     },
     [call, reload],

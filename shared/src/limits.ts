@@ -43,6 +43,13 @@ export const FILE_B64_MAX = 12 * 1024 * 1024;
 /** Base64 budget for ALL attachments of one message together. */
 export const ATTACH_B64_TOTAL_MAX = 20 * 1024 * 1024;
 
+/**
+ * Folder (at a project's root) where chat attachments over the inline limit are
+ * uploaded to. The hub lets a control-share member write ONLY here
+ * (`CHAT_UPLOAD_DIR` in server-rs/src/hub/rpc.rs — keep the two equal).
+ */
+export const CHAT_UPLOAD_DIR = '.hegai-uploads';
+
 /** Bytes of a single file the web composer will stage as a file attachment. */
 export const FILE_BYTES_MAX = 8 * 1024 * 1024;
 

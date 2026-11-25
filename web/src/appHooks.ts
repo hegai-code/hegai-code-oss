@@ -508,6 +508,10 @@ export interface Seat {
   /** The session whose run this browser currently holds, if any. */
   activeSessionId?: string;
 }
+/** The roots shared with the viewer, per machine: where the hub lets a member
+ *  write. Read deep in the session panes. */
+export const ShareRootsContext = createContext<readonly { machineId: string; cwd: string }[]>([]);
+
 export const SeatContext = createContext<Seat>({ community: false, budget: null });
 export function useSeat(): Seat {
   return useContext(SeatContext);

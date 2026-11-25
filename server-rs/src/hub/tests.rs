@@ -395,6 +395,10 @@ fn drain(receiver: &mut Receiver<String>) -> Vec<Value> {
 /// owned by someone else and shared with `control` on /repo — the
 /// employee-on-a-colleague's-box shape.
 fn seat_as_team_member(hub: &mut Hub) {
+    seat_as_team_member_with(hub, "control");
+}
+
+fn seat_as_team_member_with(hub: &mut Hub, mode: &str) {
     let ws = hub.workspaces.clone();
     ws.ensure_user("mate", "mate@example.com", Some("Mate"))
         .unwrap();
@@ -414,7 +418,7 @@ fn seat_as_team_member(hub: &mut Hub) {
             [],
         )
         .unwrap();
-    ws.share_project("mate", wid, "machine-1", "/repo", "Repo", "control", "team")
+    ws.share_project("mate", wid, "machine-1", "/repo", "Repo", mode, "team")
         .unwrap();
     let access = ws.ui_access("owner", Some(wid), false).unwrap();
     assert_eq!(access.role, "member");
@@ -5605,6 +5609,323 @@ fn member_may_rename_and_make_a_single_folder_in_a_shared_root() {
     assert!(!ok, "no can_start, no mkdir");
 }
 
+/// A member's chat attachment over the inline limit: `.hegai-uploads` made at
+/// the shared root, then begin -> chunk -> commit, each call tied to the
+/// connection and machine that began it. Nothing else of `fs.upload.*` opens.
+#[test]
+fn member_may_upload_a_chat_attachment_into_the_uploads_folder_only() {
+    let (mut hub, mut ui_rx, mut agent_rx) = test_hub(session(None));
+    seat_as_team_member(&mut hub);
+    let mut n = 0;
+    // Everything the browser was sent, collected as calls drain the channel.
+    let seen = std::cell::RefCell::new(Vec::<Value>::new());
+    // Sends from `conn`; true when the agent got the frame.
+    let mut call = |hub: &mut Hub, conn: ConnId, method: &str, params: Value| -> (String, bool) {
+        n += 1;
+        let id = format!("u{n}");
+        drain(&mut agent_rx);
+        seen.borrow_mut().extend(drain(&mut ui_rx));
+        hub.on_ui_msg(
+            conn,
+            json!({"type":"rpc_request","requestId":id,"machineId":"machine-1",
+                   "method":method,"params":params}),
+        );
+        let sent = drain(&mut agent_rx)
+            .into_iter()
+            .any(|m| m["type"] == "rpc_request" && m["requestId"] == id);
+        (id, sent)
+    };
+    let answer = |hub: &mut Hub, id: &str, result: Value| {
+        hub.on_agent_msg(
+            AGENT_CONN,
+            json!({"type":"rpc_response","requestId":id,"ok":true,"result":result}),
+        );
+    };
+    let begin =
+        |dir: &str, name: &str| json!({"cwd":"/repo","dir":dir,"name":name,"size":12_000_000});
+
+    let (_, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.mkdir",
+        json!({"cwd":"/repo","path":".hegai-uploads"}),
+    );
+    assert!(ok, "the uploads folder may be made at the shared root");
+    let (_, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.mkdir",
+        json!({"cwd":"/repo/sub","path":".hegai-uploads"}),
+    );
+    assert!(!ok, "not below the root");
+    let (_, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.mkdir",
+        json!({"cwd":"/repo","path":".other"}),
+    );
+    assert!(!ok, "other dotted names stay refused");
+
+    // Refused begins: wrong dir, `..`, nested cwd, overwrite, bad names, other root.
+    for (what, params) in [
+        ("other dir", begin("docs", "a.xlsx")),
+        ("dotdot dir", begin("../x", "a.xlsx")),
+        ("nested dir", begin(".hegai-uploads/x", "a.xlsx")),
+        ("empty dir", begin("", "a.xlsx")),
+        ("slash name", begin(".hegai-uploads", "a/b.xlsx")),
+        ("backslash name", begin(".hegai-uploads", "a\\b.xlsx")),
+        ("dotdot name", begin(".hegai-uploads", "..")),
+        ("control name", begin(".hegai-uploads", "a\nb")),
+        (
+            "nested cwd",
+            json!({"cwd":"/repo/sub","dir":".hegai-uploads","name":"a","size":1}),
+        ),
+        (
+            "foreign cwd",
+            json!({"cwd":"/elsewhere","dir":".hegai-uploads","name":"a","size":1}),
+        ),
+        (
+            "overwrite",
+            json!({"cwd":"/repo","dir":".hegai-uploads","name":"a","size":1,"overwrite":true}),
+        ),
+    ] {
+        let (_, ok) = call(&mut hub, UI_CONN, "fs.upload.begin", params);
+        assert!(!ok, "{what} must not reach the agent");
+    }
+    assert!(hub.member_uploads.is_empty());
+
+    // A strange upload id is refused before it has been begun.
+    for method in ["fs.upload.chunk", "fs.upload.commit", "fs.upload.abort"] {
+        let (_, ok) = call(
+            &mut hub,
+            UI_CONN,
+            method,
+            json!({"uploadId":"nope","offset":0,"data":""}),
+        );
+        assert!(!ok, "{method} with an unknown upload");
+    }
+
+    // The happy path.
+    let (id, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.begin",
+        begin(".hegai-uploads", "отчёт.xlsx"),
+    );
+    assert!(ok, "begin at the root");
+    answer(
+        &mut hub,
+        &id,
+        json!({"uploadId":"up-1","name":"отчёт.xlsx","path":".hegai-uploads/отчёт.xlsx"}),
+    );
+    assert_eq!(hub.member_uploads.len(), 1);
+
+    // Another connection (even the same person) and another upload id get nothing.
+    let access = hub.ui_access[&UI_CONN].clone();
+    hub.ui_access.insert(2, access);
+    let (_, ok) = call(
+        &mut hub,
+        2,
+        "fs.upload.chunk",
+        json!({"uploadId":"up-1","offset":0,"data":"QQ=="}),
+    );
+    assert!(!ok, "another connection cannot continue the upload");
+    hub.ui_access.remove(&2);
+    let (_, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.chunk",
+        json!({"uploadId":"up-2","offset":0,"data":"QQ=="}),
+    );
+    assert!(!ok, "someone else's upload id");
+
+    let (id, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.chunk",
+        json!({"uploadId":"up-1","offset":0,"data":"QQ=="}),
+    );
+    assert!(ok, "own chunk");
+    answer(&mut hub, &id, json!({"received":1}));
+    assert_eq!(hub.member_uploads.len(), 1, "a chunk keeps the record");
+
+    // A share withdrawn mid-upload stops the next window.
+    let full = hub.ui_access[&UI_CONN].clone();
+    hub.ui_access.insert(UI_CONN, {
+        let ws = hub.workspaces.clone();
+        ws.ensure_user("stranger", "s@example.com", None).unwrap();
+        ws.activate_access("stranger", "tests").unwrap();
+        ws.ui_access("stranger", None, false).unwrap()
+    });
+    let (_, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.chunk",
+        json!({"uploadId":"up-1","offset":1,"data":"QQ=="}),
+    );
+    assert!(!ok, "no start rights, no window");
+    hub.ui_access.insert(UI_CONN, full);
+
+    // Its share demoted to view while another on the machine stays control:
+    // `can_start` holds, the upload's own root does not.
+    let wid = hub.ui_access[&UI_CONN].workspace_id.clone();
+    let ws = hub.workspaces.clone();
+    ws.share_project(
+        "mate",
+        &wid,
+        "machine-1",
+        "/other",
+        "Other",
+        "control",
+        "team",
+    )
+    .unwrap();
+    let set_access = |access: &str| {
+        ws.conn
+            .lock()
+            .unwrap()
+            .execute(
+                "UPDATE project_shares SET access=?1 WHERE root='/repo'",
+                [access],
+            )
+            .unwrap();
+    };
+    set_access("view");
+    for method in ["fs.upload.chunk", "fs.upload.commit"] {
+        let (_, ok) = call(
+            &mut hub,
+            UI_CONN,
+            method,
+            json!({"uploadId":"up-1","offset":1,"data":"QQ=="}),
+        );
+        assert!(!ok, "{method} into a share that is view-only now");
+    }
+    set_access("control");
+
+    let (id, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.commit",
+        json!({"uploadId":"up-1"}),
+    );
+    assert!(ok, "own commit");
+    answer(
+        &mut hub,
+        &id,
+        json!({"path":".hegai-uploads/отчёт.xlsx","bytes":1}),
+    );
+    assert!(hub.member_uploads.is_empty(), "commit ends the record");
+    let commit_id = id.clone();
+    // The commit is audited like the owner's, with the folder it began in.
+    let wid = hub.ui_access[&UI_CONN].workspace_id.clone();
+    let mut events = hub
+        .workspaces
+        .audit_events("owner", &wid)
+        .unwrap_or_default();
+    events.extend(
+        hub.workspaces
+            .audit_events("owner", "personal:owner")
+            .unwrap_or_default(),
+    );
+    assert!(
+        events.iter().any(|e| e["action"] == "file.uploaded"
+            && e["metadata"]["cwd"] == "/repo"
+            && e["metadata"]["path"] == ".hegai-uploads/отчёт.xlsx"),
+        "audit: {events:?}"
+    );
+    let (_, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.chunk",
+        json!({"uploadId":"up-1","offset":1,"data":"QQ=="}),
+    );
+    assert!(!ok, "a committed upload is closed");
+    assert!(
+        seen.borrow()
+            .iter()
+            .any(|m| m["requestId"] == commit_id.as_str() && m["ok"] == true),
+        "the member is told the upload landed"
+    );
+
+    // abort ends it, always; a disconnect drops the rest.
+    let (id, _) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.begin",
+        begin(".hegai-uploads", "b.xlsx"),
+    );
+    answer(
+        &mut hub,
+        &id,
+        json!({"uploadId":"up-3","name":"b.xlsx","path":".hegai-uploads/b.xlsx"}),
+    );
+    let (id, ok) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.abort",
+        json!({"uploadId":"up-3"}),
+    );
+    assert!(ok);
+    hub.on_agent_msg(
+        AGENT_CONN,
+        json!({"type":"rpc_response","requestId":id,"ok":false,"error":"gone"}),
+    );
+    assert!(
+        hub.member_uploads.is_empty(),
+        "abort ends it even when refused"
+    );
+    let (id, _) = call(
+        &mut hub,
+        UI_CONN,
+        "fs.upload.begin",
+        begin(".hegai-uploads", "c.xlsx"),
+    );
+    answer(
+        &mut hub,
+        &id,
+        json!({"uploadId":"up-4","name":"c.xlsx","path":".hegai-uploads/c.xlsx"}),
+    );
+    assert_eq!(hub.member_uploads.len(), 1);
+    hub.on_disconnect(UI_CONN);
+    assert!(
+        hub.member_uploads.is_empty(),
+        "disconnect drops the records"
+    );
+    let aborted = drain(&mut agent_rx)
+        .iter()
+        .any(|m| m["method"] == "fs.upload.abort" && m["params"]["uploadId"] == "up-4");
+    assert!(aborted, "and frees the agent's slot");
+}
+
+/// A view-only share, a stranger and the control-less cannot write uploads.
+#[test]
+fn a_view_member_cannot_upload_or_make_the_uploads_folder() {
+    let (mut hub, mut ui_rx, mut agent_rx) = test_hub(session(None));
+    seat_as_team_member_with(&mut hub, "view");
+    for (method, params) in [
+        ("fs.mkdir", json!({"cwd":"/repo","path":".hegai-uploads"})),
+        (
+            "fs.upload.begin",
+            json!({"cwd":"/repo","dir":".hegai-uploads","name":"a.xlsx","size":5}),
+        ),
+    ] {
+        drain(&mut agent_rx);
+        drain(&mut ui_rx);
+        hub.on_ui_msg(
+            UI_CONN,
+            json!({"type":"rpc_request","requestId":"v1","machineId":"machine-1",
+                   "method":method,"params":params}),
+        );
+        assert!(
+            !drain(&mut agent_rx)
+                .iter()
+                .any(|m| m["type"] == "rpc_request"),
+            "{method} must not reach the agent"
+        );
+        hub.pending_rpc.clear();
+    }
+}
+
 /// A UI turn carries the typist's identity, taken from the SENDING connection
 /// at send time, not from whoever started the run; resume's first turn too.
 #[test]
@@ -8728,16 +9049,47 @@ fn drain_raw(receiver: &mut Receiver<String>) -> Vec<String> {
     out
 }
 
+/// `ping` draws a `pong` only for a client that asked for one, and never through
+/// a `pause`: an app in the field would fail to decode the frame, and a hushed
+/// page asked for silence.
+#[test]
+fn ping_is_answered_only_for_clients_that_asked() {
+    let (mut hub, mut ui_rx, _agent_rx) = test_hub(session(None));
+    drain(&mut ui_rx);
+    hub.on_ui_msg(UI_CONN, json!({"type":"ping"}));
+    assert!(drain(&mut ui_rx).is_empty(), "no cap, no answer");
+
+    hub.on_ui_msg(
+        UI_CONN,
+        json!({"type":"hello","client":"web","caps":["pong"]}),
+    );
+    drain(&mut ui_rx);
+    hub.on_ui_msg(UI_CONN, json!({"type":"ping"}));
+    assert_eq!(types_of(&drain(&mut ui_rx)), ["pong"]);
+
+    hub.on_ui_msg(UI_CONN, json!({"type":"pause","acks":true}));
+    hub.on_ui_msg(UI_CONN, json!({"type":"ping"}));
+    assert!(
+        drain(&mut ui_rx).is_empty(),
+        "a paused client hears nothing"
+    );
+    hub.on_ui_msg(UI_CONN, json!({"type":"resume"}));
+    drain(&mut ui_rx);
+    hub.on_ui_msg(UI_CONN, json!({"type":"ping"}));
+    assert_eq!(types_of(&drain(&mut ui_rx)), ["pong"]);
+}
+
 /// The capability names are strings both ends must spell the same: a rename on
 /// one side silently turns the feature off (or on) for every client.
 #[test]
 fn capability_names_match_shared() {
     for (name, value) in [
         ("CAP_STATS_ON_DEMAND", CAP_STATS_ON_DEMAND),
+        ("CAP_PONG", CAP_PONG),
         ("CAP_SESSION_DELTA", CAP_SESSION_DELTA),
         ("CAP_SESSION_PATCH", CAP_SESSION_PATCH),
     ] {
-        if name == "CAP_STATS_ON_DEMAND" {
+        if name == "CAP_STATS_ON_DEMAND" || name == "CAP_PONG" {
             assert!(
                 WEB_PROTOCOL_TS.contains(&format!("export const {name} = '{value}';")),
                 "{name} in web-protocol.ts"
