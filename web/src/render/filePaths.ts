@@ -148,11 +148,15 @@ export function fileName(path: string): string {
   return path.split(/[\\/]/).pop() || path;
 }
 
-/** An error that says the file is not there (or is not a file), as opposed to a
- *  dropped socket: only the first hides the chip. */
+/** An error that is final for this viewer — the file is not there, is not a
+ *  file, or lies outside what they may read (the agent: outside the session's
+ *  folder; the hub: outside a shared project's root, «Read-only workspace
+ *  access.») — as opposed to a dropped socket: only the first hides the chip. */
 export function isMissingFileError(e: unknown): boolean {
   const m = e instanceof Error ? e.message : String(e);
-  return /ENOENT|not found|no such file|is a directory|EISDIR|escapes working directory/i.test(m);
+  return /ENOENT|not found|no such file|is a directory|EISDIR|escapes working directory|outside this project|read-only workspace access/i.test(
+    m,
+  );
 }
 
 /** First segments of absolute paths that are a machine's file system. Anything

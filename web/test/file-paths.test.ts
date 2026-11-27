@@ -107,12 +107,17 @@ test('findFilePaths: urls and bare names are not workspace files', async () => {
   assert.deepEqual(findFilePaths('см. https://x.com/a/b.mp4 и video.mp4'), []);
 });
 
-test('isMissingFileError: only a missing file or directory hides the chip', async () => {
+test('isMissingFileError: a missing file, a directory or a path outside the readable root hides the chip', async () => {
   const { isMissingFileError } = await import('../src/render/filePaths.js');
   assert.equal(isMissingFileError(new Error("ENOENT: no such file or directory, open 'x'")), true);
   assert.equal(isMissingFileError(new Error('path is a directory')), true);
   assert.equal(isMissingFileError(new Error('socket closed')), false);
   assert.equal(isMissingFileError(new Error('timeout')), false);
+  // Outside what this viewer may read is final too: a member of a shared project
+  // must not see a chip for a file beyond its root (27.11.2026, /home/agent/data).
+  assert.equal(isMissingFileError(new Error('Read-only workspace access.')), true);
+  assert.equal(isMissingFileError(new Error('path escapes working directory')), true);
+  assert.equal(isMissingFileError(new Error('/x/a.png is outside this project and the temp directory')), true);
 });
 
 import { fileLinkTarget, fileOpenErrorText } from '../src/render/filePaths.js';
