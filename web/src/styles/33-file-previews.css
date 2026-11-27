@@ -60,3 +60,11 @@
 .fp-file-note > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .fp-file-note.err { color: var(--red); }
 .fp-video { display: block; margin-top: 8px; max-width: min(100%, 420px); max-height: 320px; border-radius: var(--radius-md); background: #000; }
+
+/* A markdown link to a file on the session's machine: a button that reads as the
+   link beside it. */
+.md-file-link { all: unset; cursor: pointer; color: var(--link-prose); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; overflow-wrap: anywhere; }
+.md-file-link:hover { text-decoration-color: currentColor; }
+.md-file-link:focus-visible { outline: 2px solid var(--link-prose); outline-offset: 2px; }
+.md-file-link:disabled { opacity: .6; cursor: progress; }
+.md .fp-file-note { display: inline-flex; margin-left: 6px; vertical-align: middle; }

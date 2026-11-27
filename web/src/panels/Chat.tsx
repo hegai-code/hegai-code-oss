@@ -1179,8 +1179,8 @@ export function Chat({
   // The files an answer names (a screenshot, a plan), read through `fs.peek`
   // from the session's folder. No folder, nothing to peek into.
   const filePeek = useMemo(
-    () => (session.cwd ? makeFilePeek(central.rpc, machineId, session.cwd) : null),
-    [central.rpc, machineId, session.cwd],
+    () => (session.cwd ? makeFilePeek(central.rpc, machineId, session.cwd, central.notifyError) : null),
+    [central.rpc, central.notifyError, machineId, session.cwd],
   );
 
   // ---- enrichment: the strip under the tail assistant turn ------------------

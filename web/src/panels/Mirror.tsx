@@ -233,8 +233,8 @@ export function Mirror({
   );
 
   const filePeek = useMemo(
-    () => (session.cwd ? makeFilePeek(central.rpc, machineId, session.cwd) : null),
-    [central.rpc, machineId, session.cwd],
+    () => (session.cwd ? makeFilePeek(central.rpc, machineId, session.cwd, central.notifyError) : null),
+    [central.rpc, central.notifyError, machineId, session.cwd],
   );
 
   return (

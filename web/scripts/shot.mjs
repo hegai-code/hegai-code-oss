@@ -289,6 +289,8 @@ const VIEWS = [
   { screen: 'filePreview', width: 390, height: 844, theme: 'light', dsf: 2, click: '.fp-chip:not(.missing):not(.pending)', settle: 500, tag: 'sheet', wait: '.fp-thumb img' },
   { screen: 'filePreview', width: 1440, height: 700, theme: 'dark', click: '.fp-chip:not(.missing):not(.pending)', settle: 500, tag: 'sheet', wait: '.fp-thumb img' },
   { screen: 'filePreview', width: 390, height: 844, theme: 'light', dsf: 2, click: '.fp-thumb', settle: 300, tag: 'lightbox', wait: '.fp-thumb img' },
+  // A markdown link to a file of the machine (27.11.2026): the plan link opens the same sheet as its chip.
+  { screen: 'filePreview', width: 390, height: 844, theme: 'light', dsf: 2, click: 'button.md-file-link:nth-of-type(2)', settle: 500, tag: 'mdlink', wait: '.fp-thumb img' },
   // Download states (Files panel) and the chat's file chips: progress, ready
   // (the second tap iOS needs), error; chips, then a tap on each kind.
   { screen: 'filesDownloading', width: 1440, height: 800, theme: 'light' },

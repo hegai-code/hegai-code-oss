@@ -114,3 +114,94 @@ test('isMissingFileError: only a missing file or directory hides the chip', asyn
   assert.equal(isMissingFileError(new Error('socket closed')), false);
   assert.equal(isMissingFileError(new Error('timeout')), false);
 });
+
+import { fileLinkTarget, fileOpenErrorText } from '../src/render/filePaths.js';
+
+test('fileLinkTarget: files on the machine', () => {
+  const t = fileLinkTarget;
+  assert.equal(t('/home/agent/data/a b.pdf'), '/home/agent/data/a b.pdf');
+  assert.equal(t('/home/h/%D0%BA.pdf'), '/home/h/к.pdf');
+  assert.equal(t('file:///srv/x/%D0%BA%20z.zip'), '/srv/x/к z.zip');
+  assert.equal(t('C:\\work\\a.docx'), 'C:\\work\\a.docx');
+  assert.equal(t('C:/work/a.docx'), 'C:/work/a.docx');
+  assert.equal(t('~/notes/a.md'), null);
+  assert.equal(t('content/README.md'), 'content/README.md');
+  assert.equal(t('./x.pdf'), './x.pdf');
+  assert.equal(t('output/a b/x.zip'), 'output/a b/x.zip');
+  assert.equal(t('report.md'), 'report.md');
+});
+
+test('fileLinkTarget: line suffixes are cut, the drive colon is not', () => {
+  const t = fileLinkTarget;
+  assert.equal(t('/home/x/m.mjs:28'), '/home/x/m.mjs');
+  assert.equal(t('/home/x/m.mjs:28:3'), '/home/x/m.mjs');
+  assert.equal(t('src/a.ts#L12'), 'src/a.ts');
+  assert.equal(t('src/a.ts#L12-L20'), 'src/a.ts');
+  assert.equal(t('C:/a.ts:5'), 'C:/a.ts');
+  assert.equal(t('C:\\a.ts'), 'C:\\a.ts');
+  assert.equal(t('/srv/a%zz.txt'), '/srv/a%zz.txt');
+});
+
+test('fileLinkTarget: not files', () => {
+  const t = fileLinkTarget;
+  for (const h of [
+    '/w/reports/abc', '/dl/x', 'https://a.com/b.pdf', 'http://x', 'mailto:a@b.c', 'tel:+7',
+    'ccremote://connect', '#anchor', '?q=1', '//host/x.pdf', '', 'word', 'www.example.com',
+  ]) {
+    assert.equal(t(h), null, h);
+  }
+});
+
+test('fileOpenErrorText', () => {
+  const e = fileOpenErrorText;
+  const outside = 'Файл вне папки проекта — из приложения его не открыть. Попросите агента выложить файл ссылкой.';
+  assert.equal(e(new Error('path escapes working directory'), '/a/b.pdf'), outside);
+  assert.equal(e(new Error('Read-only workspace access'), '/a/b.pdf'), outside);
+  assert.equal(e(new Error('ENOENT: no such file'), '/a/b.pdf'), 'Файла уже нет: b.pdf');
+  assert.equal(e('EISDIR', '/a/dir'), 'Это папка, а не файл: /a/dir');
+  assert.match(e(new Error('файл слишком большой для браузера — скопируйте путь'), '/a/b'), /больше 64 МБ/);
+  assert.equal(e(new Error('boom'), '/a/b'), 'Не удалось открыть файл: boom');
+});
+
+import { resolveFromDir, dirName } from '../src/render/filePaths.js';
+
+test('fileLinkTarget: review fixes', () => {
+  const t = fileLinkTarget;
+  assert.equal(t('C:%5Cwork%5Ca.docx'), 'C:\\work\\a.docx');
+  assert.equal(t('file:///C:/x/a.pdf'), 'C:/x/a.pdf');
+  assert.equal(t('report.md:28'), 'report.md');
+  assert.equal(t('m-glossary.mjs:28:3'), 'm-glossary.mjs');
+  assert.equal(t('example.com:8080'), null);
+  assert.equal(t('example.com'), null);
+  assert.equal(t('site.ru'), null);
+  assert.equal(t('README.md#install'), 'README.md');
+  assert.equal(t('docs/README.md#usage'), 'docs/README.md');
+  assert.equal(t('/home/u/a.pdf#page=2'), '/home/u/a.pdf');
+  assert.equal(t('a.pdf?x=1'), 'a.pdf');
+  assert.equal(t('/home/u/a%23b.pdf'), '/home/u/a#b.pdf');
+  assert.equal(t('/home/u/a%3Fb.pdf'), '/home/u/a?b.pdf');
+});
+
+test('resolveFromDir', () => {
+  assert.equal(resolveFromDir('docs/api', 'guide.md'), 'docs/api/guide.md');
+  assert.equal(resolveFromDir('docs/api', '../a.md'), 'docs/a.md');
+  assert.equal(resolveFromDir('/srv/p/docs', './x.png'), '/srv/p/docs/x.png');
+  assert.equal(resolveFromDir('docs', '/home/a.pdf'), '/home/a.pdf');
+  assert.equal(resolveFromDir('docs', '~/a.pdf'), '~/a.pdf');
+  assert.equal(resolveFromDir('docs', 'C:\\a.pdf'), 'C:\\a.pdf');
+  assert.equal(resolveFromDir(null, 'a.md'), 'a.md');
+  assert.equal(dirName('docs/api/README.md'), 'docs/api');
+  assert.equal(dirName('README.md'), '');
+  assert.equal(dirName('/a.md'), '/');
+});
+
+test('md urlTransform keeps file hrefs that react-markdown would blank', async () => {
+  const { defaultUrlTransform } = await import('react-markdown');
+  const { mdUrlTransform } = await import('../src/render/Blocks.js');
+  for (const u of ['file:///srv/a.pdf', 'C:\\work\\a.docx', 'C:/work/a.docx', 'm-glossary.mjs:28', 'report.md:12']) {
+    assert.equal(defaultUrlTransform(u), '', `default blanks ${u}`);
+    assert.equal(mdUrlTransform(u, 'href', defaultUrlTransform), u);
+  }
+  assert.equal(mdUrlTransform('javascript:alert(1)', 'href', defaultUrlTransform), '');
+  assert.equal(mdUrlTransform('https://a.com', 'href', defaultUrlTransform), 'https://a.com');
+});

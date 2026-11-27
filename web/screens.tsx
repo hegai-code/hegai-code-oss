@@ -853,6 +853,8 @@ const PREVIEW_HISTORY: HistoryMessage[] = [
           'Письмо пришло, шапка и кнопка на месте. План выкатки лежит в `docs/plan.md`, ещё один файл потерялся: /srv/shop-app/out/missing.png, а в `docs/nothere.md` я только предполагал.',
           '',
           `Скриншот: ${PREVIEW_SHOT}`,
+          '',
+          '- [Конспект PDF](/home/agent/data/live-notes/Конспект.pdf) · [план](docs/plan.md) · [отчёт](/w/reports/demo)',
         ].join('\n'),
       },
     ],
@@ -866,7 +868,13 @@ const previewPeek: PeekFile = Object.assign(
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
     return { blob: new Blob([bytes], { type: 'image/png' }), truncated: false };
   },
-  { scope: 'fixture', window: () => async () => { throw new Error('fixture'); } },
+  {
+    scope: 'fixture',
+    window: () => async () => {
+      throw new Error('Read-only workspace access.');
+    },
+    notifyError: (message: string) => console.warn(message),
+  },
 );
 
 const FILES_TEXT = [

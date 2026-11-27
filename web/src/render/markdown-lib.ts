@@ -16,7 +16,11 @@ import type { ComponentType } from 'react';
  * main.tsx), so by the time a transcript is on screen it is normally already
  * here. The split buys a smaller critical path, not a slower transcript.
  */
-type Lib = { Markdown: ComponentType<Record<string, unknown>>; gfm: unknown };
+type Lib = {
+  Markdown: ComponentType<Record<string, unknown>>;
+  gfm: unknown;
+  defaultUrlTransform: (url: string) => string;
+};
 
 let lib: Lib | null = null;
 let inflight: Promise<void> | null = null;
@@ -25,7 +29,7 @@ export function loadMarkdown(): Promise<void> {
   if (lib) return Promise.resolve();
   inflight ??= Promise.all([import('react-markdown'), import('remark-gfm')])
     .then(([md, gfm]) => {
-      lib = { Markdown: md.default as ComponentType<Record<string, unknown>>, gfm: gfm.default };
+      lib = { Markdown: md.default as ComponentType<Record<string, unknown>>, gfm: gfm.default, defaultUrlTransform: md.defaultUrlTransform };
     })
     .catch(() => {
       inflight = null; // a dropped chunk must not wedge every transcript forever

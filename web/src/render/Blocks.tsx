@@ -10,7 +10,8 @@ import { linkProps } from '../router.js';
 import { notLoggedInRuntime } from '../components/runtimeChips.js';
 import { BudgetCard, isBudgetLine } from '../components/BudgetCard.js';
 import { Attachment, ImageLightbox } from './Attachment.js';
-import { FilePreviews } from './FilePreviews.js';
+import { FileHref, FilePreviews } from './FilePreviews.js';
+import { fileLinkTarget } from './filePaths.js';
 import { GeneratedImage, ImageGenCard } from './GeneratedImage.js';
 import { BROWSER_FLAG, OWN_WINDOW_FLAG } from '../router.js';
 import { linksToBrowser, ownWindowsSafe } from '../shell/useSessionMenu.js';
@@ -105,9 +106,20 @@ function sameSiteLinks(): SameSiteLinks {
   return ownWindowsSafe() ? 'window' : 'none';
 }
 
+/** react-markdown blanks an href with a colon before its first `/` (`C:\\a.docx`,
+ *  `m-glossary.mjs:28`, `file:///…`). A file link is drawn as a button, never as
+ *  `<a href>`, so it passes through untouched. */
+export function mdUrlTransform(url: string, key: string, fallback: (u: string) => string): string {
+  return key === 'href' && fileLinkTarget(url) ? url : fallback(url);
+}
+
 function MdLink({ href, children }: { href?: string; children?: ReactNode }) {
   if (!href) return <>{children}</>;
   if (href.startsWith('#')) return <a href={href}>{children}</a>;
+  const file = fileLinkTarget(href);
+  if (file) return <FileHref path={file}>{children}</FileHref>;
+  // `~/…` is a path on the machine the app cannot resolve: text, not a dead link.
+  if (href.startsWith('~')) return <span title={href}>{children}</span>;
   return (
     <a href={mdLinkHref(href, window.location.href, sameSiteLinks())} target="_blank" rel="noreferrer noopener">
       {children}
@@ -162,7 +174,11 @@ export const Md = memo(function Md({
   return (
     <div className={cls}>
       {Markdown ? (
-        <Markdown remarkPlugins={[lib!.gfm]} components={MD_COMPONENTS}>
+        <Markdown
+          remarkPlugins={[lib!.gfm]}
+          components={MD_COMPONENTS}
+          urlTransform={(u: string, key: string) => mdUrlTransform(u, key, lib!.defaultUrlTransform)}
+        >
           {stripCitations(text)}
         </Markdown>
       ) : (

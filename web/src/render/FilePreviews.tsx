@@ -9,7 +9,7 @@ import { ImageLightbox } from './Attachment.js';
 import { Md } from './Blocks.js';
 import { mimeForName, withMime } from '../saveFile.js';
 import { useFileSave, saveStatusText } from '../useFileSave.js';
-import { fileName, findFilePaths, findPreviewPaths, isAbsolutePath, isMissingFileError, isMarkdownPath, isVideoPath } from './filePaths.js';
+import { dirName, fileName, fileOpenErrorText, resolveFromDir, findFilePaths, findPreviewPaths, isAbsolutePath, isMissingFileError, isMarkdownPath, isVideoPath } from './filePaths.js';
 
 /**
  * Previews of the files an answer names — a screenshot's path on its last line,
@@ -34,13 +34,24 @@ export type PeekFile = ((
   /** `fs.download` windows for any file inside the folder — the chat's file
    *  chips (video, pdf…) use it; `fs.peek` refuses those extensions. */
   window: (path: string) => (offset: number, length: number) => Promise<FsDownloadResult>;
+  /** Shows a failure to the person (a toast): a link they tapped must not fail silently. */
+  notifyError: (message: string) => void;
 };
 
 export const FilePeekContext = createContext<PeekFile | null>(null);
 
+/** The folder a relative link resolves from: the opened markdown file's own,
+ *  not the session's (null = the session folder). */
+export const FileBaseContext = createContext<string | null>(null);
+
 /** The reader for one machine + folder, over `fs.peek`. Quiet RPCs: a file that
  *  will not load is a muted chip, not a toast over the transcript. */
-export function makeFilePeek(rpc: ReturnType<typeof useCentral>['rpc'], machineId: string, cwd: string): PeekFile {
+export function makeFilePeek(
+  rpc: ReturnType<typeof useCentral>['rpc'],
+  machineId: string,
+  cwd: string,
+  notifyError: (message: string) => void = () => {},
+): PeekFile {
   const read = (path: string) => (offset: number, length: number) =>
     rpc<FsDownloadResult>(machineId, 'fs.peek', { cwd, path, offset, length }, true);
   return Object.assign(
@@ -50,6 +61,7 @@ export function makeFilePeek(rpc: ReturnType<typeof useCentral>['rpc'], machineI
         : pullBytes(read(path), maxBytes).then((blob) => ({ blob, truncated: false })),
     {
       scope: `${machineId}\u0000${cwd}`,
+      notifyError,
       window: (path: string) => (offset: number, length: number) =>
         rpc<FsDownloadResult>(machineId, 'fs.download', { cwd, path, offset, length }, true),
     },
@@ -333,7 +345,13 @@ function MdSheet({ path, name, loaded, onClose }: { path: string; name: string; 
       <div className="fp-sheet-path" title={path}>
         {path}
       </div>
-      {text === null ? <div className="line status">Загружаю…</div> : <Md text={text} />}
+      {text === null ? (
+        <div className="line status">Загружаю…</div>
+      ) : (
+        <FileBaseContext.Provider value={dirName(path) || null}>
+          <Md text={text} />
+        </FileBaseContext.Provider>
+      )}
       {loaded.truncated && (
         <div className="line status">Показано начало файла (первые {MD_CAP_BYTES / 1024} КБ).</div>
       )}
@@ -346,6 +364,15 @@ function MdSheet({ path, name, loaded, onClose }: { path: string; name: string; 
 async function probeFile(peek: PeekFile, path: string): Promise<number> {
   const w = await peek.window(path)(0, 1);
   return w.size;
+}
+
+/** The whole file through `fs.download` windows, typed by its name. */
+function downloadFile(peek: PeekFile, path: string, onProgress?: (loaded: number, total: number) => void): Promise<Blob> {
+  const pull = () => inSlot(() => pullBytes(peek.window(path), LINK_MAX_BYTES, onProgress));
+  // A file the agent is still writing changes between windows: once more from the start.
+  return pull()
+    .catch((e: unknown) => (/изменился во время чтения/.test(e instanceof Error ? e.message : String(e)) ? pull() : Promise.reject(e)))
+    .then((b) => withMime(b, fileName(path)));
 }
 
 function sizeLabel(n: number): string {
@@ -434,7 +461,7 @@ function FileLink({ peek, path }: { peek: PeekFile; path: string }) {
                 void save.start(name, (onProgress) =>
                   videoBlob.current
                     ? Promise.resolve(videoBlob.current)
-                    : inSlot(() => pullBytes(peek.window(path), LINK_MAX_BYTES, onProgress)).then((b) => withMime(b, name)),
+                    : downloadFile(peek, path, onProgress),
                 )
               }
             >
@@ -468,5 +495,105 @@ function FileLink({ peek, path }: { peek: PeekFile; path: string }) {
         </>
       )}
     </div>
+  );
+}
+
+/** A picture the `fs.peek` reader gave, in the same lightbox as a thumbnail's. */
+function PeekedImage({ loaded, name, onClose }: { loaded: Loaded; name: string; onClose: () => void }) {
+  const url = useObjectUrl(loaded.blob);
+  return url ? <ImageLightbox url={url} name={name} blob={loaded.blob} onClose={onClose} /> : null;
+}
+
+/**
+ * A markdown link that names a file on the session's machine
+ * (`[x](/home/me/out/a.pdf)`, see `fileLinkTarget`). A tap behaves like the
+ * chip under the answer: a picture or a note opens in the same lightbox / sheet,
+ * anything else is fetched through `fs.download` and saved (on a phone: fetched,
+ * then «Сохранить» from a fresh tap). A failure is a toast, in words.
+ * Without a session folder there is nothing to ask: plain text, no dead link.
+ */
+export function FileHref({ path, children }: { path: string; children?: ReactNode }) {
+  const peek = useContext(FilePeekContext);
+  if (!peek) return <span title={path}>{children}</span>;
+  return <FileHrefOpen peek={peek} path={path}>{children}</FileHrefOpen>;
+}
+
+function FileHrefOpen({ peek, path: written, children }: { peek: PeekFile; path: string; children?: ReactNode }) {
+  const path = resolveFromDir(useContext(FileBaseContext), written);
+  const name = fileName(path);
+  const peekable = /\.(png|jpe?g|gif|webp|md|markdown)$/i.test(path);
+  const md = isMarkdownPath(path);
+  const save = useFileSave();
+  const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const { notifyError } = peek;
+  const state = save.state;
+  useEffect(() => {
+    if (state?.phase === 'error') {
+      notifyError(state.message);
+      save.dismiss();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the state only
+  }, [state]);
+
+  const open = () => {
+    if (peekable) {
+      setBusy(true);
+      loadPreview(peek, path)
+        .then((l) => live.current && setLoaded(l))
+        .catch((e: unknown) => {
+          // Over the `fs.peek` ceiling: the file is still fine to download.
+          if (/too large to preview/i.test(e instanceof Error ? e.message : String(e))) download();
+          else notifyError(fileOpenErrorText(e, path));
+        })
+        .finally(() => live.current && setBusy(false));
+      return;
+    }
+    download();
+  };
+  const download = () => {
+    void save.start(name, (onProgress) =>
+      downloadFile(peek, path, onProgress).catch((e: unknown) => {
+        throw new Error(fileOpenErrorText(e, path));
+      }),
+    );
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        className="md-file-link"
+        title={path}
+        disabled={busy || state?.phase === 'loading'}
+        onClick={open}
+      >
+        {children}
+      </button>
+      {state && state.phase !== 'error' && (
+        <span className="fp-file-note" role="status">
+          <span>{saveStatusText(state)}</span>
+          {state.phase === 'ready' && (
+            <button type="button" className="btn primary" onClick={() => save.save(state)}>
+              Сохранить
+            </button>
+          )}
+          {state.phase === 'ready' && (
+            <button type="button" className="iconbtn" onClick={save.dismiss} aria-label="Скрыть">
+              ×
+            </button>
+          )}
+        </span>
+      )}
+      {loaded && !md && <PeekedImage loaded={loaded} name={name} onClose={() => setLoaded(null)} />}
+      {loaded && md && <MdSheet path={path} name={name} loaded={loaded} onClose={() => setLoaded(null)} />}
+    </>
   );
 }
