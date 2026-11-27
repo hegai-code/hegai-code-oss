@@ -4,7 +4,7 @@ import { HegaiMark } from './components/HegaiMark.js';
 import { TelegramSignInButton } from './components/TelegramSignIn.js';
 import {
   AGENT_INSTALL_COMMAND, type AgentOs, APP_INSTALL_COMMAND, APP_STORE_URL, type DesktopOs,
-  githubStartHref, googleStartHref, guessDesktopOs, PLAY_URL,
+  githubStartHref, googleStartHref, guessDesktopOs, OSS_REPO_URL, PLAY_URL,
 } from './lib.js';
 import { isExternal, usePublicConfig } from './publicConfig.js';
 
@@ -342,7 +342,10 @@ export function Landing() {
 
     <footer className="install-footer lp-footer">
       <span>Hegai Code</span>
-      {ext ? <a href="/">Войти</a> : <a href={login}>Войти через Google</a>}
+      <span className="lp-footer-links">
+        <a href={OSS_REPO_URL} target="_blank" rel="noreferrer">Исходный код на GitHub</a>
+        {ext ? <a href="/">Войти</a> : <a href={login}>Войти через Google</a>}
+      </span>
     </footer>
   </main>;
 }

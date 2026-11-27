@@ -130,6 +130,8 @@ const VIEWS = [
   { screen: 'landing', width: 1440, height: 1000, theme: 'dark' },
   { screen: 'landing', width: 390, height: 844, theme: 'light', dsf: 2 },
   { screen: 'landing', width: 390, height: 844, theme: 'dark', dsf: 2 },
+  { screen: 'signinExt', width: 1440, height: 900, theme: 'light' },
+  { screen: 'signinExt', width: 390, height: 844, theme: 'dark', dsf: 2 },
   // «Доступ»: the ember «приостановлено» tile and the seat/sandbox chips are
   // the pair that has to hold ≥4.5:1 in both themes, and the narrow frame is
   // where five tabs and a four-chip row either wrap or push the page sideways.

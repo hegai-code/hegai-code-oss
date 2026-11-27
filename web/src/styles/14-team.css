@@ -165,6 +165,8 @@ button.team-row:hover { background: var(--surface-hover); }
    email + password + authenticator code, provider buttons, the /setup page. */
 .signin-card { gap: var(--space-4); }
 .signin-card p { overflow-wrap: anywhere; }
+.signin-source { margin: 0; font-size: var(--size-meta); }
+.signin-source a { color: var(--link); text-decoration: none; }
 .signin-form { display: grid; gap: var(--space-3); }
 .signin-form p { margin: 0; color: var(--text-muted); }
 .signin-form label { display: grid; gap: var(--space-1); color: var(--text-muted); font-size: var(--size-meta); font-weight: 600; }

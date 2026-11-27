@@ -93,14 +93,26 @@ if [ "$(read_state pressure_boot 0)" != "$boot" ] || [ $((now - $(read_state las
 fi
 write_state last_check "$now"
 
+# Owner's Chrome, not the headless one that shares its bundle: render-chrome
+# (ixbt-resolver, 13.11.2026) runs /Applications/Google Chrome.app --headless,
+# and LaunchServices takes it for "Google Chrome". After the 27.11.2026 reboot
+# it started first: pgrep said "Chrome is up", the real one was never opened,
+# and a click on Chrome only activated the windowless instance. Hence `open -n`.
+real_chrome_pids() {
+  local pid
+  for pid in $(pgrep -x "Google Chrome"); do
+    ps -o command= -p "$pid" 2>/dev/null | grep -q -- '--headless' || echo "$pid"
+  done
+}
+
 after_boot() {
   [ "$(read_state boot_chrome 0)" = "$boot" ] || {
     if [ "$uptime" -ge 120 ]; then
-      if pgrep -x "Google Chrome" >/dev/null; then
+      if [ -n "$(real_chrome_pids)" ]; then
         write_state boot_chrome "$boot"
       else
         log "boot: opening Chrome"
-        with_timeout 20 open -gj -a "Google Chrome" && write_state boot_chrome "$boot"
+        with_timeout 20 open -n -gj -a "Google Chrome" && write_state boot_chrome "$boot"
       fi
     fi
   }
@@ -130,12 +142,15 @@ after_boot() {
 
 restart_chrome() {
   log "chrome hung, restarting"
-  pkill -TERM -x "Google Chrome"
+  local pids
+  pids=$(real_chrome_pids)
+  [ -n "$pids" ] && kill -TERM $pids 2>/dev/null
   sleep 5
-  pkill -KILL -x "Google Chrome"
+  pids=$(real_chrome_pids)
+  [ -n "$pids" ] && kill -KILL $pids 2>/dev/null
   sleep 1
   # A failed open goes back to the boot opener, which retries every minute.
-  with_timeout 20 open -gj -a "Google Chrome" || rm -f "$state_dir/boot_chrome"
+  with_timeout 20 open -n -gj -a "Google Chrome" || rm -f "$state_dir/boot_chrome"
 }
 
 # AppleEvents are no probe here: from a launchd job osascript just hangs on TCC
@@ -145,7 +160,7 @@ restart_chrome() {
 probe_chrome() {
   local pid health chrome_fails restarts day
   chrome_fails=$(read_state chrome_fails 0)
-  pid=$(pgrep -x "Google Chrome" | head -1)
+  pid=$(real_chrome_pids | head -1)
   if [ "$uptime" -lt "$boot_grace" ] || [ -z "$pid" ]; then
     write_state chrome_fails 0
     return 0
@@ -209,7 +224,9 @@ rung_stop() {
 stop_next() {
   local rung tried
   tried=$(read_state tried "")
-  for rung in whisper android simulator macvps; do
+  # whisper-cli is not a rung (Owner, 12.11.2026): it is the meeting recogniser for the
+  # platform, and killing it mid-run lost the recording; a job lasts minutes and ends itself.
+  for rung in android simulator macvps; do
     case " $tried " in *" $rung "*) continue ;; esac
     # and never in the minute its simulators went: give that a check to free memory
     [ "$rung" = macvps ] && { [ "$level" -lt 4 ] || [ -n "$sims_now" ]; } && continue

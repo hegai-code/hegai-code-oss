@@ -230,6 +230,9 @@ export const APP_STORE_URL = 'https://apps.apple.com/ru/app/hegai-code/id6789674
 /** The Google Play listing. */
 export const PLAY_URL = 'https://play.google.com/store/apps/details?id=net.hegai.code';
 
+/** The public source repository (self-host kit included). Owner decision 15.11.2026 in DECISIONS.md. */
+export const OSS_REPO_URL = 'https://github.com/hegai-code/hegai-code-oss';
+
 /** The link that opens the phone app pointed at this hub (`ccremote://connect`,
  *  handled by both the iPhone and the Android app). The app only proposes the
  *  switch — it asks before leaving the server it is on — so the link is safe to

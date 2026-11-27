@@ -36,6 +36,8 @@ import { SettingsTabs } from './src/TeamViews.js';
 import { Appearance } from './src/Appearance.js';
 import type { SettingsTab } from './src/router.js';
 import { Landing } from './src/Landing.js';
+import { SignInScreen } from './src/SignInScreen.js';
+import type { PublicConfig } from '@cc-remote/shared';
 import { ProjectList } from './src/components/ProjectList.js';
 import { setScopeAvailable, useSessionScope } from './src/components/MineOnly.js';
 import type { SessionScope } from './src/lib.js';
@@ -197,7 +199,7 @@ const SCREEN_PARAM = new URLSearchParams(location.search).get('screen') ?? '';
 /* ---- a customer's own hub (external edition) ----------------------------
    `?screen=...Ext` pretends the hub answered `/api/public-config` as a
    self-hosted one: no desktop builds, no HegAI sign-in. */
-const EXTERNAL_SCREENS = new Set(['accessExt', 'appPagePhoneExt', 'appPageExt', 'setupDonePhone', 'settingsAccountExt', 'teamPeopleExt', 'settingsAppsExt', 'onboardPhoneExt', 'onboardMachineOnlineExt']);
+const EXTERNAL_SCREENS = new Set(['accessExt', 'appPagePhoneExt', 'appPageExt', 'setupDonePhone', 'settingsAccountExt', 'teamPeopleExt', 'settingsAppsExt', 'onboardPhoneExt', 'onboardMachineOnlineExt', 'signinExt']);
 if (EXTERNAL_SCREENS.has(SCREEN_PARAM)) {
   RESPONSES['/api/public-config'] = {
     edition: 'external', brandName: 'Hegai Code', publicUrl: location.origin,
@@ -1739,6 +1741,11 @@ const SCREENS: Record<string, () => React.ReactElement> = {
   /** THE public page — one now, where there were three. It is what a stranger
    *  sees first and what every pasted invitation opens. */
   landing: () => <Landing />,
+  /** A self-hosted hub's sign-in card (external edition, logged out). */
+  signinExt: () => <SignInScreen config={{
+    edition: 'external', brandName: 'Hegai Code', publicUrl: location.origin,
+    auth: { local: true, google: false, telegram: false, apple: false, hegaiSso: false }, desktopApps: false,
+  } as PublicConfig} />,
   /** «Доска» — the task board on its own data. Three states: the columns, a
    *  card open in the drawer (a right column at 1440, a sheet at 390), and the
    *  phone, where the columns are a tab strip and one column at a time. */
@@ -2539,7 +2546,7 @@ const BARE = new Set([
   // frame and reported as horizontal overflow on the two links people paste
   // into chats. The pages were fine; the fixture was lying, exactly the way
   // the note at the mount below predicts.
-  'landing',
+  'landing', 'signinExt',
 ]);
 const which = new URLSearchParams(location.search).get('screen') ?? 'settings';
 const Screen = SCREENS[which] ?? SCREENS.settings;

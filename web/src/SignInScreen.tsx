@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { PublicConfig } from '@cc-remote/shared';
 import { ApiError } from './api.js';
-import { githubStartHref, googleStartHref, oidcStartHref } from './lib.js';
+import { githubStartHref, googleStartHref, oidcStartHref, OSS_REPO_URL } from './lib.js';
 import { localLogin } from './localAuth.js';
 import { isExternal, usePublicConfig } from './publicConfig.js';
 import { storageGet } from './storage.js';
@@ -116,6 +116,7 @@ export function SignInScreen({ config }: { config: PublicConfig }) {
         <h1>Вход</h1>
         <InviteNotice />
         <SignInMethods config={config} />
+        <p className="team-help signin-source"><a href={OSS_REPO_URL} target="_blank" rel="noreferrer">Исходный код Hegai Code на GitHub</a></p>
       </div>
     </div>
   );

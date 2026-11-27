@@ -169,6 +169,7 @@ html.install-document #root { position: static; height: auto; min-height: 100%; 
 .install-warning { margin-bottom: 64px; padding: var(--space-5); border: 1px solid color-mix(in srgb, var(--orange) 45%, var(--divider)); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--orange) 8%, var(--bg)); }
 .install-footer { display: flex; justify-content: space-between; width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: var(--space-5) 0; border-top: 1px solid var(--divider); color: var(--text-faint); font-size: 12px; }  /* off-ladder: the /install landing has a hero; the app does not */
 .install-footer a { color: var(--link); text-decoration: none; }
+.lp-footer-links { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 
 @media (max-width: 620px) {
   .install-hero { padding: 56px 0 40px; text-align: left; }
